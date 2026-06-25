@@ -32,3 +32,7 @@ Then select `hypr-waves` in `/settings`, or copy values from `settings.example.j
 - `install.sh` / `install.ps1` — one-line setup scripts
 
 After adding new custom features, commit and push them here, then run `pi update --extensions` on other devices.
+
+## Shoutout
+
+Shoutout to [h4ni0](https://github.com/h4ni0) for the original Pi custom setup and extensions this package was based on.
