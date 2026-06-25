@@ -35,12 +35,22 @@ Then select `hypr-waves` in `/settings`, or copy values from `settings.example.j
 
 ## Contents
 
-- `extensions/` — custom Pi extensions
+- `extensions/` — custom Pi extensions, including plan/build mode
 - `themes/hypr-waves.json` — active theme
 - `package.json` — Pi package manifest
 - `settings.example.json` — current recommended settings, including companion packages
 - `install.sh` / `install.ps1` — one-line setup scripts
 - `keybindings.json` — clipboard/current TUI bindings: `Ctrl+C` copies selected text, `app.clear` is disabled, and the built-in image-paste binding is left empty so it does not steal normal paste behavior
+
+## Plan / build mode
+
+This package includes `extensions/plan-mode/`:
+
+- `/plan` or `Ctrl+Alt+P` toggles read-only planning mode
+- `--plan` starts Pi in planning mode
+- `/build` exits planning and restores full tool access
+- `/todos` shows tracked plan progress
+
 
 After adding new custom features, commit and push them here, then run `pi update --extensions` on other devices.
 
