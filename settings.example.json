@@ -1,0 +1,19 @@
+{
+  "theme": "hypr-waves",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "hideThinkingBlock": true,
+  "defaultThinkingLevel": "xhigh",
+  "editorPaddingX": 0,
+  "terminal": {
+    "showTerminalProgress": true
+  },
+  "steeringMode": "one-at-a-time",
+  "quietStartup": true,
+  "enableInstallTelemetry": false,
+  "doubleEscapeAction": "tree",
+  "treeFilterMode": "no-tools",
+  "warnings": {
+    "anthropicExtraUsage": true
+  }
+}
