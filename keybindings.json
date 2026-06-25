@@ -1,4 +1,7 @@
 {
-  "tui.input.copy": ["ctrl+c"],
-  "app.clipboard.pasteImage": ["ctrl+v", "alt+v"]
+  "tui.input.copy": [
+    "ctrl+c"
+  ],
+  "app.clear": [],
+  "app.clipboard.pasteImage": []
 }

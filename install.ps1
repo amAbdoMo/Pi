@@ -1,45 +1,60 @@
 $ErrorActionPreference = 'Stop'
 
-pi install git:github.com/amAbdoMo/Pi
+$PiPackages = @(
+  'git:github.com/amAbdoMo/Pi',
+  'npm:@hypabolic/pi-hypa',
+  'npm:context-mode',
+  'npm:pi-mcp-adapter'
+)
 
-$settingsDir = if ($env:PI_AGENT_DIR) { $env:PI_AGENT_DIR } else { Join-Path $HOME '.pi\agent' }
-$settingsFile = Join-Path $settingsDir 'settings.json'
-New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null
-
-if (Test-Path $settingsFile) {
-  $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable
-} else {
-  $settings = @{}
+foreach ($Package in $PiPackages) {
+  pi install $Package
 }
 
-$settings['theme'] = 'hypr-waves'
-if (-not $settings.ContainsKey('defaultProvider')) { $settings['defaultProvider'] = 'openai-codex' }
-if (-not $settings.ContainsKey('defaultModel')) { $settings['defaultModel'] = 'gpt-5.5' }
-if (-not $settings.ContainsKey('hideThinkingBlock')) { $settings['hideThinkingBlock'] = $true }
-if (-not $settings.ContainsKey('defaultThinkingLevel')) { $settings['defaultThinkingLevel'] = 'xhigh' }
-if (-not $settings.ContainsKey('editorPaddingX')) { $settings['editorPaddingX'] = 0 }
-if (-not $settings.ContainsKey('terminal')) { $settings['terminal'] = @{} }
-$settings['terminal']['showTerminalProgress'] = $true
-if (-not $settings.ContainsKey('steeringMode')) { $settings['steeringMode'] = 'one-at-a-time' }
-if (-not $settings.ContainsKey('quietStartup')) { $settings['quietStartup'] = $true }
-if (-not $settings.ContainsKey('enableInstallTelemetry')) { $settings['enableInstallTelemetry'] = $false }
-if (-not $settings.ContainsKey('doubleEscapeAction')) { $settings['doubleEscapeAction'] = 'tree' }
-if (-not $settings.ContainsKey('treeFilterMode')) { $settings['treeFilterMode'] = 'no-tools' }
-if (-not $settings.ContainsKey('warnings')) { $settings['warnings'] = @{} }
-$settings['warnings']['anthropicExtraUsage'] = $true
+node -e @'
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-$settings | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsFile -Encoding UTF8
-Write-Host "Updated $settingsFile"
+const requiredPackages = [
+  'git:github.com/amAbdoMo/Pi',
+  'npm:@hypabolic/pi-hypa',
+  'npm:context-mode',
+  'npm:pi-mcp-adapter',
+];
 
-$keybindingsFile = Join-Path $settingsDir 'keybindings.json'
-if (Test-Path $keybindingsFile) {
-  $keybindings = Get-Content $keybindingsFile -Raw | ConvertFrom-Json -AsHashtable
-} else {
-  $keybindings = @{}
-}
-$keybindings['tui.input.copy'] = @('ctrl+c')
-$keybindings['app.clipboard.pasteImage'] = @('ctrl+v', 'alt+v')
-$keybindings | ConvertTo-Json -Depth 10 | Set-Content -Path $keybindingsFile -Encoding UTF8
-Write-Host "Updated $keybindingsFile"
+const settingsDir = process.env.PI_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+const settingsFile = path.join(settingsDir, 'settings.json');
+let settings = {};
+try { settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8')); } catch {}
 
-Write-Host "Done. Start Pi with: pi"
+settings.theme = 'hypr-waves';
+settings.packages = Array.from(new Set([...(Array.isArray(settings.packages) ? settings.packages : []), ...requiredPackages]));
+settings.defaultProvider ??= 'openai-codex';
+settings.defaultModel ??= 'gpt-5.5';
+settings.hideThinkingBlock ??= true;
+settings.defaultThinkingLevel ??= 'xhigh';
+settings.editorPaddingX ??= 0;
+settings.terminal = { ...(settings.terminal || {}), showTerminalProgress: true };
+settings.steeringMode ??= 'one-at-a-time';
+settings.quietStartup ??= true;
+settings.enableInstallTelemetry ??= false;
+settings.doubleEscapeAction ??= 'tree';
+settings.treeFilterMode ??= 'no-tools';
+settings.warnings = { ...(settings.warnings || {}), anthropicExtraUsage: true };
+
+fs.mkdirSync(settingsDir, { recursive: true });
+fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
+console.log(`Updated ${settingsFile}`);
+
+const keybindingsFile = path.join(settingsDir, 'keybindings.json');
+let keybindings = {};
+try { keybindings = JSON.parse(fs.readFileSync(keybindingsFile, 'utf8')); } catch {}
+keybindings['tui.input.copy'] = ['ctrl+c'];
+keybindings['app.clear'] = [];
+keybindings['app.clipboard.pasteImage'] = [];
+fs.writeFileSync(keybindingsFile, JSON.stringify(keybindings, null, 2) + '\n');
+console.log(`Updated ${keybindingsFile}`);
+'@
+
+Write-Host 'Done. Start Pi with: pi'

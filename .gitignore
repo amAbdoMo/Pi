@@ -1,0 +1,8 @@
+generated_images
+sessions
+auth.json
+models.json
+trust.json
+node_modules
+.DS_Store
+*.log

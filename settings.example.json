@@ -1,5 +1,11 @@
 {
   "theme": "hypr-waves",
+  "packages": [
+    "git:github.com/amAbdoMo/Pi",
+    "npm:@hypabolic/pi-hypa",
+    "npm:context-mode",
+    "npm:pi-mcp-adapter"
+  ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
   "hideThinkingBlock": true,
