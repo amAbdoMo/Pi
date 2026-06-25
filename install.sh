@@ -32,8 +32,16 @@ const file = path.join(process.env.PI_AGENT_DIR || path.join(os.homedir(), '.pi'
 let settings = {};
 try { settings = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
 
+function isLegacyLocalPiPackage(packageSpec) {
+  if (typeof packageSpec !== 'string') return false;
+  return /(^|[\\/])Projects[\\/]Pi$/i.test(packageSpec.replace(/\\\\/g, '\\'));
+}
+
 settings.theme = 'hypr-waves';
-settings.packages = Array.from(new Set([...(Array.isArray(settings.packages) ? settings.packages : []), ...requiredPackages]));
+settings.packages = Array.from(new Set([
+  ...(Array.isArray(settings.packages) ? settings.packages.filter((packageSpec) => !isLegacyLocalPiPackage(packageSpec)) : []),
+  ...requiredPackages,
+]));
 settings.defaultProvider ??= 'openai-codex';
 settings.defaultModel ??= 'gpt-5.5';
 settings.hideThinkingBlock ??= true;

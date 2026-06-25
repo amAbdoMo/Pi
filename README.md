@@ -52,6 +52,10 @@ This package includes `extensions/plan-mode/`:
 - `/todos` shows tracked plan progress
 
 
+## Troubleshooting
+
+If Pi reports tool conflicts between `C:\Users\...\Projects\Pi\...` and `~/.pi/agent/git/github.com/amAbdoMo/Pi\...`, both the local development checkout and the installed git package are enabled. Re-run the installer; it removes the old local checkout package entry and keeps `git:github.com/amAbdoMo/Pi`.
+
 After adding new custom features, commit and push them here, then run `pi update --extensions` on other devices.
 
 ## Shoutout
