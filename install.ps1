@@ -30,4 +30,16 @@ $settings['warnings']['anthropicExtraUsage'] = $true
 
 $settings | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsFile -Encoding UTF8
 Write-Host "Updated $settingsFile"
+
+$keybindingsFile = Join-Path $settingsDir 'keybindings.json'
+if (Test-Path $keybindingsFile) {
+  $keybindings = Get-Content $keybindingsFile -Raw | ConvertFrom-Json -AsHashtable
+} else {
+  $keybindings = @{}
+}
+$keybindings['tui.input.copy'] = @('ctrl+c')
+$keybindings['app.clipboard.pasteImage'] = @('ctrl+v', 'alt+v')
+$keybindings | ConvertTo-Json -Depth 10 | Set-Content -Path $keybindingsFile -Encoding UTF8
+Write-Host "Updated $keybindingsFile"
+
 Write-Host "Done. Start Pi with: pi"

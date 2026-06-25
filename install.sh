@@ -30,6 +30,14 @@ settings.warnings = { ...(settings.warnings || {}), anthropicExtraUsage: true };
 fs.mkdirSync(path.dirname(file), { recursive: true });
 fs.writeFileSync(file, JSON.stringify(settings, null, 2) + '\n');
 console.log(`Updated ${file}`);
+
+const keybindingsFile = path.join(path.dirname(file), 'keybindings.json');
+let keybindings = {};
+try { keybindings = JSON.parse(fs.readFileSync(keybindingsFile, 'utf8')); } catch {}
+keybindings['tui.input.copy'] = ['ctrl+c'];
+keybindings['app.clipboard.pasteImage'] = ['ctrl+v', 'alt+v'];
+fs.writeFileSync(keybindingsFile, JSON.stringify(keybindings, null, 2) + '\n');
+console.log(`Updated ${keybindingsFile}`);
 NODE
 
 echo "Done. Start Pi with: pi"

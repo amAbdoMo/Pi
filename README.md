@@ -30,6 +30,7 @@ Then select `hypr-waves` in `/settings`, or copy values from `settings.example.j
 - `themes/hypr-waves.json` — active theme
 - `package.json` — Pi package manifest
 - `install.sh` / `install.ps1` — one-line setup scripts
+- `keybindings.json` — clipboard shortcuts: `Ctrl+C` copies selected text; `Ctrl+V`/`Alt+V` paste clipboard images into the typing area
 
 After adding new custom features, commit and push them here, then run `pi update --extensions` on other devices.
 
