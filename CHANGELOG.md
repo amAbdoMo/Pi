@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1
+
+- Restored the h4ni0 Nerd Font icons for folder, Git branch, model, context usage, and session name in the custom header.
+- Added validation that prevents these status icons from disappearing again.
+
 ## 0.4.0
 
 - Restored the custom terminal header and brighter `hypr-waves` theme from the original working copy.

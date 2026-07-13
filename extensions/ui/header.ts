@@ -55,21 +55,26 @@ function sessionNameLabel(): string | undefined {
   }
   const clean = name?.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
   if (!clean) return undefined;
-  return color("customMessageLabel", "session:") + " " + color("accent", clean);
+  return color("customMessageLabel", " ") + color("accent", clean);
 }
 
 export function buildHeader(width: number): string {
   const sep = color("borderMuted", "  │  ");
   const fastModeActive = state.getFastModeActive?.() ?? state.fastModeActive;
   const model = [
+    color("toolTitle", "󰧑 "),
     color("toolTitle", bold(state.model)),
     color("muted", " • "),
     color(thinkingColor(state.thinking), state.thinking),
     fastModeActive ? color("muted", " • ") + linkColor("fast") : "",
   ].join("");
-  const folder = color("accent", state.folder || "~");
-  const branch = color("mdQuoteBorder", state.branch || "—");
-  const context = color("customMessageLabel", contextLabel()) + " " + contextProgressBar();
+  const folder = color("accent", "󰉋 ") + color("accent", state.folder || "~");
+  const branch = color("mdQuoteBorder", " ") + color("mdQuoteBorder", state.branch || "—");
+  const context =
+    color("customMessageLabel", "󰍛 ") +
+    color("customMessageLabel", contextLabel()) +
+    " " +
+    contextProgressBar();
   const subagents = subagentsLabel();
   const chatGptLimit = chatGptFiveHourLimitLabel();
   const parts = [folder, branch, model, context];

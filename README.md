@@ -20,7 +20,7 @@ The command is safe to run again when this repository changes. It installs the r
 
 ## Included setup
 
-- Custom terminal UI and `hypr-waves` theme
+- Custom terminal UI with Nerd Font status icons and the `hypr-waves` theme
 - Compact clipboard image markers on Windows
 - Compact multiline-text paste markers on Windows
 - Plan/build workflow:
@@ -59,6 +59,7 @@ Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expand
 - `scripts/apply-config.mjs` — idempotent configuration merger used by both installers
 - `scripts/capture-config.mjs` — captures safe local settings/keybindings into the repository
 - `scripts/validate.mjs` — repository validation
+- `UPSTREAM.md` — audited relationship with the original `h4ni0/pi` source
 - `install.ps1` / `install.sh` — one-command installers/updaters
 
 Private and machine-specific state is intentionally excluded: authentication, sessions, generated images, trust decisions, and custom model credentials.

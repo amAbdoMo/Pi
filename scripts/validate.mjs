@@ -27,11 +27,18 @@ const requiredFiles = [
   "extensions/plan-mode/index.ts",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
+  "UPSTREAM.md",
   "install.ps1",
   "install.sh",
 ];
 for (const relativePath of requiredFiles) {
   if (!fs.existsSync(path.join(root, relativePath))) throw new Error(`Missing required file: ${relativePath}`);
+}
+
+const headerSource = fs.readFileSync(path.join(root, "extensions/ui/header.ts"), "utf8");
+const requiredHeaderIcons = ["󰉋", "", "󰧑", "󰍛", ""];
+for (const icon of requiredHeaderIcons) {
+  if (!headerSource.includes(icon)) throw new Error(`Missing required header icon: ${icon}`);
 }
 
 const settings = parsedJson.get("settings.example.json");
