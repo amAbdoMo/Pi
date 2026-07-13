@@ -13,9 +13,9 @@ function shortTokens(tokens: number | undefined): string {
 
 function contextLabel(): string {
   const window = state.contextWindow;
-  if (!window) return "?/?";
+  if (!window) return "ctx ?/?";
   const used = state.contextTokens ?? 0;
-  return `${shortTokens(used)}/${shortTokens(window)}`;
+  return `ctx ${shortTokens(used)}/${shortTokens(window)}`;
 }
 
 function contextProgressBar(width = 4): string {
@@ -42,8 +42,8 @@ function thinkingColor(level: string): string {
   }
 }
 
-function cyan(text: string): string {
-  return `\x1b[36m${text}\x1b[39m`;
+function linkColor(text: string): string {
+  return color("mdLink", text);
 }
 
 function sessionNameLabel(): string | undefined {
@@ -55,26 +55,21 @@ function sessionNameLabel(): string | undefined {
   }
   const clean = name?.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
   if (!clean) return undefined;
-  return color("customMessageLabel", " ") + color("accent", clean);
+  return color("customMessageLabel", "session:") + " " + color("accent", clean);
 }
 
 export function buildHeader(width: number): string {
-  const sep = color("borderMuted", " | ");
+  const sep = color("borderMuted", "  │  ");
   const fastModeActive = state.getFastModeActive?.() ?? state.fastModeActive;
   const model = [
-    color("toolTitle", "󰧑 "),
     color("toolTitle", bold(state.model)),
     color("muted", " • "),
     color(thinkingColor(state.thinking), state.thinking),
-    fastModeActive ? color("muted", " • ") + cyan("fast") : "",
+    fastModeActive ? color("muted", " • ") + linkColor("fast") : "",
   ].join("");
-  const folder = color("success", "󰉋 ") + color("success", state.folder || "~");
-  const branch = color("warning", " ") + color("warning", state.branch || "—");
-  const context =
-    color("customMessageLabel", "󰍛 ") +
-    color("muted", contextLabel()) +
-    " " +
-    contextProgressBar();
+  const folder = color("accent", state.folder || "~");
+  const branch = color("mdQuoteBorder", state.branch || "—");
+  const context = color("customMessageLabel", contextLabel()) + " " + contextProgressBar();
   const subagents = subagentsLabel();
   const chatGptLimit = chatGptFiveHourLimitLabel();
   const parts = [folder, branch, model, context];
@@ -83,5 +78,5 @@ export function buildHeader(width: number): string {
   const sessionName = sessionNameLabel();
   if (sessionName) parts.push(sessionName);
 
-  return padToWidth(`${color("success", "╭─")} ${parts.join(sep)}`, width);
+  return padToWidth(`${color("border", "╭─")} ${parts.join(sep)}`, width);
 }

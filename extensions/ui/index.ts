@@ -6,6 +6,7 @@ import {
 import { editors, notifyEditors } from "./editorRegistry.ts";
 import { updateBranch } from "./git.ts";
 import { bigPiHeader } from "./piHeader.ts";
+import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
 import { updateState } from "./state.ts";
 import { subscribeSubagents } from "./subagents.ts";
 import { TerminalEditor } from "./terminalEditor.ts";
@@ -45,6 +46,21 @@ export default function uiExtension(pi: ExtensionAPI) {
       render: () => [],
       invalidate: () => {},
     }));
+  });
+
+  pi.on("input", (event) => {
+    const images = imagesForText(event.text);
+    const expandedText = expandPastedTextMarkers(event.text);
+    if (images.length === 0 && expandedText === event.text) return { action: "continue" as const };
+
+    return {
+      action: "transform" as const,
+      text: expandedText,
+      images: [
+        ...(event.images ?? []),
+        ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType })),
+      ],
+    };
   });
 
   pi.on("model_select", async (_event, ctx) => {

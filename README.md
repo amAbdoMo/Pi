@@ -1,8 +1,8 @@
 # amAbdoMo Pi setup
 
-Personal Pi coding-agent package containing the current custom extensions, companion tools, keybindings, and the `hypr-waves` theme.
+Portable Pi setup containing the custom extensions, theme, companion packages, settings defaults, and keybindings used in this environment.
 
-## One-line install
+## Install or update with one command
 
 ### Windows PowerShell
 
@@ -16,48 +16,91 @@ irm https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.sh | bash
 ```
 
-The installer adds this package plus the companion packages currently used in this setup:
+The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries, and applies the shared configuration. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
 
-- `npm:@hypabolic/pi-hypa`
-- `npm:context-mode`
-- `npm:pi-mcp-adapter`
+## Included setup
 
-## Manual install
+- Custom terminal UI and `hypr-waves` theme
+- Compact clipboard image markers on Windows
+- Compact multiline-text paste markers on Windows
+- Plan/build workflow:
+  - `/plan` or `Ctrl+Alt+P` enters read-only planning
+  - `--plan` starts in planning mode
+  - `/build` restores full tool access
+  - `/todos` shows plan progress
+- Web tools powered by Firecrawl
+- Image generation
+- Persistent memory
+- Side chat, subagents, workflows, fast mode, code-state, and custom tool display
+- Companion packages:
+  - `npm:@hypabolic/pi-hypa`
+  - `npm:context-mode`
+  - `npm:pi-mcp-adapter`
+- Shared clipboard keybindings and recommended settings
 
-```bash
-pi install git:github.com/amAbdoMo/Pi
-pi install npm:@hypabolic/pi-hypa
-pi install npm:context-mode
-pi install npm:pi-mcp-adapter
-```
+## Current defaults for a fresh setup
 
-Then select `hypr-waves` in `/settings`, or copy values from `settings.example.json` into `~/.pi/agent/settings.json`.
+- Theme: `hypr-waves`
+- Provider: `openai-codex`
+- Model: `gpt-5.6-sol`
+- Thinking level: `high`
+- Quiet startup enabled
+- Terminal progress enabled
+- Tree filter: `no-tools`
 
-## Contents
+Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expands or collapses thinking blocks.
 
-- `extensions/` — custom Pi extensions, including plan/build mode
-- `themes/hypr-waves.json` — active theme
-- `package.json` — Pi package manifest
-- `settings.example.json` — current recommended settings, including companion packages
-- `install.sh` / `install.ps1` — one-line setup scripts
-- `keybindings.json` — clipboard/current TUI bindings: `Ctrl+C` copies selected text, `app.clear` is disabled, and the built-in image-paste binding is left empty so it does not steal normal paste behavior
+## Repository contents
 
-## Plan / build mode
+- `extensions/` — all custom Pi extensions
+- `themes/hypr-waves.json` — shared theme
+- `settings.example.json` — safe shared settings defaults
+- `keybindings.json` — shared keybindings
+- `scripts/apply-config.mjs` — idempotent configuration merger used by both installers
+- `scripts/capture-config.mjs` — captures safe local settings/keybindings into the repository
+- `scripts/validate.mjs` — repository validation
+- `install.ps1` / `install.sh` — one-command installers/updaters
 
-This package includes `extensions/plan-mode/`:
+Private and machine-specific state is intentionally excluded: authentication, sessions, generated images, trust decisions, and custom model credentials.
 
-- `/plan` or `Ctrl+Alt+P` toggles read-only planning mode
-- `--plan` starts Pi in planning mode
-- `/build` exits planning and restores full tool access
-- `/todos` shows tracked plan progress
+## Source-of-truth workflow
 
+Treat this GitHub repository as the only editable source of the shared setup.
+
+1. Make custom extension/theme changes in a normal clone of this repository.
+2. Do **not** edit `~/.pi/agent/git/github.com/amAbdoMo/Pi`; Pi owns and resets that installed clone during updates.
+3. After changing Pi settings or keybindings, capture the safe shared values into the repository:
+
+   ```bash
+   npm run capture
+   ```
+
+   This intentionally excludes authentication, session history, trust data, and model credentials.
+4. Validate changes:
+
+   ```bash
+   npm test
+   ```
+
+5. Commit and push the changes.
+6. Update another device:
+
+   ```bash
+   pi update --extensions
+   ```
+
+   Or rerun the one-command installer to also reconcile settings and companion packages.
 
 ## Troubleshooting
 
-If Pi reports tool conflicts between `C:\Users\...\Projects\Pi\...` and `~/.pi/agent/git/github.com/amAbdoMo/Pi\...`, both the local development checkout and the installed git package are enabled. Re-run the installer; it removes the old local checkout package entry and keeps `git:github.com/amAbdoMo/Pi`.
+### Duplicate tool conflicts
 
-After adding new custom features, commit and push them here, then run `pi update --extensions` on other devices.
+If paths from both a development checkout and `~/.pi/agent/git/github.com/amAbdoMo/Pi` appear in a conflict, the package is enabled twice. Rerun the installer; it removes local checkout package entries and keeps `git:github.com/amAbdoMo/Pi`.
+
+### UI looks older after an update
+
+Confirm the desired changes were committed and pushed before running `pi update --extensions`. Pi resets its installed clone to GitHub and intentionally removes uncommitted edits from that clone.
 
 ## Shoutout
 
-Shoutout to [h4ni0](https://github.com/h4ni0) for the original Pi custom setup and extensions this package was based on.
+Shoutout to [h4ni0](https://github.com/h4ni0) for the original Pi setup and extensions this package was based on.

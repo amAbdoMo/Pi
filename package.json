@@ -1,6 +1,6 @@
 {
   "name": "amabdomo-pi",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "description": "Personal Pi coding agent extensions and theme bundle.",
   "type": "module",
@@ -17,5 +17,9 @@
     "themes": [
       "./themes"
     ]
+  },
+  "scripts": {
+    "capture": "node scripts/capture-config.mjs",
+    "test": "node scripts/validate.mjs && node --test tests/*.test.mjs"
   }
 }

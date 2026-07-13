@@ -1,12 +1,20 @@
 import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
+  matchesKey,
   visibleWidth,
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
 import { color, padToWidth } from "./formatting.ts";
 import { buildHeader } from "./header.ts";
+import {
+  IMAGE_MARKER_RE,
+  TEXT_MARKER_RE,
+  readBestImage,
+  readClipboardText,
+  savePastedText,
+} from "./imagePaste.ts";
 import type { KeybindingsManager } from "./types.ts";
 
 function stripAnsi(input: string): string {
@@ -24,6 +32,8 @@ function looksLikeEditorBorder(line: string): boolean {
 }
 
 export class TerminalEditor extends CustomEditor {
+  private busyPastingClipboard = false;
+
   constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
     // paddingX 0 avoids the stock editor's side-padding/wrap weirdness.
     super(tui, theme, keybindings, { paddingX: 0 });
@@ -34,9 +44,45 @@ export class TerminalEditor extends CustomEditor {
     this.tui.requestRender();
   }
 
+  override handleInput(data: string): void {
+    const isCustomPaste = matchesKey(data, "ctrl+v") || matchesKey(data, "alt+v");
+    if (process.platform === "win32" && isCustomPaste) {
+      this.pasteCompactImage();
+      return;
+    }
+
+    super.handleInput(data);
+  }
+
+  private pasteClipboardText(): boolean {
+    const text = readClipboardText();
+    if (!text) return false;
+    const pastedText = savePastedText(text, this.getText());
+    this.insertTextAtCursor(pastedText.marker);
+    this.requestRender();
+    return true;
+  }
+
+  private pasteCompactImage(): void {
+    if (this.busyPastingClipboard) return;
+    this.busyPastingClipboard = true;
+    try {
+      const image = readBestImage(this.getText());
+      if (image) {
+        this.insertTextAtCursor(image.marker);
+        this.requestRender();
+        return;
+      }
+
+      this.pasteClipboardText();
+    } finally {
+      this.busyPastingClipboard = false;
+    }
+  }
+
   override render(width: number): string[] {
-    const promptSymbol = this.getText().startsWith("!") ? "# " : "❯ ";
-    const prompt = color("success", "╰─") + color("accent", promptSymbol);
+    const promptSymbol = this.getText().startsWith("!") ? "# " : "> ";
+    const prompt = color("border", "╰─") + color("accent", promptSymbol);
     const promptWidth = visibleWidth(prompt);
     const innerWidth = Math.max(1, width - promptWidth);
 
@@ -49,7 +95,10 @@ export class TerminalEditor extends CustomEditor {
 
     for (let i = 0; i < inputLines.length; i++) {
       const prefix = i === 0 ? prompt : " ".repeat(promptWidth);
-      lines.push(padToWidth(prefix + inputLines[i], width));
+      const inputLine = inputLines[i]
+        .replace(IMAGE_MARKER_RE, (marker) => `\x1b[97m${marker}\x1b[39m`)
+        .replace(TEXT_MARKER_RE, (marker) => `\x1b[97m${marker}\x1b[39m`);
+      lines.push(padToWidth(prefix + inputLine, width));
     }
 
     return lines;

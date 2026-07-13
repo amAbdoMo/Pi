@@ -31,8 +31,8 @@
     "success": "cyan",
     "error": "primaryBright",
     "warning": "yellow",
-    "muted": "softFg",
-    "dim": "surface3",
+    "muted": "fg",
+    "dim": "fg",
     "text": "fg",
     "thinkingText": "softFg",
 
