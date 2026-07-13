@@ -16,14 +16,19 @@ import { updateBranch } from "./git.ts";
 import { bigPiHeader } from "./piHeader.ts";
 import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
 import { updateState } from "./state.ts";
-import { subscribeSubagents } from "./subagents.ts";
+import { hasActiveSubagents, subscribeSubagents } from "./subagents.ts";
 import { TerminalEditor } from "./terminalEditor.ts";
+import {
+  createUsageRefreshPoller,
+  type UsageRefreshPoller,
+} from "./usagePolling.ts";
 import { clearTerminal } from "./terminal.ts";
 import type { UiTheme } from "./types.ts";
 
 // UI extension: startup header, terminal-style editor, and footer cleanup.
 let unsubscribePlanBuildMode: (() => void) | undefined;
 let unsubscribeSubagents: (() => void) | undefined;
+let subagentUsagePoller: UsageRefreshPoller | undefined;
 
 export default function uiExtension(pi: ExtensionAPI) {
   subscribePlanBuildModeChanges(pi.events, setPlanBuildMode);
@@ -40,7 +45,16 @@ export default function uiExtension(pi: ExtensionAPI) {
     unsubscribePlanBuildMode?.();
     unsubscribePlanBuildMode = subscribePlanBuildMode(notifyEditors);
     unsubscribeSubagents?.();
-    unsubscribeSubagents = subscribeSubagents(notifyEditors);
+    subagentUsagePoller?.dispose();
+    subagentUsagePoller = createUsageRefreshPoller(() =>
+      refreshChatGptUsage(ctx, { force: true }),
+    );
+    const syncSubagentUsage = () => {
+      notifyEditors();
+      subagentUsagePoller?.setActive(hasActiveSubagents());
+    };
+    unsubscribeSubagents = subscribeSubagents(syncSubagentUsage);
+    syncSubagentUsage();
 
     ctx.ui.setHeader((_tui, theme) => ({
       render: () => bigPiHeader(theme as unknown as UiTheme),
@@ -115,6 +129,8 @@ export default function uiExtension(pi: ExtensionAPI) {
     unsubscribePlanBuildMode = undefined;
     unsubscribeSubagents?.();
     unsubscribeSubagents = undefined;
+    subagentUsagePoller?.dispose();
+    subagentUsagePoller = undefined;
     editors.clear();
   });
 }

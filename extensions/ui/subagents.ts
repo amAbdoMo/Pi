@@ -39,6 +39,11 @@ export function subagentsLabel(): string | undefined {
   ].join(" ");
 }
 
+export function hasActiveSubagents(): boolean {
+  const status = subagentsStatus();
+  return status.total > 0 || status.nested > 0;
+}
+
 export function subscribeSubagents(listener: () => void): () => void {
   const status = subagentsStatus();
   status.listeners.add(listener);
