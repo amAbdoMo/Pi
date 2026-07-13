@@ -34,6 +34,7 @@ const requiredFiles = [
   "extensions/ui/imagePaste.ts",
   "extensions/ui/terminalEditor.ts",
   "extensions/plan-mode/index.ts",
+  "extensions/skills-browser/index.ts",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
   "scripts/setup-terminal-font.ps1",

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Added `/skills`, a scrollable window listing every loaded skill with its description.
+- Selecting a skill prefills its `/skill:name` command so optional instructions can be added before submission.
+- Removed individual `/skill:*` entries from `/` autocomplete while preserving all other commands and path completion.
+- Added regression tests for skill discovery, ordering, and autocomplete filtering.
+
 ## 0.6.0
 
 - Added Codex weekly usage beside the five-hour indicator, matching rate-limit windows by duration instead of response position.

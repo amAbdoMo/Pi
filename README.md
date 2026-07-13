@@ -34,6 +34,7 @@ The command is safe to run again when this repository changes. It installs the r
 - Web tools powered by Firecrawl
 - Image generation
 - Persistent memory
+- `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
 - Side chat, subagents, workflows, fast mode, code-state, and custom tool display
 - Companion packages:
   - `npm:@hypabolic/pi-hypa`
