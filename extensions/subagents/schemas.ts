@@ -1,5 +1,6 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
+import { CHILD_THINKING_LEVELS } from "./child-profile.ts";
 
 export const DelegateParams = Type.Object({
   title: Type.Optional(
@@ -15,6 +16,18 @@ export const DelegateParams = Type.Object({
       description:
         "compact (default) passes an ephemeral parent handoff summary; fresh passes no parent context.",
       default: "compact",
+    }),
+  ),
+  model: Type.Optional(
+    Type.String({
+      description:
+        "Optional child model as provider/model. Omit to inherit the parent model.",
+    }),
+  ),
+  thinking: Type.Optional(
+    StringEnum(CHILD_THINKING_LEVELS, {
+      description:
+        "Optional child thinking level. Omit to inherit the parent thinking level.",
     }),
   ),
 });

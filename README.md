@@ -35,7 +35,8 @@ The command is safe to run again when this repository changes. It installs the r
 - Image generation
 - Persistent memory
 - `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
-- Side chat, subagents, workflows, fast mode, code-state, and custom tool display
+- Adaptive delegation routes bounded child tasks to task-sized Codex models/thinking levels and requires parent review
+- Side chat, nested subagents, workflows, fast mode, code-state, and custom tool display
 - Companion packages:
   - `npm:@hypabolic/pi-hypa`
   - `npm:context-mode`
@@ -57,6 +58,7 @@ Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expand
 ## Repository contents
 
 - `extensions/` — all custom Pi extensions
+- `skills/adaptive-delegation/` — automatic task decomposition, child-profile routing, and result-review guidance
 - `themes/hypr-waves.json` — shared theme
 - `settings.example.json` — safe shared settings defaults
 - `keybindings.json` — shared keybindings

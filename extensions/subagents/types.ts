@@ -1,6 +1,15 @@
+import type { ChildThinkingLevel } from "./child-profile.ts";
 import type { RpcProcess } from "./rpc-process.ts";
 
 export type ContextMode = "compact" | "fresh";
+
+export interface DelegateRequest {
+  title?: string;
+  task: string;
+  context?: ContextMode;
+  model?: string;
+  thinking?: ChildThinkingLevel;
+}
 export type SubagentStatus =
   | "queued"
   | "starting"
@@ -93,7 +102,7 @@ export interface SubagentRecord {
   error?: string;
   usage?: UsageStats;
   model?: string;
-  thinkingLevel?: string;
+  thinkingLevel?: ChildThinkingLevel;
   nestedActiveCount?: number;
   pendingQuestion?: PendingQuestion;
   client?: RpcProcess;
@@ -116,7 +125,7 @@ export interface DelegateDetails {
   lastMessageSnippet?: string;
   usage?: UsageStats;
   model?: string;
-  thinkingLevel?: string;
+  thinkingLevel?: ChildThinkingLevel;
   error?: string;
   finalOutput?: string;
   events: RpcEventSummary[];
@@ -138,7 +147,7 @@ export interface CompletionPayload {
   outputPath?: string;
   usage?: UsageStats;
   model?: string;
-  thinkingLevel?: string;
+  thinkingLevel?: ChildThinkingLevel;
   error?: string;
 }
 

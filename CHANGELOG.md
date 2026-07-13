@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- Added the `adaptive-delegation` skill for automatic task decomposition, task-sized child model/thinking selection, safe concurrency, and parent-owned review.
+- Extended `delegate` with optional `model` and `thinking` parameters; omitted values continue to inherit the parent profile.
+- Added default routing for small (`gpt-5.4-mini`/low), medium (`gpt-5.5`/medium), and large or high-risk (`gpt-5.6-sol`/high) child tasks.
+- Added delegation briefing, routing, review references, initial skill evaluations, and child-profile regression tests.
+- Added packaged skill discovery through the Pi package manifest.
+
 ## 0.7.0
 
 - Added `/skills`, a scrollable window listing every loaded skill with its description.

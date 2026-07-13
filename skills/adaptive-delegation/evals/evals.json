@@ -1,0 +1,41 @@
+{
+  "skill_name": "adaptive-delegation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "In a temporary directory, create a file named greeting.txt containing exactly `hello world` and report its path. This is the entire task.",
+      "expected_output": "The parent completes the tiny deterministic task directly without spawning a sub-agent and reports the verified file.",
+      "files": [],
+      "expectations": [
+        "No delegate tool call is used for this tiny task",
+        "The created file contains exactly `hello world`",
+        "The final response reports the verified file path"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Read the TypeScript files under extensions/skills-browser and its tests. Produce a focused, read-only review for correctness, edge cases, and missing regression coverage. Do not edit anything. Verify every finding with file:line evidence and summarize what you checked.",
+      "expected_output": "The parent delegates the bounded review to a small or medium child profile, verifies the cited evidence, and returns a concise reviewed result.",
+      "files": [],
+      "expectations": [
+        "A bounded delegate call uses openai-codex/gpt-5.4-mini with low thinking or openai-codex/gpt-5.5 with medium thinking",
+        "The delegated brief is explicitly read-only and requests file:line evidence",
+        "The parent checks the child's evidence before presenting findings",
+        "The final response distinguishes verified findings from uncertainty"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Audit this Pi package as a release candidate without changing files. Cover three independent areas: extension loading and conflicts, installer/configuration safety, and documentation-versus-code accuracy. Run appropriate read-only validation where possible, reconcile the three workstreams, and give one prioritized release recommendation with evidence.",
+      "expected_output": "The parent decomposes the audit into independent read-only workstreams, routes each to an appropriate profile, reviews their evidence, runs final gates, and synthesizes one recommendation.",
+      "files": [],
+      "expectations": [
+        "At least two independent read-only workstreams are delegated without overlapping writes",
+        "Each child receives one bounded area with explicit evidence and validation requirements",
+        "Model and thinking choices are justified by each child task's complexity rather than the parent task's total size",
+        "The parent reconciles conflicting or overlapping findings instead of concatenating reports",
+        "The final recommendation is based on parent-verified repository evidence and validation results"
+      ]
+    }
+  ]
+}

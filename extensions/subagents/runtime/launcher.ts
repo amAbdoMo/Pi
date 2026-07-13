@@ -4,14 +4,15 @@ import type {
   AgentToolUpdateCallback,
 } from "@earendil-works/pi-agent-core";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { childProfileArgs, resolveChildProfile } from "../child-profile.ts";
 import { buildInitialPrompt } from "../prompts.ts";
 import { loadSettings } from "../settings.ts";
 import { RpcProcess } from "../rpc-process.ts";
 import { generateHandoffSummary, makeCompletionPayload } from "../summaries.ts";
 import type {
   CompletionPayload,
-  ContextMode,
   DelegateDetails,
+  DelegateRequest,
   LiveDelegateUpdater,
   SubagentRecord,
 } from "../types.ts";
@@ -63,9 +64,12 @@ export async function launchChild(
   ];
   if (childSettings.persistSessions) args.push("--session-dir", record.sessionDir);
   else args.push("--no-session");
-  if (ctx.model) args.push("--model", `${ctx.model.provider}/${ctx.model.id}`);
-  const thinking = state.pi.getThinkingLevel?.();
-  if (thinking) args.push("--thinking", thinking);
+  args.push(
+    ...childProfileArgs({
+      model: record.model,
+      thinking: record.thinkingLevel,
+    }),
+  );
 
   const invocation = getPiInvocation(args);
   const env: Record<string, string | undefined> = {
@@ -190,7 +194,7 @@ function waitForChildFinish(
 
 export async function spawnDelegate(
   state: SubagentRuntimeState,
-  params: { title?: string; task: string; context?: ContextMode },
+  params: DelegateRequest,
   signal: AbortSignal | undefined,
   onUpdate: AgentToolUpdateCallback<DelegateDetails> | undefined,
   ctx: ExtensionContext,
@@ -223,6 +227,13 @@ export async function spawnDelegate(
 
   const id = makeId();
   const label = oneLine(params.title?.trim() || generatedLabel(params.task), 48);
+  const profile = resolveChildProfile(
+    { model: params.model, thinking: params.thinking },
+    {
+      model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
+      thinking: state.pi.getThinkingLevel?.(),
+    },
+  );
   const rootId = currentRootId(ctx);
   const depth = state.currentDepth + 1;
   const sessionDir = path.join(state.settings.sessionDir, rootId, id);
@@ -237,6 +248,8 @@ export async function spawnDelegate(
     task: params.task,
     contextMode,
     createdAt: now(),
+    model: profile.model,
+    thinkingLevel: profile.thinking,
     sessionDir,
     bridgeDir,
     nestedActiveCount: 0,
