@@ -30,7 +30,7 @@ At that commit, h4ni0/pi has 88 tracked files. This repository contains every fu
 
 ## Current additions beyond upstream
 
-This repository also includes plan/build mode, adaptive model-aware delegation, a `/skills` browser with compact slash autocomplete, compact clipboard handling, Codex five-hour and weekly usage, Warp terminal configuration, an expanded `pi-tool-display`, portable installers, configuration capture/merge scripts, tests, CI validation, changelog, and maintenance documentation.
+This repository also includes plan/build mode, model-aware subagent profiles, a `/skills` browser with compact slash autocomplete, compact clipboard handling, Codex five-hour and weekly usage, Warp terminal configuration, an expanded `pi-tool-display`, portable installers, configuration capture/merge scripts, tests, CI validation, changelog, and maintenance documentation.
 
 ## Header icons retained from upstream
 

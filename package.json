@@ -1,6 +1,6 @@
 {
   "name": "amabdomo-pi",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Personal Pi coding agent extensions and theme bundle.",
   "type": "module",
@@ -13,9 +13,6 @@
   "pi": {
     "extensions": [
       "./extensions"
-    ],
-    "skills": [
-      "./skills"
     ],
     "themes": [
       "./themes"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1
+
+- Removed the bundled `adaptive-delegation` skill from this Pi package so custom skills can live in their own repository.
+- Kept the reusable `delegate` model/thinking profile support in the Pi extension.
+
 ## 0.8.0
 
 - Added the `adaptive-delegation` skill for automatic task decomposition, task-sized child model/thinking selection, safe concurrency, and parent-owned review.

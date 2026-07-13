@@ -23,7 +23,7 @@ if (!changelog.includes(`## ${packageManifest.version}`)) {
   throw new Error(`CHANGELOG.md is missing version ${packageManifest.version}`);
 }
 
-for (const resourceGroup of ["extensions", "skills", "themes"]) {
+for (const resourceGroup of ["extensions", "themes"]) {
   for (const resourcePath of packageManifest.pi?.[resourceGroup] ?? []) {
     const absolutePath = path.resolve(root, resourcePath);
     if (!fs.existsSync(absolutePath)) throw new Error(`Missing ${resourceGroup} resource: ${resourcePath}`);
@@ -36,7 +36,6 @@ const requiredFiles = [
   "extensions/plan-mode/index.ts",
   "extensions/skills-browser/index.ts",
   "extensions/subagents/child-profile.ts",
-  "skills/adaptive-delegation/SKILL.md",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
   "scripts/setup-terminal-font.ps1",
