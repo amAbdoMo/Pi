@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.2
+
+- Replaced the literal `mode` header label with a Nerd Font cog icon (`󰒓`) while retaining the colored `PLAN` or `BUILD` text.
+- Added validation to prevent the mode icon from disappearing in future UI changes.
+
 ## 0.5.1
 
 - Fixed `Tab` opening path autocomplete instead of switching modes by routing toggle requests through Pi's shared extension event bus.

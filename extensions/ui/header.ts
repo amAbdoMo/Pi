@@ -50,7 +50,7 @@ function linkColor(text: string): string {
 function modeLabel(): string {
   const mode = getPlanBuildMode();
   const token = mode === "plan" ? "warning" : "success";
-  return color("muted", "mode ") + color(token, bold(mode.toUpperCase()));
+  return color(token, "󰒓 ") + color(token, bold(mode.toUpperCase()));
 }
 
 function sessionNameLabel(): string | undefined {

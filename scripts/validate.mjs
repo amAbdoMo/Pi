@@ -38,7 +38,7 @@ for (const relativePath of requiredFiles) {
 }
 
 const headerSource = fs.readFileSync(path.join(root, "extensions/ui/header.ts"), "utf8");
-const requiredHeaderIcons = ["󰉋", "", "󰧑", "󰍛", ""];
+const requiredHeaderIcons = ["󰉋", "", "󰒓", "󰧑", "󰍛", ""];
 for (const icon of requiredHeaderIcons) {
   if (!headerSource.includes(icon)) throw new Error(`Missing required header icon: ${icon}`);
 }
