@@ -16,11 +16,12 @@ irm https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.sh | bash
 ```
 
-The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries, and applies the shared configuration. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
+The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries, and applies the shared configuration. On Windows it also installs the pinned `CaskaydiaMono NFM` Nerd Font for the current user and configures Windows Terminal after backing up its settings. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
 
 ## Included setup
 
 - Custom terminal UI with Nerd Font status icons and the `hypr-waves` theme
+- Verified Windows Nerd Font setup using CaskaydiaMono Nerd Font Mono 3.4.0
 - Compact clipboard image markers on Windows
 - Compact multiline-text paste markers on Windows
 - Plan/build workflow:
@@ -58,6 +59,8 @@ Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expand
 - `keybindings.json` — shared keybindings
 - `scripts/apply-config.mjs` — idempotent configuration merger used by both installers
 - `scripts/capture-config.mjs` — captures safe local settings/keybindings into the repository
+- `scripts/setup-terminal-font.ps1` — installs and version-checks the pinned Windows Nerd Font
+- `scripts/set-terminal-font.mjs` — safely applies the font to Windows Terminal JSON/JSONC settings
 - `scripts/validate.mjs` — repository validation
 - `UPSTREAM.md` — audited relationship with the original `h4ni0/pi` source
 - `install.ps1` / `install.sh` — one-command installers/updaters

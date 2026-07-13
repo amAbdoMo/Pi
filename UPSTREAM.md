@@ -40,7 +40,7 @@ This repository also includes plan/build mode, compact clipboard handling, an ex
 - Context: `󰍛`
 - Session: ``
 
-These glyphs require a Nerd Font in the terminal.
+These glyphs require a Nerd Font in the terminal. The Windows installer provisions the pinned `CaskaydiaMono NFM` font; other platforms must configure a compatible Nerd Font separately.
 
 ## Future audit procedure
 

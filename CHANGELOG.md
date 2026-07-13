@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.2
+
+- Added verified per-user installation of CaskaydiaMono Nerd Font Mono 3.4.0 on Windows.
+- Configured Windows Terminal, Windows Terminal Preview, and unpackaged Windows Terminal JSON/JSONC settings to use `CaskaydiaMono NFM`, with one-time settings backups.
+- Added version-marker and four-style registry validation so older or incomplete font installations are repaired.
+- Extended both one-command installers to configure the Nerd Font on Windows and explain the requirement on other platforms.
+
 ## 0.4.1
 
 - Restored the h4ni0 Nerd Font icons for folder, Git branch, model, context usage, and session name in the custom header.

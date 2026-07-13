@@ -27,6 +27,8 @@ const requiredFiles = [
   "extensions/plan-mode/index.ts",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
+  "scripts/setup-terminal-font.ps1",
+  "scripts/set-terminal-font.mjs",
   "UPSTREAM.md",
   "install.ps1",
   "install.sh",
@@ -39,6 +41,13 @@ const headerSource = fs.readFileSync(path.join(root, "extensions/ui/header.ts"),
 const requiredHeaderIcons = ["󰉋", "", "󰧑", "󰍛", ""];
 for (const icon of requiredHeaderIcons) {
   if (!headerSource.includes(icon)) throw new Error(`Missing required header icon: ${icon}`);
+}
+
+const fontSetupSource = fs.readFileSync(path.join(root, "scripts/setup-terminal-font.ps1"), "utf8");
+for (const requiredFontSetting of ["CaskaydiaMono NFM", "3.4.0", "7c22db8c8460ef62abffbb6d5c7b212507de0798a4a762fa2a005a8bc4c90fc6"]) {
+  if (!fontSetupSource.includes(requiredFontSetting)) {
+    throw new Error(`Missing pinned Nerd Font setting: ${requiredFontSetting}`);
+  }
 }
 
 const settings = parsedJson.get("settings.example.json");
