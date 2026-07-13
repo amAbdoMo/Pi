@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Highlighted compact text-paste, image-paste, and native paste placeholders with the theme's code color.
+- Made `Tab` switch directly between plan and build modes while preserving `Shift+Tab` for thinking-level changes.
+- Added an always-visible `mode PLAN` or `mode BUILD` indicator to the custom terminal header.
+- Added regression tests for paste-placeholder styling and plan/build mode state changes.
+
 ## 0.4.2
 
 - Added verified per-user installation of CaskaydiaMono Nerd Font Mono 3.4.0 on Windows.

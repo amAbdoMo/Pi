@@ -18,9 +18,9 @@ At that commit, h4ni0/pi has 88 tracked files. This repository contains every fu
 ## Intentional common-file differences
 
 - `.gitignore` — adds package/build/runtime exclusions used by this portable repository.
-- `extensions/ui/header.ts` — retains the upstream Nerd Font status icons while using the current header spacing, labels, and colors.
-- `extensions/ui/index.ts` — integrates compact image and multiline-text paste transformation.
-- `extensions/ui/terminalEditor.ts` — integrates the custom Windows clipboard behavior and current terminal editor layout.
+- `extensions/ui/header.ts` — retains the upstream Nerd Font status icons while using the current header spacing, labels, colors, and plan/build indicator.
+- `extensions/ui/index.ts` — integrates compact image and multiline-text paste transformation plus shared plan/build state.
+- `extensions/ui/terminalEditor.ts` — integrates the custom Windows clipboard behavior, highlighted paste markers, `Tab` mode switching, and current terminal editor layout.
 - `themes/hypr-waves.json` — uses the current black-background variant instead of the upstream blue surfaces.
 
 ## Upstream-only files

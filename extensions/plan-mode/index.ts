@@ -16,6 +16,10 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
+import {
+	setPlanBuildMode,
+	setPlanBuildModeToggleHandler,
+} from "./modeState.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
 // Tools
@@ -45,6 +49,7 @@ function getTextContent(message: AssistantMessage): string {
 }
 
 export default function planModeExtension(pi: ExtensionAPI): void {
+	let activeContext: ExtensionContext | undefined;
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
@@ -57,6 +62,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	});
 
 	function updateStatus(ctx: ExtensionContext): void {
+		setPlanBuildMode(planModeEnabled ? "plan" : "build");
+
 		// Footer status
 		if (executionMode && todoItems.length > 0) {
 			const completed = todoItems.filter((t) => t.completed).length;
@@ -145,6 +152,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		updateStatus(ctx);
 		persistState();
 	}
+
+	setPlanBuildModeToggleHandler(() => {
+		if (!activeContext) return false;
+		togglePlanMode(activeContext);
+		return true;
+	});
 
 	pi.registerCommand("plan", {
 		description: "Toggle plan mode (read-only exploration)",
@@ -351,6 +364,7 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
 	// Restore state on session start/resume
 	pi.on("session_start", async (_event, ctx) => {
+		activeContext = ctx;
 		if (pi.getFlag("plan") === true) {
 			planModeEnabled = true;
 		}
@@ -399,5 +413,9 @@ After completing a step, include a [DONE:n] tag in your response.`;
 			enablePlanModeTools();
 		}
 		updateStatus(ctx);
+	});
+
+	pi.on("session_shutdown", async () => {
+		activeContext = undefined;
 	});
 }

@@ -22,10 +22,10 @@ The command is safe to run again when this repository changes. It installs the r
 
 - Custom terminal UI with Nerd Font status icons and the `hypr-waves` theme
 - Verified Windows Nerd Font setup using CaskaydiaMono Nerd Font Mono 3.4.0
-- Compact clipboard image markers on Windows
-- Compact multiline-text paste markers on Windows
-- Plan/build workflow:
-  - `/plan` or `Ctrl+Alt+P` enters read-only planning
+- Color-highlighted clipboard image markers on Windows
+- Color-highlighted compact multiline-text paste markers on Windows
+- Plan/build workflow with the current mode shown in the terminal header:
+  - `Tab`, `/plan`, or `Ctrl+Alt+P` switches between read-only planning and full-access building
   - `--plan` starts in planning mode
   - `/build` restores full tool access
   - `/todos` shows plan progress

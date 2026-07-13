@@ -1,5 +1,9 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
+  requestPlanBuildModeToggle,
+  subscribePlanBuildMode,
+} from "../plan-mode/modeState.ts";
+import {
   refreshChatGptUsage,
   resetChatGptUsage,
 } from "./chatgptUsage.ts";
@@ -14,6 +18,7 @@ import { clearTerminal } from "./terminal.ts";
 import type { UiTheme } from "./types.ts";
 
 // UI extension: startup header, terminal-style editor, and footer cleanup.
+let unsubscribePlanBuildMode: (() => void) | undefined;
 let unsubscribeSubagents: (() => void) | undefined;
 
 export default function uiExtension(pi: ExtensionAPI) {
@@ -26,6 +31,8 @@ export default function uiExtension(pi: ExtensionAPI) {
     updateState(ctx, pi);
     void updateBranch(pi);
     void refreshChatGptUsage(ctx, { force: true });
+    unsubscribePlanBuildMode?.();
+    unsubscribePlanBuildMode = subscribePlanBuildMode(notifyEditors);
     unsubscribeSubagents?.();
     unsubscribeSubagents = subscribeSubagents(notifyEditors);
 
@@ -35,7 +42,12 @@ export default function uiExtension(pi: ExtensionAPI) {
     }));
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-      const editor = new TerminalEditor(tui, theme, keybindings);
+      const editor = new TerminalEditor(
+        tui,
+        theme,
+        keybindings,
+        requestPlanBuildModeToggle,
+      );
       editors.add(editor);
       return editor;
     });
@@ -93,6 +105,8 @@ export default function uiExtension(pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     resetChatGptUsage();
+    unsubscribePlanBuildMode?.();
+    unsubscribePlanBuildMode = undefined;
     unsubscribeSubagents?.();
     unsubscribeSubagents = undefined;
     editors.clear();

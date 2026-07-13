@@ -1,3 +1,4 @@
+import { getPlanBuildMode } from "../plan-mode/modeState.ts";
 import { chatGptFiveHourLimitLabel } from "./chatgptUsage.ts";
 import { bold, color, padToWidth, ratioProgressBar } from "./formatting.ts";
 import { state } from "./state.ts";
@@ -46,6 +47,12 @@ function linkColor(text: string): string {
   return color("mdLink", text);
 }
 
+function modeLabel(): string {
+  const mode = getPlanBuildMode();
+  const token = mode === "plan" ? "warning" : "success";
+  return color("muted", "mode ") + color(token, bold(mode.toUpperCase()));
+}
+
 function sessionNameLabel(): string | undefined {
   let name: string | undefined;
   try {
@@ -77,7 +84,7 @@ export function buildHeader(width: number): string {
     contextProgressBar();
   const subagents = subagentsLabel();
   const chatGptLimit = chatGptFiveHourLimitLabel();
-  const parts = [folder, branch, model, context];
+  const parts = [folder, branch, modeLabel(), model, context];
   if (subagents) parts.push(subagents);
   if (chatGptLimit) parts.push(chatGptLimit);
   const sessionName = sessionNameLabel();

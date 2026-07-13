@@ -6,15 +6,14 @@ import {
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { color, padToWidth } from "./formatting.ts";
+import { bold, color, padToWidth } from "./formatting.ts";
 import { buildHeader } from "./header.ts";
 import {
-  IMAGE_MARKER_RE,
-  TEXT_MARKER_RE,
   readBestImage,
   readClipboardText,
   savePastedText,
 } from "./imagePaste.ts";
+import { highlightPasteMarkers } from "./pasteMarkers.ts";
 import type { KeybindingsManager } from "./types.ts";
 
 function stripAnsi(input: string): string {
@@ -34,7 +33,12 @@ function looksLikeEditorBorder(line: string): boolean {
 export class TerminalEditor extends CustomEditor {
   private busyPastingClipboard = false;
 
-  constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    keybindings: KeybindingsManager,
+    private readonly togglePlanBuildMode?: () => boolean,
+  ) {
     // paddingX 0 avoids the stock editor's side-padding/wrap weirdness.
     super(tui, theme, keybindings, { paddingX: 0 });
   }
@@ -45,6 +49,10 @@ export class TerminalEditor extends CustomEditor {
   }
 
   override handleInput(data: string): void {
+    if (matchesKey(data, "tab") && this.togglePlanBuildMode?.()) {
+      return;
+    }
+
     const isCustomPaste = matchesKey(data, "ctrl+v") || matchesKey(data, "alt+v");
     if (process.platform === "win32" && isCustomPaste) {
       this.pasteCompactImage();
@@ -95,9 +103,9 @@ export class TerminalEditor extends CustomEditor {
 
     for (let i = 0; i < inputLines.length; i++) {
       const prefix = i === 0 ? prompt : " ".repeat(promptWidth);
-      const inputLine = inputLines[i]
-        .replace(IMAGE_MARKER_RE, (marker) => `\x1b[97m${marker}\x1b[39m`)
-        .replace(TEXT_MARKER_RE, (marker) => `\x1b[97m${marker}\x1b[39m`);
+      const inputLine = highlightPasteMarkers(inputLines[i], (marker) =>
+        color("mdCode", bold(marker)),
+      );
       lines.push(padToWidth(prefix + inputLine, width));
     }
 
