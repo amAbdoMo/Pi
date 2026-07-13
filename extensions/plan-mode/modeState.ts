@@ -1,10 +1,8 @@
-export type PlanBuildMode = "plan" | "build";
+import type { PlanBuildMode } from "./modeEvents.ts";
 
 type ModeListener = (mode: PlanBuildMode) => void;
-type ToggleHandler = () => boolean;
 
 let currentMode: PlanBuildMode = "build";
-let toggleHandler: ToggleHandler | undefined;
 const listeners = new Set<ModeListener>();
 
 export function getPlanBuildMode(): PlanBuildMode {
@@ -20,12 +18,4 @@ export function setPlanBuildMode(mode: PlanBuildMode): void {
 export function subscribePlanBuildMode(listener: ModeListener): () => void {
 	listeners.add(listener);
 	return () => listeners.delete(listener);
-}
-
-export function setPlanBuildModeToggleHandler(handler: ToggleHandler | undefined): void {
-	toggleHandler = handler;
-}
-
-export function requestPlanBuildModeToggle(): boolean {
-	return toggleHandler?.() ?? false;
 }

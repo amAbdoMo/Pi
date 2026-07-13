@@ -17,9 +17,9 @@ import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
 import {
-	setPlanBuildMode,
-	setPlanBuildModeToggleHandler,
-} from "./modeState.ts";
+	publishPlanBuildMode,
+	subscribePlanBuildModeToggleRequests,
+} from "./modeEvents.ts";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
 // Tools
@@ -62,7 +62,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	});
 
 	function updateStatus(ctx: ExtensionContext): void {
-		setPlanBuildMode(planModeEnabled ? "plan" : "build");
+		publishPlanBuildMode(pi.events, planModeEnabled ? "plan" : "build");
 
 		// Footer status
 		if (executionMode && todoItems.length > 0) {
@@ -153,10 +153,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		persistState();
 	}
 
-	setPlanBuildModeToggleHandler(() => {
-		if (!activeContext) return false;
-		togglePlanMode(activeContext);
-		return true;
+	subscribePlanBuildModeToggleRequests(pi.events, () => {
+		if (activeContext) togglePlanMode(activeContext);
 	});
 
 	pi.registerCommand("plan", {

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  getPlanBuildMode,
+  publishPlanBuildMode,
   requestPlanBuildModeToggle,
+  subscribePlanBuildModeChanges,
+  subscribePlanBuildModeToggleRequests,
+} from "../extensions/plan-mode/modeEvents.ts";
+import {
+  getPlanBuildMode,
   setPlanBuildMode,
-  setPlanBuildModeToggleHandler,
   subscribePlanBuildMode,
 } from "../extensions/plan-mode/modeState.ts";
 import { highlightPasteMarkers } from "../extensions/ui/pasteMarkers.ts";
@@ -28,28 +32,45 @@ test("paste placeholders share the highlighted marker treatment", () => {
   assert.equal(highlightPasteMarkers("ordinary [text]", () => "changed"), "ordinary [text]");
 });
 
-test("plan/build mode state notifies subscribers and delegates toggle requests", () => {
-  setPlanBuildMode("build");
+function createEventBus() {
+  const listeners = new Map();
+  return {
+    emit(channel, payload) {
+      for (const listener of listeners.get(channel) ?? []) listener(payload);
+    },
+    on(channel, listener) {
+      const channelListeners = listeners.get(channel) ?? new Set();
+      channelListeners.add(listener);
+      listeners.set(channel, channelListeners);
+      return () => channelListeners.delete(listener);
+    },
+  };
+}
+
+test("shared events carry Tab toggle requests from the UI to plan mode", () => {
+  const events = createEventBus();
   const observedModes = [];
-  const unsubscribe = subscribePlanBuildMode((mode) => observedModes.push(mode));
-  setPlanBuildModeToggleHandler(() => {
-    setPlanBuildMode(getPlanBuildMode() === "build" ? "plan" : "build");
-    return true;
+  setPlanBuildMode("build");
+
+  const unsubscribeState = subscribePlanBuildMode((mode) => observedModes.push(mode));
+  const unsubscribeChanges = subscribePlanBuildModeChanges(events, setPlanBuildMode);
+  const unsubscribeToggle = subscribePlanBuildModeToggleRequests(events, () => {
+    const nextMode = getPlanBuildMode() === "build" ? "plan" : "build";
+    publishPlanBuildMode(events, nextMode);
   });
 
   try {
-    assert.equal(requestPlanBuildModeToggle(), true);
+    requestPlanBuildModeToggle(events);
     assert.equal(getPlanBuildMode(), "plan");
     assert.deepEqual(observedModes, ["plan"]);
 
-    assert.equal(requestPlanBuildModeToggle(), true);
+    requestPlanBuildModeToggle(events);
     assert.equal(getPlanBuildMode(), "build");
     assert.deepEqual(observedModes, ["plan", "build"]);
   } finally {
-    unsubscribe();
-    setPlanBuildModeToggleHandler(undefined);
+    unsubscribeToggle();
+    unsubscribeChanges();
+    unsubscribeState();
     setPlanBuildMode("build");
   }
-
-  assert.equal(requestPlanBuildModeToggle(), false);
 });

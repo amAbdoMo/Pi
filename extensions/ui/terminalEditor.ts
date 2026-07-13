@@ -37,7 +37,7 @@ export class TerminalEditor extends CustomEditor {
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
-    private readonly togglePlanBuildMode?: () => boolean,
+    private readonly togglePlanBuildMode: () => void,
   ) {
     // paddingX 0 avoids the stock editor's side-padding/wrap weirdness.
     super(tui, theme, keybindings, { paddingX: 0 });
@@ -49,7 +49,8 @@ export class TerminalEditor extends CustomEditor {
   }
 
   override handleInput(data: string): void {
-    if (matchesKey(data, "tab") && this.togglePlanBuildMode?.()) {
+    if (matchesKey(data, "tab")) {
+      this.togglePlanBuildMode();
       return;
     }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed `Tab` opening path autocomplete instead of switching modes by routing toggle requests through Pi's shared extension event bus.
+- Added a regression test covering the full UI-to-plan-mode toggle event flow.
+
 ## 0.5.0
 
 - Highlighted compact text-paste, image-paste, and native paste placeholders with the theme's code color.

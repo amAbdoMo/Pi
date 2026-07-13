@@ -1,6 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   requestPlanBuildModeToggle,
+  subscribePlanBuildModeChanges,
+} from "../plan-mode/modeEvents.ts";
+import {
+  setPlanBuildMode,
   subscribePlanBuildMode,
 } from "../plan-mode/modeState.ts";
 import {
@@ -22,6 +26,8 @@ let unsubscribePlanBuildMode: (() => void) | undefined;
 let unsubscribeSubagents: (() => void) | undefined;
 
 export default function uiExtension(pi: ExtensionAPI) {
+  subscribePlanBuildModeChanges(pi.events, setPlanBuildMode);
+
   pi.on("session_start", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
 
@@ -46,7 +52,7 @@ export default function uiExtension(pi: ExtensionAPI) {
         tui,
         theme,
         keybindings,
-        requestPlanBuildModeToggle,
+        () => requestPlanBuildModeToggle(pi.events),
       );
       editors.add(editor);
       return editor;
