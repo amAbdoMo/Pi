@@ -9,14 +9,17 @@ $PiPackages = @(
 $ConfigScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs'
 $FontSetupScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1'
 $TerminalSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-terminal-font.mjs'
+$WarpSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-warp-settings.mjs'
 $ConfigScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-config-$([guid]::NewGuid()).mjs"
 $FontSetupScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-font-$([guid]::NewGuid()).ps1"
 $TerminalSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-terminal-$([guid]::NewGuid()).mjs"
+$WarpSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-warp-$([guid]::NewGuid()).mjs"
 
 try {
   Invoke-WebRequest -UseBasicParsing -Uri $ConfigScriptUrl -OutFile $ConfigScriptFile
   Invoke-WebRequest -UseBasicParsing -Uri $FontSetupScriptUrl -OutFile $FontSetupScriptFile
   Invoke-WebRequest -UseBasicParsing -Uri $TerminalSettingsScriptUrl -OutFile $TerminalSettingsScriptFile
+  Invoke-WebRequest -UseBasicParsing -Uri $WarpSettingsScriptUrl -OutFile $WarpSettingsScriptFile
   node $ConfigScriptFile
 
   foreach ($Package in $PiPackages) {
@@ -25,11 +28,12 @@ try {
   pi update --extensions
 
   node $ConfigScriptFile
-  & $FontSetupScriptFile -TerminalSettingsScript $TerminalSettingsScriptFile
+  & $FontSetupScriptFile -TerminalSettingsScript $TerminalSettingsScriptFile -WarpSettingsScript $WarpSettingsScriptFile
 } finally {
   Remove-Item $ConfigScriptFile -Force -ErrorAction SilentlyContinue
   Remove-Item $FontSetupScriptFile -Force -ErrorAction SilentlyContinue
   Remove-Item $TerminalSettingsScriptFile -Force -ErrorAction SilentlyContinue
+  Remove-Item $WarpSettingsScriptFile -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host 'Done. Restart Pi with: pi'

@@ -1,5 +1,5 @@
 import { getPlanBuildMode } from "../plan-mode/modeState.ts";
-import { chatGptFiveHourLimitLabel } from "./chatgptUsage.ts";
+import { chatGptLimitLabels } from "./chatgptUsage.ts";
 import { bold, color, padToWidth, ratioProgressBar } from "./formatting.ts";
 import { state } from "./state.ts";
 import { subagentsLabel } from "./subagents.ts";
@@ -83,10 +83,9 @@ export function buildHeader(width: number): string {
     " " +
     contextProgressBar();
   const subagents = subagentsLabel();
-  const chatGptLimit = chatGptFiveHourLimitLabel();
   const parts = [folder, branch, modeLabel(), model, context];
   if (subagents) parts.push(subagents);
-  if (chatGptLimit) parts.push(chatGptLimit);
+  parts.push(...chatGptLimitLabels());
   const sessionName = sessionNameLabel();
   if (sessionName) parts.push(sessionName);
 

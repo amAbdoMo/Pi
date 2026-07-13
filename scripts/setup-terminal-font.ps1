@@ -1,6 +1,8 @@
 param(
   [string[]]$TerminalSettingsFiles,
   [string]$TerminalSettingsScript,
+  [string[]]$WarpSettingsFiles,
+  [string]$WarpSettingsScript,
   [string]$FontSourceDirectory,
   [string]$FontInstallDirectory,
   [string]$FontRegistryPath,
@@ -8,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$WarpSettingsFilesProvided = $PSBoundParameters.ContainsKey('WarpSettingsFiles')
 
 $FontFamily = 'CaskaydiaMono NFM'
 $FontVersion = '3.4.0'
@@ -37,6 +40,9 @@ if (-not $FontVersionMarkerFile) {
 }
 if (-not $TerminalSettingsScript) {
   $TerminalSettingsScript = Join-Path $PSScriptRoot 'set-terminal-font.mjs'
+}
+if (-not $WarpSettingsScript) {
+  $WarpSettingsScript = Join-Path $PSScriptRoot 'set-warp-settings.mjs'
 }
 
 function Get-FileSha256([string]$FilePath) {
@@ -93,12 +99,23 @@ function Set-WindowsTerminalFont([string[]]$SettingsFiles) {
   }
   $existingSettingsFiles = @($SettingsFiles | Select-Object -Unique | Where-Object { Test-Path $_ })
   if ($existingSettingsFiles.Count -eq 0) {
-    Write-Warning 'No Windows Terminal settings files were found. The Nerd Font was installed but must be selected manually.'
+    Write-Warning 'No Windows Terminal settings files were found; skipping Windows Terminal configuration.'
     return
   }
 
   & node $TerminalSettingsScript $FontFamily @existingSettingsFiles
   if ($LASTEXITCODE -ne 0) { throw 'Could not configure Windows Terminal settings.' }
+}
+
+function Set-WarpTerminalSettings([string[]]$SettingsFiles) {
+  $existingSettingsFiles = @($SettingsFiles | Select-Object -Unique | Where-Object { Test-Path $_ })
+  if ($existingSettingsFiles.Count -eq 0) { return }
+  if (-not (Test-Path $WarpSettingsScript)) {
+    throw "Warp settings helper not found: $WarpSettingsScript"
+  }
+
+  & node $WarpSettingsScript $FontFamily @existingSettingsFiles
+  if ($LASTEXITCODE -ne 0) { throw 'Could not configure Warp terminal settings.' }
 }
 
 if ($env:OS -ne 'Windows_NT') {
@@ -131,8 +148,14 @@ try {
       (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows Terminal\settings.json')
     )
   }
+  if (-not $WarpSettingsFilesProvided) {
+    $WarpSettingsFiles = @(
+      (Join-Path $env:LOCALAPPDATA 'warp\Warp\config\settings.toml')
+    )
+  }
   Set-WindowsTerminalFont $TerminalSettingsFiles
-  Write-Host "Installed $FontFamily $FontVersion. Close every Windows Terminal window and reopen it."
+  Set-WarpTerminalSettings $WarpSettingsFiles
+  Write-Host "Installed $FontFamily $FontVersion. Close every Windows Terminal and Warp window, then reopen your terminal."
 } finally {
   if ($temporaryDirectory) { Remove-Item $temporaryDirectory -Recurse -Force -ErrorAction SilentlyContinue }
 }

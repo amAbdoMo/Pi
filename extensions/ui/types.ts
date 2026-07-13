@@ -22,6 +22,7 @@ export type HeaderState = {
   contextTokens?: number;
   contextWindow?: number;
   chatGptFiveHourUsedPercent?: number;
+  chatGptWeeklyUsedPercent?: number;
   chatGptUsageProvider?: string;
 };
 

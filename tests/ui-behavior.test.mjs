@@ -12,6 +12,7 @@ import {
   subscribePlanBuildMode,
 } from "../extensions/plan-mode/modeState.ts";
 import { highlightPasteMarkers } from "../extensions/ui/pasteMarkers.ts";
+import { isEmptyBracketedPaste } from "../extensions/ui/terminalCompatibility.ts";
 
 test("paste placeholders share the highlighted marker treatment", () => {
   const markers = [
@@ -30,6 +31,12 @@ test("paste placeholders share the highlighted marker treatment", () => {
   }
   assert.equal((highlighted.match(/<highlight>/g) ?? []).length, 5);
   assert.equal(highlightPasteMarkers("ordinary [text]", () => "changed"), "ordinary [text]");
+});
+
+test("Warp image-only paste signal is distinguished from normal text paste", () => {
+  assert.equal(isEmptyBracketedPaste("\x1b[200~\x1b[201~"), true);
+  assert.equal(isEmptyBracketedPaste("\x1b[200~pasted text\x1b[201~"), false);
+  assert.equal(isEmptyBracketedPaste("\x16"), false);
 });
 
 function createEventBus() {

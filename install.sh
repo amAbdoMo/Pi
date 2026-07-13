@@ -10,14 +10,17 @@ PI_PACKAGES=(
 CONFIG_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs"
 FONT_SETUP_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1"
 TERMINAL_SETTINGS_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-terminal-font.mjs"
+WARP_SETTINGS_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-warp-settings.mjs"
 CONFIG_SCRIPT_FILE="$(mktemp "${TMPDIR:-/tmp}/amabdomo-pi-config.XXXXXX")"
 FONT_SETUP_SCRIPT_FILE=""
 TERMINAL_SETTINGS_SCRIPT_FILE=""
+WARP_SETTINGS_SCRIPT_FILE=""
 
 cleanup() {
   rm -f "$CONFIG_SCRIPT_FILE"
   if [[ -n "$FONT_SETUP_SCRIPT_FILE" ]]; then rm -f "$FONT_SETUP_SCRIPT_FILE"; fi
   if [[ -n "$TERMINAL_SETTINGS_SCRIPT_FILE" ]]; then rm -f "$TERMINAL_SETTINGS_SCRIPT_FILE"; fi
+  if [[ -n "$WARP_SETTINGS_SCRIPT_FILE" ]]; then rm -f "$WARP_SETTINGS_SCRIPT_FILE"; fi
 }
 trap cleanup EXIT
 
@@ -38,9 +41,13 @@ case "$(uname -s)" in
     TERMINAL_SETTINGS_SCRIPT_BASE="$(mktemp "${TMPDIR:-/tmp}/amabdomo-pi-terminal.XXXXXX")"
     TERMINAL_SETTINGS_SCRIPT_FILE="$TERMINAL_SETTINGS_SCRIPT_BASE.mjs"
     mv "$TERMINAL_SETTINGS_SCRIPT_BASE" "$TERMINAL_SETTINGS_SCRIPT_FILE"
+    WARP_SETTINGS_SCRIPT_BASE="$(mktemp "${TMPDIR:-/tmp}/amabdomo-pi-warp.XXXXXX")"
+    WARP_SETTINGS_SCRIPT_FILE="$WARP_SETTINGS_SCRIPT_BASE.mjs"
+    mv "$WARP_SETTINGS_SCRIPT_BASE" "$WARP_SETTINGS_SCRIPT_FILE"
     curl -fsSL "$FONT_SETUP_SCRIPT_URL" -o "$FONT_SETUP_SCRIPT_FILE"
     curl -fsSL "$TERMINAL_SETTINGS_SCRIPT_URL" -o "$TERMINAL_SETTINGS_SCRIPT_FILE"
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$FONT_SETUP_SCRIPT_FILE")" -TerminalSettingsScript "$(cygpath -w "$TERMINAL_SETTINGS_SCRIPT_FILE")"
+    curl -fsSL "$WARP_SETTINGS_SCRIPT_URL" -o "$WARP_SETTINGS_SCRIPT_FILE"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$FONT_SETUP_SCRIPT_FILE")" -TerminalSettingsScript "$(cygpath -w "$TERMINAL_SETTINGS_SCRIPT_FILE")" -WarpSettingsScript "$(cygpath -w "$WARP_SETTINGS_SCRIPT_FILE")"
     ;;
   *)
     echo "Nerd Font note: configure a Nerd Font such as CaskaydiaMono NFM to render Pi status icons."

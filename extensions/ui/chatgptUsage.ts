@@ -3,16 +3,16 @@ import { notifyEditors } from "./editorRegistry.ts";
 import { color, ratioProgressBar } from "./formatting.ts";
 import { isOpenAICodexProvider } from "./providers.ts";
 import { state } from "./state.ts";
+import { extractChatGptUsage, type ChatGptUsage } from "./usageWindows.ts";
 
 const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
-const FIVE_HOUR_SECONDS = 5 * 60 * 60;
 const OPENAI_AUTH_CLAIM = "https://api.openai.com/auth";
 const USAGE_REFRESH_THROTTLE_MS = 30 * 1000;
 
 let usageRequestId = 0;
 let usageLastRefreshStartedAt = 0;
 
-function decodeJwtPayload(token: string): Record<string, any> {
+function decodeJwtPayload(token: string): Record<string, unknown> {
   const parts = token.split(".");
   if (parts.length < 2) return {};
 
@@ -26,69 +26,52 @@ function decodeJwtPayload(token: string): Record<string, any> {
 function getChatGptAccountId(token: string): string | undefined {
   const payload = decodeJwtPayload(token);
   const auth = payload[OPENAI_AUTH_CLAIM];
-  return auth && typeof auth.chatgpt_account_id === "string"
-    ? auth.chatgpt_account_id
-    : undefined;
+  if (!auth || typeof auth !== "object") return undefined;
+  const accountId = (auth as Record<string, unknown>).chatgpt_account_id;
+  return typeof accountId === "string" ? accountId : undefined;
 }
 
-function clampPercent(value: number): number {
-  return Math.max(0, Math.min(100, value));
+function clampPercent(percent: number): number {
+  return Math.max(0, Math.min(100, percent));
 }
 
-function usageLimitColor(percent: number | undefined): string {
-  if (percent === undefined) return "muted";
+function usageLimitColor(percent: number): string {
   if (percent >= 90) return "error";
   if (percent >= 80) return "warning";
   return "muted";
 }
 
-export function chatGptFiveHourLimitLabel(): string | undefined {
-  if (!isOpenAICodexProvider(state.provider)) return undefined;
-
-  const usedPercent = state.chatGptFiveHourUsedPercent;
-  const percentText =
-    usedPercent === undefined
-      ? "?%"
-      : `${Math.round(clampPercent(usedPercent))}%`;
-  const ratio = usedPercent === undefined ? 0 : clampPercent(usedPercent) / 100;
-
+function usageLimitLabel(label: string, usedPercent: number): string {
+  const clampedPercent = clampPercent(usedPercent);
   return [
-    color("warning", "5h "),
-    color(usageLimitColor(usedPercent), percentText),
+    color("warning", `${label} `),
+    color(usageLimitColor(clampedPercent), `${Math.round(clampedPercent)}%`),
     " ",
-    ratioProgressBar(ratio),
+    ratioProgressBar(clampedPercent / 100),
   ].join("");
 }
 
-function normalizeUsageWindow(
-  value: unknown,
-): { usedPercent: number; windowSeconds: number } | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const record = value as Record<string, unknown>;
-  const usedPercent =
-    typeof record.used_percent === "number" ? record.used_percent : undefined;
-  const windowSeconds =
-    typeof record.limit_window_seconds === "number"
-      ? record.limit_window_seconds
-      : undefined;
-  if (usedPercent === undefined || windowSeconds === undefined)
-    return undefined;
-  return { usedPercent, windowSeconds };
+export function chatGptLimitLabels(): string[] {
+  if (!isOpenAICodexProvider(state.provider)) return [];
+
+  const labels: string[] = [];
+  if (state.chatGptFiveHourUsedPercent !== undefined) {
+    labels.push(usageLimitLabel("5h", state.chatGptFiveHourUsedPercent));
+  }
+  if (state.chatGptWeeklyUsedPercent !== undefined) {
+    labels.push(usageLimitLabel("7d", state.chatGptWeeklyUsedPercent));
+  }
+  return labels;
 }
 
-function extractFiveHourUsedPercent(data: unknown): number | undefined {
-  if (!data || typeof data !== "object") return undefined;
-  const rateLimit = (data as Record<string, any>).rate_limit;
-  if (!rateLimit || typeof rateLimit !== "object") return undefined;
+function clearChatGptUsage(): void {
+  state.chatGptFiveHourUsedPercent = undefined;
+  state.chatGptWeeklyUsedPercent = undefined;
+}
 
-  const windows = [
-    normalizeUsageWindow(rateLimit.primary_window),
-    normalizeUsageWindow(rateLimit.secondary_window),
-  ].filter(Boolean) as { usedPercent: number; windowSeconds: number }[];
-
-  return windows.find(
-    (window) => Math.abs(window.windowSeconds - FIVE_HOUR_SECONDS) <= 120,
-  )?.usedPercent;
+function setChatGptUsage(usage: ChatGptUsage): void {
+  state.chatGptFiveHourUsedPercent = usage.fiveHourUsedPercent;
+  state.chatGptWeeklyUsedPercent = usage.weeklyUsedPercent;
 }
 
 export async function refreshChatGptUsage(
@@ -100,7 +83,7 @@ export async function refreshChatGptUsage(
   if (!isOpenAICodexProvider(provider)) {
     usageRequestId++;
     usageLastRefreshStartedAt = 0;
-    state.chatGptFiveHourUsedPercent = undefined;
+    clearChatGptUsage();
     state.chatGptUsageProvider = undefined;
     notifyEditors();
     return;
@@ -108,7 +91,7 @@ export async function refreshChatGptUsage(
 
   const providerChanged = state.chatGptUsageProvider !== provider;
   if (providerChanged) {
-    state.chatGptFiveHourUsedPercent = undefined;
+    clearChatGptUsage();
     state.chatGptUsageProvider = provider;
     notifyEditors();
   }
@@ -126,12 +109,10 @@ export async function refreshChatGptUsage(
   const requestId = ++usageRequestId;
 
   try {
-    const auth = await (ctx.modelRegistry as any).getApiKeyAndHeaders(
-      ctx.model,
-    );
+    const auth = await (ctx.modelRegistry as any).getApiKeyAndHeaders(ctx.model);
     if (requestId !== usageRequestId) return;
     if (!auth?.ok || !auth.apiKey) {
-      state.chatGptFiveHourUsedPercent = undefined;
+      clearChatGptUsage();
       notifyEditors();
       return;
     }
@@ -148,12 +129,10 @@ export async function refreshChatGptUsage(
     });
     if (requestId !== usageRequestId) return;
 
-    state.chatGptFiveHourUsedPercent = response.ok
-      ? extractFiveHourUsedPercent(await response.json())
-      : undefined;
+    setChatGptUsage(response.ok ? extractChatGptUsage(await response.json()) : {});
   } catch {
     if (requestId !== usageRequestId) return;
-    state.chatGptFiveHourUsedPercent = undefined;
+    clearChatGptUsage();
   }
 
   notifyEditors();
@@ -162,6 +141,6 @@ export async function refreshChatGptUsage(
 export function resetChatGptUsage(): void {
   usageRequestId++;
   usageLastRefreshStartedAt = 0;
-  state.chatGptFiveHourUsedPercent = undefined;
+  clearChatGptUsage();
   state.chatGptUsageProvider = undefined;
 }

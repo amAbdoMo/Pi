@@ -9,6 +9,7 @@ $testRoot = Join-Path ([System.IO.Path]::GetTempPath()) "pi-font-test-$([guid]::
 $fontSourceDirectory = Join-Path $testRoot 'source'
 $fontInstallDirectory = Join-Path $testRoot 'installed'
 $settingsFile = Join-Path $testRoot 'settings.json'
+$warpSettingsFile = Join-Path $testRoot 'warp-settings.toml'
 $versionMarker = Join-Path $fontInstallDirectory 'version'
 $registryPath = "HKCU:\Software\amAbdoMo\PiFontTests\$([guid]::NewGuid())"
 $fontFiles = @(
@@ -39,10 +40,19 @@ try {
   },
 }
 '@)
+  [System.IO.File]::WriteAllText($warpSettingsFile, @'
+[appearance.text]
+font_size = 16.0
+
+[terminal.input]
+input_box_type_setting = "universal"
+'@)
 
   $setupArguments = @{
     TerminalSettingsFiles = @($settingsFile)
     TerminalSettingsScript = (Join-Path $repositoryRoot 'scripts\set-terminal-font.mjs')
+    WarpSettingsFiles = @($warpSettingsFile)
+    WarpSettingsScript = (Join-Path $repositoryRoot 'scripts\set-warp-settings.mjs')
     FontSourceDirectory = $fontSourceDirectory
     FontInstallDirectory = $fontInstallDirectory
     FontRegistryPath = $registryPath
@@ -62,6 +72,11 @@ try {
   Assert-Equal $configuredSettings.profiles.defaults.opacity 90 'Profile defaults were not preserved'
   Assert-Equal $configuredSettings.profiles.defaults.font.face 'CaskaydiaMono NFM' 'Nerd Font was not configured'
   if (-not (Test-Path "$settingsFile.amabdomo-pi-backup")) { throw 'Windows Terminal settings backup was not created' }
+
+  $configuredWarpSettings = Get-Content -Raw $warpSettingsFile
+  if ($configuredWarpSettings -notmatch 'font_name = "CaskaydiaMono NFM"') { throw 'Warp Nerd Font was not configured' }
+  if ($configuredWarpSettings -notmatch 'input_box_type_setting = "classic"') { throw 'Warp classic input was not configured' }
+  if (-not (Test-Path "$warpSettingsFile.amabdomo-pi-backup")) { throw 'Warp settings backup was not created' }
 
   Remove-Item $fontSourceDirectory -Recurse -Force
   $setupArguments.Remove('FontSourceDirectory')

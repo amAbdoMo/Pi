@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Added Codex weekly usage beside the five-hour indicator, matching rate-limit windows by duration instead of response position.
+- Hid usage windows that OpenAI does not return instead of rendering an unknown percentage.
+- Configured detected Warp installations to use `CaskaydiaMono NFM` and terminal-first classic input, with fail-closed TOML updates and a one-time backup.
+- Handled Warp's empty bracketed-paste signal for image-only clipboard content on Windows; `Alt+V` remains a fallback.
+- Added behavioral coverage for usage-window parsing, Warp settings preservation, ambiguous TOML failure, and Warp image-paste detection.
+
 ## 0.5.2
 
 - Replaced the literal `mode` header label with a Nerd Font cog icon (`󰒓`) while retaining the colored `PLAN` or `BUILD` text.

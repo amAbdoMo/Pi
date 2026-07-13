@@ -14,7 +14,15 @@ import {
   savePastedText,
 } from "./imagePaste.ts";
 import { highlightPasteMarkers } from "./pasteMarkers.ts";
+import { isEmptyBracketedPaste } from "./terminalCompatibility.ts";
 import type { KeybindingsManager } from "./types.ts";
+
+function isWarpTerminal(): boolean {
+  return (
+    process.env.TERM_PROGRAM === "WarpTerminal" ||
+    process.env.WARP_IS_LOCAL_SHELL_SESSION === "1"
+  );
+}
 
 function stripAnsi(input: string): string {
   return input
@@ -48,19 +56,21 @@ export class TerminalEditor extends CustomEditor {
     this.tui.requestRender();
   }
 
-  override handleInput(data: string): void {
-    if (matchesKey(data, "tab")) {
+  override handleInput(inputSequence: string): void {
+    if (matchesKey(inputSequence, "tab")) {
       this.togglePlanBuildMode();
       return;
     }
 
-    const isCustomPaste = matchesKey(data, "ctrl+v") || matchesKey(data, "alt+v");
-    if (process.platform === "win32" && isCustomPaste) {
+    const isCustomPaste =
+      matchesKey(inputSequence, "ctrl+v") || matchesKey(inputSequence, "alt+v");
+    const isWarpImagePaste = isWarpTerminal() && isEmptyBracketedPaste(inputSequence);
+    if (process.platform === "win32" && (isCustomPaste || isWarpImagePaste)) {
       this.pasteCompactImage();
       return;
     }
 
-    super.handleInput(data);
+    super.handleInput(inputSequence);
   }
 
   private pasteClipboardText(): boolean {
