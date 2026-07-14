@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.2
+
+- Restored native mouse text selection and copy by removing application mouse-capture mode; `PageUp` and `PageDown` continue to scroll chat while alternate-screen wheel input no longer cycles composer history.
+- Prevented global MCP tool searches from connecting every enabled server; global discovery now uses cached metadata, while server-scoped operations connect only the requested server.
+
 ## 0.9.1
 
 - Moved configured MCP servers into a dedicated sidebar section with per-server Connected, Connecting, Disconnected, Disabled, or Error states.

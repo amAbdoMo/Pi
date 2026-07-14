@@ -3,8 +3,9 @@ import test from "node:test";
 
 import {
   fixedViewport,
-  mouseInputKind,
   workbenchDimensions,
+  WORKBENCH_ENTER_SEQUENCE,
+  WORKBENCH_LEAVE_SEQUENCE,
 } from "../extensions/ui/workbenchShellLayout.ts";
 
 test("wide workbench reserves a fixed sidebar while narrow terminals collapse it", () => {
@@ -19,11 +20,10 @@ test("wide workbench reserves a fixed sidebar while narrow terminals collapse it
   assert.equal(narrow.sidebarWidth, 0);
 });
 
-test("SGR mouse wheel events are separated from clicks", () => {
-  assert.equal(mouseInputKind("\x1b[<64;20;10M"), "wheel-up");
-  assert.equal(mouseInputKind("\x1b[<65;20;10M"), "wheel-down");
-  assert.equal(mouseInputKind("\x1b[<0;20;10M"), "other");
-  assert.equal(mouseInputKind("\x1b[A"), undefined);
+test("workbench terminal modes preserve native mouse selection", () => {
+  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1007l/);
+  assert.doesNotMatch(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?(?:1000|1006)h/);
+  assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1007h/);
 });
 
 test("composer dock stays at the bottom when chat content is short", () => {

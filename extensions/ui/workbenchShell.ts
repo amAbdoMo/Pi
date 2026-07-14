@@ -9,17 +9,12 @@ import {
 import { isWorkbenchModalActive } from "./modalState.ts";
 import {
   fixedViewport,
-  mouseInputKind,
   workbenchDimensions,
-  type MouseInputKind,
+  WORKBENCH_ENTER_SEQUENCE,
+  WORKBENCH_LEAVE_SEQUENCE,
 } from "./workbenchShellLayout.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
-const ENTER_ALTERNATE_SCREEN = "\x1b[?1049h\x1b[2J\x1b[H";
-const LEAVE_ALTERNATE_SCREEN = "\x1b[?1049l";
-const ENABLE_MOUSE_TRACKING = "\x1b[?1000h\x1b[?1006h";
-const DISABLE_MOUSE_TRACKING = "\x1b[?1006l\x1b[?1000l";
-const WHEEL_SCROLL_LINES = 3;
 const DOCK_CHILD_COUNT = 4;
 
 export interface WorkbenchShellHandle {
@@ -144,11 +139,6 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private handleScrollInput(input: string): { consume: true } | undefined {
-    const mouseInput = mouseInputKind(input);
-    if (mouseInput) {
-      if (!isWorkbenchModalActive()) this.scrollWithMouse(mouseInput);
-      return { consume: true };
-    }
     if (isWorkbenchModalActive()) return undefined;
     const pageSize = Math.max(3, Math.floor(this.tui.terminal.rows * 0.7));
     if (matchesKey(input, "pageup")) {
@@ -165,23 +155,15 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     return undefined;
   }
 
-  private scrollWithMouse(input: MouseInputKind): void {
-    if (input === "wheel-up") this.scrollOffset += WHEEL_SCROLL_LINES;
-    if (input === "wheel-down") {
-      this.scrollOffset = Math.max(0, this.scrollOffset - WHEEL_SCROLL_LINES);
-    }
-    if (input !== "other") this.tui.requestRender();
-  }
-
   private enterAlternateScreen(): void {
     if (this.alternateScreenActive) return;
-    this.tui.terminal.write(ENTER_ALTERNATE_SCREEN + ENABLE_MOUSE_TRACKING);
+    this.tui.terminal.write(WORKBENCH_ENTER_SEQUENCE);
     this.alternateScreenActive = true;
   }
 
   private leaveAlternateScreen(): void {
     if (!this.alternateScreenActive) return;
-    this.tui.terminal.write(DISABLE_MOUSE_TRACKING + LEAVE_ALTERNATE_SCREEN);
+    this.tui.terminal.write(WORKBENCH_LEAVE_SEQUENCE);
     this.alternateScreenActive = false;
   }
 }

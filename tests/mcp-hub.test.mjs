@@ -10,6 +10,7 @@ import {
   safeConfigurationSummary,
 } from "../extensions/mcp/config.ts";
 import { searchMcpTools } from "../extensions/mcp/discovery.ts";
+import { McpHub } from "../extensions/mcp/hub.ts";
 import { guardMcpOutput } from "../extensions/mcp/output-guard.ts";
 import { redactServerSecrets } from "../extensions/mcp/security.ts";
 
@@ -144,6 +145,27 @@ test("MCP config accepts JSONC and OpenCode-style server entries", async (t) => 
     oauthConfigured: false,
   });
   assert.deepEqual(configuration.loadedSources, [sourcePath]);
+});
+
+test("global MCP search does not connect idle servers", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "pi-mcp-idle-search-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const agentDirectory = join(root, "agent");
+  await writeJson(join(agentDirectory, "mcp.json"), {
+    mcp: {
+      idle: {
+        type: "local",
+        command: ["definitely-missing-mcp-command"],
+      },
+    },
+  });
+
+  const hub = new McpHub(agentDirectory);
+  t.after(() => hub.closeAll());
+  await hub.startSession(root, false);
+
+  assert.deepEqual(await hub.searchTools("anything"), []);
+  assert.equal(hub.serverSummaries()[0]?.state, "disconnected");
 });
 
 test("fuzzy discovery ranks abbreviated tool intent above unrelated tools", () => {

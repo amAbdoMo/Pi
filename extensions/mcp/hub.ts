@@ -150,7 +150,7 @@ export class McpHub {
 		await this.waitForReload(signal);
 		const catalogs = serverName
 			? [{ server: serverName, tools: await this.toolsForServer(serverName, signal) }]
-			: await this.allCatalogs(signal);
+			: this.knownCatalogs();
 		return searchMcpTools(catalogs, query);
 	}
 
@@ -325,13 +325,9 @@ export class McpHub {
 		throw new Error("MCP server returned too many tool-list pages");
 	}
 
-	private async allCatalogs(signal?: AbortSignal): Promise<McpToolCatalog[]> {
-		const activeServers = Array.from(this.servers.values()).filter((runtime) => !runtime.definition.config.disabled);
-		await Promise.allSettled(
-			activeServers.filter((runtime) => !runtime.metadataKnown).map((runtime) => this.connectServer(runtime.definition.name, signal)),
-		);
-		return activeServers
-			.filter((runtime) => runtime.metadataKnown)
+	private knownCatalogs(): McpToolCatalog[] {
+		return Array.from(this.servers.values())
+			.filter((runtime) => !runtime.definition.config.disabled && runtime.metadataKnown)
 			.map((runtime) => ({ server: runtime.definition.name, tools: runtime.tools.map(cloneTool) }));
 	}
 

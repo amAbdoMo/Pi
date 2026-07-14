@@ -21,7 +21,7 @@ The command is safe to run again when this repository changes. It installs the r
 ## Included setup
 
 - Full-screen terminal workbench with a fixed responsive sidebar, bottom-anchored composer, scrollable chat viewport, coordinated modal windows, and the `hypr-waves` graphite theme
-- Mouse-wheel and `PageUp`/`PageDown` chat scrolling without cycling composer history
+- Native mouse text selection and copy, with `PageUp`/`PageDown` chat scrolling and alternate-screen wheel input kept out of composer history
 - Automatic Arabic shaping, RTL visual ordering, right-aligned composition, and LTR preservation for code, paths, commands, and metadata
 - Verified Windows Nerd Font setup using DejaVu Sans Mono Nerd Font 3.4.0, with Arabic cursive and required-ligature features enabled in Windows Terminal
 - Windows Terminal and Warp font configuration, with terminal-first Warp input
@@ -39,7 +39,7 @@ The command is safe to run again when this repository changes. It installs the r
 - `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
 - Subagents support optional task-sized child model and thinking profiles while preserving parent inheritance by default
 - Side chat, nested subagents, workflows, fast mode, code-state, and custom tool display
-- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, tool discovery/search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, `/mcp` management, and a dedicated sidebar section showing every configured server state
+- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, cached global discovery that does not wake idle servers, server-scoped search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, `/mcp` management, and a dedicated sidebar section showing every configured server state
 - Explicit task progress states: pending, running, completed with evidence, and failed
 - Companion packages:
   - `npm:@hypabolic/pi-hypa`

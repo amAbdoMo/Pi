@@ -10,17 +10,8 @@ export interface WorkbenchDimensions {
   showSidebar: boolean;
 }
 
-export type MouseInputKind = "wheel-up" | "wheel-down" | "other";
-
-export function mouseInputKind(input: string): MouseInputKind | undefined {
-  const match = /\x1b\[<(\d+);\d+;\d+[mM]/.exec(input);
-  if (!match) return undefined;
-  const buttonCode = Number(match[1]);
-  if ((buttonCode & 64) === 0) return "other";
-  if ((buttonCode & 3) === 0) return "wheel-up";
-  if ((buttonCode & 3) === 1) return "wheel-down";
-  return "other";
-}
+export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[2J\x1b[H";
+export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1007h\x1b[?1049l";
 
 export function workbenchDimensions(
   terminalWidth: number,
