@@ -42,5 +42,5 @@ test("terminal font configuration preserves settings and creates only one backup
     rlig: 1,
     liga: 1,
   });
-  assert.equal(fs.readFileSync(`${settingsFile}.amabdomo-pi-backup`, "utf8"), original);
+  assert.equal(fs.readFileSync(`${settingsFile}.pi-workbench-backup`, "utf8"), original);
 });

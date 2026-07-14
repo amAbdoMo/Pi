@@ -36,7 +36,7 @@ if (-not $FontRegistryPath) {
   $FontRegistryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
 }
 if (-not $FontVersionMarkerFile) {
-  $FontVersionMarkerFile = Join-Path $FontInstallDirectory '.amabdomo-dejavusansm-nfm-version'
+  $FontVersionMarkerFile = Join-Path $FontInstallDirectory '.pi-workbench-dejavusansm-nfm-version'
 }
 if (-not $TerminalSettingsScript) {
   $TerminalSettingsScript = Join-Path $PSScriptRoot 'set-terminal-font.mjs'
@@ -60,7 +60,7 @@ function Get-FileSha256([string]$FilePath) {
 }
 
 function Get-InstalledFontPath([string]$FontFile) {
-  return Join-Path $FontInstallDirectory "amabdomo-$FontVersion-$FontFile"
+  return Join-Path $FontInstallDirectory "pi-workbench-$FontVersion-$FontFile"
 }
 
 function Test-NerdFontInstalled {
@@ -87,10 +87,13 @@ function Install-NerdFontFiles([string]$SourceDirectory) {
     $destinationPath = Get-InstalledFontPath $fontFile
     Copy-Item -Force -Path $sourcePath -Destination $destinationPath
     New-ItemProperty -Path $FontRegistryPath -Name $FontRegistryNames[$fontFile] -Value $destinationPath -PropertyType String -Force | Out-Null
+    $legacyDestinationPath = Join-Path $FontInstallDirectory "amabdomo-$FontVersion-$fontFile"
+    Remove-Item $legacyDestinationPath -Force -ErrorAction SilentlyContinue
   }
 
   $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText($FontVersionMarkerFile, $FontVersion, $utf8WithoutBom)
+  Remove-Item (Join-Path $FontInstallDirectory '.amabdomo-dejavusansm-nfm-version') -Force -ErrorAction SilentlyContinue
 }
 
 function Set-WindowsTerminalFont([string[]]$SettingsFiles) {
@@ -127,7 +130,7 @@ $temporaryDirectory = $null
 try {
   if (-not (Test-NerdFontInstalled) -or $FontSourceDirectory) {
     if (-not $FontSourceDirectory) {
-      $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-font-$([guid]::NewGuid())"
+      $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-font-$([guid]::NewGuid())"
       New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
       $archiveFile = Join-Path $temporaryDirectory 'DejaVuSansMono.tar.xz'
       Invoke-WebRequest -UseBasicParsing -Uri $FontArchiveUrl -OutFile $archiveFile

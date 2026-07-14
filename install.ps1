@@ -9,10 +9,10 @@ $ConfigScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/a
 $FontSetupScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1'
 $TerminalSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-terminal-font.mjs'
 $WarpSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-warp-settings.mjs'
-$ConfigScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-config-$([guid]::NewGuid()).mjs"
-$FontSetupScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-font-$([guid]::NewGuid()).ps1"
-$TerminalSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-terminal-$([guid]::NewGuid()).mjs"
-$WarpSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-warp-$([guid]::NewGuid()).mjs"
+$ConfigScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-config-$([guid]::NewGuid()).mjs"
+$FontSetupScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-font-$([guid]::NewGuid()).ps1"
+$TerminalSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-terminal-$([guid]::NewGuid()).mjs"
+$WarpSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-warp-$([guid]::NewGuid()).mjs"
 
 try {
   Invoke-WebRequest -UseBasicParsing -Uri $ConfigScriptUrl -OutFile $ConfigScriptFile

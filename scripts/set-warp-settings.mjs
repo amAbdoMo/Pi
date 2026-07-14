@@ -168,7 +168,7 @@ function configuredWarpToml(original, settingsFile, fontFamily) {
 }
 
 function replaceFile(settingsFile, configured) {
-  const temporaryFile = `${settingsFile}.amabdomo-pi-${randomUUID()}.tmp`;
+  const temporaryFile = `${settingsFile}.pi-workbench-${randomUUID()}.tmp`;
   const mode = fs.statSync(settingsFile).mode;
   let descriptor;
   try {
@@ -191,8 +191,9 @@ export function configureWarpSettings(settingsFile, fontFamily) {
   const configured = configuredWarpToml(original, settingsFile, fontFamily);
   if (configured === original) return false;
 
-  const backupFile = `${settingsFile}.amabdomo-pi-backup`;
-  const createdBackup = !fs.existsSync(backupFile);
+  const backupFile = `${settingsFile}.pi-workbench-backup`;
+  const legacyBackupFile = `${settingsFile}.amabdomo-pi-backup`;
+  const createdBackup = !fs.existsSync(backupFile) && !fs.existsSync(legacyBackupFile);
   if (createdBackup) fs.copyFileSync(settingsFile, backupFile);
   try {
     replaceFile(settingsFile, configured);

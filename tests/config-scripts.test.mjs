@@ -20,11 +20,14 @@ test("package reconciliation preserves user filters and unrelated local packages
   const testRoot = temporaryDirectory("pi-apply-config-");
   const agentDir = path.join(testRoot, ".pi", "agent");
   const setupCheckout = path.join(testRoot, "ours", "Projects", "Pi");
+  const legacySetupCheckout = path.join(testRoot, "legacy", "Projects", "Pi");
   const unrelatedPiPackage = path.join(testRoot, "unrelated", "Projects", "Pi");
   fs.mkdirSync(agentDir, { recursive: true });
   fs.mkdirSync(setupCheckout, { recursive: true });
+  fs.mkdirSync(legacySetupCheckout, { recursive: true });
   fs.mkdirSync(unrelatedPiPackage, { recursive: true });
-  fs.writeFileSync(path.join(setupCheckout, "package.json"), JSON.stringify({ name: "amabdomo-pi" }));
+  fs.writeFileSync(path.join(setupCheckout, "package.json"), JSON.stringify({ name: "pi-workbench" }));
+  fs.writeFileSync(path.join(legacySetupCheckout, "package.json"), JSON.stringify({ name: "amabdomo-pi" }));
   fs.writeFileSync(path.join(unrelatedPiPackage, "package.json"), JSON.stringify({ name: "unrelated-pi" }));
 
   const filteredContextMode = { source: "npm:context-mode", extensions: ["keep-context-filter"] };
@@ -35,6 +38,7 @@ test("package reconciliation preserves user filters and unrelated local packages
       packages: [
         unrelatedPiPackage,
         path.relative(agentDir, setupCheckout),
+        path.relative(agentDir, legacySetupCheckout),
         "npm:context-mode",
         filteredContextMode,
         filteredHypa,
@@ -61,6 +65,7 @@ test("package reconciliation preserves user filters and unrelated local packages
   );
   assert.ok(sources.includes(unrelatedPiPackage));
   assert.ok(!sources.includes(path.relative(agentDir, setupCheckout)));
+  assert.ok(!sources.includes(path.relative(agentDir, legacySetupCheckout)));
   assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:context-mode"), filteredContextMode);
   assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:@hypabolic/pi-hypa"), filteredHypa);
   assert.equal(sources.filter((source) => source === "npm:context-mode").length, 1);

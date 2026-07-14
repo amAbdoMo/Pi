@@ -1,66 +1,131 @@
-# amAbdoMo Pi setup
+# Pi Workbench
 
-Portable Pi setup containing the custom extensions, theme, companion packages, settings defaults, and keybindings used in this environment.
+[![Validate Pi setup](https://github.com/amAbdoMo/Pi/actions/workflows/validate.yml/badge.svg)](https://github.com/amAbdoMo/Pi/actions/workflows/validate.yml)
+[![Pi package](https://img.shields.io/badge/Pi-package-E8364F)](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent)
 
-## Install or update with one command
+A polished, opinionated terminal workbench for [Pi](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent), packaged as extensions, a theme, portable settings, and one-command setup.
 
-### Windows PowerShell
+Pi Workbench is **not a fork of Pi**. Pi remains the runtime and provides models, sessions, built-in tools, package loading, and extension APIs. This package keeps that foundation intact and adds a more structured interface, agent workflows, integrations, RTL support, and cross-device terminal setup.
+
+## Why Pi Workbench?
+
+Pi intentionally starts small and expects people to shape it with packages. Pi Workbench is for anyone who wants a ready-made, OpenCode-inspired environment instead of assembling each extension and terminal setting separately.
+
+### What changes compared with default Pi?
+
+| Default Pi | Pi Workbench adds |
+| --- | --- |
+| Header, message stream, editor, and footer | Full-screen graphite workbench with a fixed responsive sidebar and anchored composer |
+| Minimal agent loop; subagents and plan mode are intentionally left to extensions | Plan/build modes, verified task progress, nested subagents, side chat, and reusable workflows |
+| MCP integration is left to packages | An owned MCP Hub with JSON/JSONC configuration, discovery, calls, status, caching, cancellation, and secret redaction |
+| Built-in file, search, edit, and shell tools | Firecrawl web tools, image generation, persistent memory, tool display, fast mode, and code-state undo/redo |
+| Standard terminal text rendering | Arabic shaping, RTL visual ordering, right-aligned composition, and LTR code/path preservation |
+| Themes and terminal fonts are configured separately | Hypr Waves theme plus verified Nerd Font, Windows Terminal, and Warp provisioning |
+| Standard user/tool rendering | Content-fitted user cards, organized tool output, coordinated dialogs, and activity/status surfaces |
+
+Pi can support all of this through its extension system; the difference is that Pi Workbench ships the pieces together and keeps them portable.
+
+## Highlights
+
+### Workbench interface
+
+- Fixed sidebar sections for session, context, activity, and MCP server states
+- Bottom-anchored composer showing mode, model, thinking level, and available Codex usage windows
+- Content-fitted user message cards that grow only as wide as their rendered content
+- Compact assistant, tool, workflow, side-chat, and subagent presentation
+- Coordinated overlays for MCP, skills, agents, child consoles, side chat, workflows, and display settings
+- Native mouse selection and copy, with `PageUp` and `PageDown` chat navigation
+- Graphite-black `hypr-waves` theme with orange structure, red accents, and green verified-success states
+
+### Agent workflows
+
+- **Plan/build mode** with direct `Tab` switching and read-only planning
+- **Task progress** using explicit pending, running, completed-with-evidence, and failed states
+- **Subagents** with optional task-specific model and thinking profiles
+- **Side chat** for temporary questions that do not enter the main conversation context
+- **Workflows** for reusable multi-step operations
+- **Fast mode**, code-state undo/redo, and custom tool rendering
+
+### Tools and integrations
+
+- Owned MCP Hub for local stdio and remote streamable-HTTP servers
+- Firecrawl-backed search, scrape, map, and crawl tools
+- OpenAI image generation and image editing
+- Persistent user, global, and project memory
+- Scrollable `/skills` browser without filling slash-command autocomplete with every skill
+- Optional companion packages installed by the setup script:
+  - `npm:@hypabolic/pi-hypa`
+  - `npm:context-mode`
+
+### Terminal and language support
+
+- Arabic presentation shaping and bidirectional visual ordering
+- Mixed Arabic and English support with code, commands, URLs, and paths kept LTR
+- DejaVu Sans Mono Nerd Font 3.4.0 on Windows
+- Arabic cursive and required-ligature features enabled in Windows Terminal
+- Windows Terminal and Warp configuration with one-time backups
+- Compact text/image clipboard markers and Warp-compatible image paste handling
+
+> Terminal applications still render on a fixed cell grid. Pi Workbench improves Arabic order and shaping, but final joining quality depends on the terminal and font renderer.
+
+## Install
+
+A working Pi installation is required. Pi packages execute code with the same access as Pi, so review third-party packages before installing them.
+
+### Full setup — Windows PowerShell
 
 ```powershell
 irm https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.ps1 | iex
 ```
 
-### macOS / Linux / Git Bash
+### Full setup — macOS, Linux, or Git Bash
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.sh | bash
 ```
 
-The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries and the retired external MCP adapter, applies shared configuration, and creates an empty personal `mcp.jsonc` when needed. On Windows it also installs the pinned `DejaVuSansM Nerd Font Mono` for the current user and configures detected Windows Terminal and Warp settings after backing them up. Warp uses terminal-first classic input for a terminal-oriented PowerShell workflow. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
+The installer is safe to run again. It:
 
-## Included setup
+1. Installs or updates the Pi Workbench git package.
+2. Installs the optional Hypa and context-mode companions.
+3. Removes duplicate development checkouts and the retired external MCP adapter from shared settings.
+4. Applies safe defaults without replacing existing model or thinking preferences.
+5. Creates an empty personal `mcp.jsonc` only when one does not already exist.
+6. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
 
-- Full-screen terminal workbench with a fixed responsive sidebar, bottom-anchored composer, scrollable chat viewport, content-fitted user message cards, coordinated modal windows, and the `hypr-waves` graphite theme
-- Native mouse text selection and copy, with `PageUp`/`PageDown` chat scrolling and alternate-screen wheel input kept out of composer history
-- Automatic Arabic shaping, RTL visual ordering, right-aligned composition, and LTR preservation for code, paths, commands, and metadata
-- Verified Windows Nerd Font setup using DejaVu Sans Mono Nerd Font 3.4.0, with Arabic cursive and required-ligature features enabled in Windows Terminal
-- Windows Terminal and Warp font configuration, with terminal-first Warp input
-- Codex five-hour and weekly usage indicators when OpenAI returns those windows
-- Color-highlighted clipboard image markers on Windows, including Warp's image-only paste signal
-- Color-highlighted compact multiline-text paste markers on Windows
-- Plan/build workflow with the current mode shown in the terminal header:
-  - `Tab`, `/plan`, or `Ctrl+Alt+P` switches between read-only planning and full-access building
-  - `--plan` starts in planning mode
-  - `/build` restores full tool access
-  - `/todos` shows plan progress
-- Web tools powered by Firecrawl
-- Image generation
-- Persistent memory
-- `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
-- Subagents support optional task-sized child model and thinking profiles while preserving parent inheritance by default
-- Side chat, nested subagents, workflows, fast mode, code-state, and custom tool display
-- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, cached global discovery that does not wake idle servers, server-scoped search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, `/mcp` management, and a dedicated sidebar section showing every configured server state
-- Explicit task progress states: pending, running, completed with evidence, and failed
-- Companion packages:
-  - `npm:@hypabolic/pi-hypa`
-  - `npm:context-mode`
-- Shared clipboard keybindings and recommended settings
+### Package only
 
-## Current defaults for a fresh setup
+To load the extensions and theme without applying the shared settings or terminal configuration:
 
-- Theme: `hypr-waves`
-- Provider: `openai-codex`
-- Model: `gpt-5.6-sol`
-- Thinking level: `high`
-- Quiet startup enabled
-- Terminal progress enabled
-- Tree filter: `no-tools`
+```bash
+pi install git:github.com/amAbdoMo/Pi
+```
 
-Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expands or collapses thinking blocks.
+Select `hypr-waves` from Pi settings if it is not already active.
+
+## Everyday controls
+
+| Control | Action |
+| --- | --- |
+| `Tab` | Switch between plan and build modes |
+| `Shift+Tab` | Change thinking level |
+| `PageUp` / `PageDown` | Scroll the chat viewport |
+| `/sidebar` | Toggle the workbench sidebar |
+| `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
+| `/agents` | Open subagent management |
+| `/btw` or `/side` | Ask a temporary side question |
+| `/workflow` | Open reusable workflows |
+| `/mcp` | Configure, connect, disconnect, and inspect MCP servers |
+| `/skills` | Browse loaded skills |
+| `/memory` | Manage persistent memory |
+| `/fast` | Toggle fast mode |
+| `/undo`, `/redo` | Navigate code-state checkpoints |
+| `/tool-display` | Configure custom tool rendering |
+| `Ctrl+V` / `Alt+V` | Paste text or use the Windows image-paste path |
 
 ## MCP configuration
 
-Add personal MCP servers to `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc` on Windows). The installer creates this file with an empty `mcp` object when it does not exist and never overwrites an existing personal configuration. The MCP Hub accepts JSON or JSONC, including comments and trailing commas. Its recommended format is compatible with OpenCode:
+Personal servers live in `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc` on Windows). JSON and JSONC are accepted, including comments and trailing commas.
 
 ```jsonc
 {
@@ -71,91 +136,96 @@ Add personal MCP servers to `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc`
       "environment": {
         "EXAMPLE_TOKEN": "value"
       },
-      "enabled": true,
+      "enabled": true
     },
     "remote-tools": {
       "type": "remote",
       "url": "https://example.com/mcp",
       "headers": {
         "Authorization": "Bearer value"
-      },
-    },
-  },
+      }
+    }
+  }
 }
 ```
 
-The existing `mcpServers` and `servers` containers remain supported, along with `command` plus `args`, `env`, `disabled`, and `stdio` or `streamable-http` transport names. Config files are loaded in this precedence order, with later entries overriding servers of the same name:
+Open `/mcp` and press `R` after changing configuration. Enabled servers remain idle until connected or called; the sidebar reports Connected, Connecting, Disconnected, Disabled, or Error for each server. Global discovery uses cached metadata and does not wake every idle server.
+
+<details>
+<summary>Configuration locations and compatibility</summary>
+
+Later files override servers with the same name:
 
 1. `~/.config/mcp/mcp.json`, then `mcp.jsonc`
 2. `~/.pi/agent/mcp.json`, then `mcp.jsonc`
 3. Trusted project `.mcp.json`, then `.mcp.jsonc`
 4. Trusted project `.pi/mcp.json`, then `mcp.jsonc`
 
-Open `/mcp` and press `R` after editing a config file, then select a server and press `Enter` to connect. OAuth configuration is detected but not yet supported.
+The OpenCode-style top-level `mcp` object is recommended. Existing `mcpServers` and `servers` containers are also supported, along with `command` plus `args`, `env`, `disabled`, and `stdio` or `streamable-http` transport names.
 
-Keep credentials out of this repository. Prefer environment variables inherited by local MCP processes; remote header values are currently literal config values.
+OAuth configuration is detected but not yet supported. Keep credentials out of this repository. Prefer inherited environment variables for local servers; remote header values are currently literal configuration values.
 
-## Repository contents
+</details>
 
-- `extensions/` — all custom Pi extensions, including the owned `extensions/mcp/` Hub and full-screen workbench UI
-- `themes/hypr-waves.json` — shared theme
-- `settings.example.json` — safe shared settings defaults
-- `keybindings.json` — shared keybindings
-- `scripts/apply-config.mjs` — idempotent configuration merger used by both installers
-- `scripts/capture-config.mjs` — captures safe local settings/keybindings into the repository
-- `scripts/setup-terminal-font.ps1` — installs and version-checks the pinned Windows Nerd Font
-- `scripts/set-terminal-font.mjs` — safely applies the font to Windows Terminal JSON/JSONC settings
-- `scripts/set-warp-settings.mjs` — updates Warp-generated TOML while applying the font and classic input
-- `scripts/validate.mjs` — repository validation
-- `UPSTREAM.md` — audited relationship with the original `h4ni0/pi` source
-- `install.ps1` / `install.sh` — one-command installers/updaters
+## Defaults
 
-Private and machine-specific state is intentionally excluded: authentication, sessions, generated images, trust decisions, and custom model credentials.
+Fresh installations use these values only when an existing preference is absent:
 
-## Source-of-truth workflow
+| Setting | Default |
+| --- | --- |
+| Theme | `hypr-waves` |
+| Provider | `openai-codex` |
+| Model | `gpt-5.6-sol` |
+| Thinking level | `high` |
+| Startup | Quiet |
+| Terminal progress | Enabled |
+| Session tree filter | `no-tools` |
 
-Treat this GitHub repository as the only editable source of the shared setup.
+## Update
 
-1. Make custom extension/theme changes in a normal clone of this repository.
-2. Do **not** edit `~/.pi/agent/git/github.com/amAbdoMo/Pi`; Pi owns and resets that installed clone during updates.
-3. After changing Pi settings or keybindings, capture the safe shared values into the repository:
+Update the package without changing terminal settings:
 
-   ```bash
-   npm run capture
-   ```
+```bash
+pi update --extensions
+```
 
-   This intentionally excludes authentication, session history, trust data, and model credentials.
-4. Validate changes:
+Rerun the one-command installer when shared settings, companion packages, fonts, or terminal integration should also be reconciled.
 
-   ```bash
-   npm test
-   ```
+## Project structure
 
-5. Commit and push the changes.
-6. Update another device:
+| Path | Purpose |
+| --- | --- |
+| `extensions/` | Workbench UI, workflows, agents, MCP, tools, memory, and integrations |
+| `themes/hypr-waves.json` | Shared terminal theme |
+| `settings.example.json` | Safe, portable Pi defaults |
+| `keybindings.json` | Shared clipboard and interaction bindings |
+| `scripts/` | Idempotent configuration, font, Windows Terminal, Warp, capture, and validation helpers |
+| `tests/` | Behavior and regression coverage |
+| `install.ps1`, `install.sh` | One-command installers and updaters |
+| `UPSTREAM.md` | Audited relationship with the original extension source |
 
-   ```bash
-   pi update --extensions
-   ```
+## Development
 
-   Or rerun the one-command installer to also reconcile settings and companion packages.
+Work in a normal clone, not Pi's managed package checkout:
 
-## Troubleshooting
+```bash
+git clone https://github.com/amAbdoMo/Pi.git
+cd Pi
+npm ci
+npm test
+```
 
-### Duplicate tool conflicts
+Pi owns `~/.pi/agent/git/github.com/amAbdoMo/Pi` and may reset it during updates. Shared settings can be captured safely with `npm run capture`; authentication, sessions, trust decisions, generated images, and model credentials are intentionally excluded.
 
-If paths from both a development checkout and `~/.pi/agent/git/github.com/amAbdoMo/Pi` appear in a conflict, the package is enabled twice. Rerun the installer; it removes local checkout package entries and keeps `git:github.com/amAbdoMo/Pi`.
+## Privacy and safety
 
-### UI looks older after an update
+- No authentication files, session history, trust decisions, or API credentials are stored in this repository.
+- MCP runtime errors and cached metadata are sanitized to reduce accidental secret exposure.
+- Project-level MCP configuration is loaded only for trusted projects.
+- Local MCP processes and Pi extensions run with the current user's permissions. Review configuration and third-party packages before enabling them.
 
-Confirm the desired changes were committed and pushed before running `pi update --extensions`. Pi resets its installed clone to GitHub and intentionally removes uncommitted edits from that clone.
+## Credits
 
-### Warp shortcuts or image paste do not reach Pi
+Pi Workbench is built on [Pi](https://github.com/earendil-works/pi-mono) and its extension/package APIs.
 
-Rerun the installer, then close every Warp window and reopen Warp. The installer selects the Nerd Font and terminal-first classic input. `Ctrl+V` handles normal text and image-only clipboard paste; `Alt+V` remains the direct image-paste fallback. Warp still owns global application shortcuts, so use Pi's slash-command equivalent when a custom Warp shortcut conflicts.
-
-The Warp helper fails without changing the settings file when uncommon multiline, quoted-table, or conflicting dotted/inline TOML forms cannot be updated safely. In that case, select the font and classic input through Warp Settings.
-
-## Shoutout
-
-Shoutout to [h4ni0](https://github.com/h4ni0) for the original Pi setup and extensions this package was based on.
+The project also retains ideas and selected extension foundations from [h4ni0](https://github.com/h4ni0). See [`UPSTREAM.md`](UPSTREAM.md) for the audited relationship and intentional differences.

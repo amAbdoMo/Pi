@@ -11,7 +11,7 @@ $fontInstallDirectory = Join-Path $testRoot 'installed'
 $settingsFile = Join-Path $testRoot 'settings.json'
 $warpSettingsFile = Join-Path $testRoot 'warp-settings.toml'
 $versionMarker = Join-Path $fontInstallDirectory 'version'
-$registryPath = "HKCU:\Software\amAbdoMo\PiFontTests\$([guid]::NewGuid())"
+$registryPath = "HKCU:\Software\PiWorkbench\FontTests\$([guid]::NewGuid())"
 $fontFiles = @(
   'DejaVuSansMNerdFontMono-Regular.ttf',
   'DejaVuSansMNerdFontMono-Bold.ttf',
@@ -62,7 +62,7 @@ input_box_type_setting = "universal"
 
   Assert-Equal (Get-Content -Raw $versionMarker) '3.4.0' 'Version marker was not written'
   for ($index = 0; $index -lt $fontFiles.Count; $index++) {
-    $installedFontPath = Join-Path $fontInstallDirectory "amabdomo-3.4.0-$($fontFiles[$index])"
+    $installedFontPath = Join-Path $fontInstallDirectory "pi-workbench-3.4.0-$($fontFiles[$index])"
     if (-not (Test-Path $installedFontPath)) { throw "Missing installed font: $installedFontPath" }
     Assert-Equal (Get-ItemPropertyValue -Path $registryPath -Name $registryNames[$index]) $installedFontPath "Incorrect registry path for $($registryNames[$index])"
   }
@@ -74,12 +74,12 @@ input_box_type_setting = "universal"
   Assert-Equal $configuredSettings.profiles.defaults.font.features.curs 1 'Arabic cursive positioning was not enabled'
   Assert-Equal $configuredSettings.profiles.defaults.font.features.rlig 1 'Required ligatures were not enabled'
   Assert-Equal $configuredSettings.profiles.defaults.font.features.liga 1 'Standard ligatures were not enabled'
-  if (-not (Test-Path "$settingsFile.amabdomo-pi-backup")) { throw 'Windows Terminal settings backup was not created' }
+  if (-not (Test-Path "$settingsFile.pi-workbench-backup")) { throw 'Windows Terminal settings backup was not created' }
 
   $configuredWarpSettings = Get-Content -Raw $warpSettingsFile
   if ($configuredWarpSettings -notmatch 'font_name = "DejaVuSansM Nerd Font Mono"') { throw 'Warp Nerd Font was not configured' }
   if ($configuredWarpSettings -notmatch 'input_box_type_setting = "classic"') { throw 'Warp classic input was not configured' }
-  if (-not (Test-Path "$warpSettingsFile.amabdomo-pi-backup")) { throw 'Warp settings backup was not created' }
+  if (-not (Test-Path "$warpSettingsFile.pi-workbench-backup")) { throw 'Warp settings backup was not created' }
 
   Remove-Item $fontSourceDirectory -Recurse -Force
   $setupArguments.Remove('FontSourceDirectory')

@@ -33,7 +33,7 @@ is_settings_sync_enabled = true
   assert.match(configured, /input_box_type_setting = "classic"/);
   assert.match(configured, /osc52_clipboard_access = "write_only"/);
   assert.match(configured, /is_settings_sync_enabled = true/);
-  assert.equal(fs.readFileSync(`${settingsFile}.amabdomo-pi-backup`, "utf8"), original);
+  assert.equal(fs.readFileSync(`${settingsFile}.pi-workbench-backup`, "utf8"), original);
   assert.equal(fs.readdirSync(directory).some((name) => name.endsWith(".tmp")), false);
 });
 
@@ -136,7 +136,7 @@ mode = "classic"
 
     assert.throws(() => configureWarpSettings(settingsFile, "CaskaydiaMono NFM"), expectedError);
     assert.equal(fs.readFileSync(settingsFile, "utf8"), original);
-    assert.equal(fs.existsSync(`${settingsFile}.amabdomo-pi-backup`), false);
+    assert.equal(fs.existsSync(`${settingsFile}.pi-workbench-backup`), false);
     assert.equal(fs.readdirSync(directory).some((name) => name.endsWith(".tmp")), false);
   }
 });

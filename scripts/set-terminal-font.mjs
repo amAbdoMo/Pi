@@ -117,8 +117,11 @@ export function configureTerminalSettings(settingsFile, fontFamily) {
     .every(([feature, setting]) => features[feature] === setting);
   if (font.face === fontFamily && featuresConfigured) return false;
 
-  const backupFile = `${settingsFile}.amabdomo-pi-backup`;
-  if (!fs.existsSync(backupFile)) fs.copyFileSync(settingsFile, backupFile);
+  const backupFile = `${settingsFile}.pi-workbench-backup`;
+  const legacyBackupFile = `${settingsFile}.amabdomo-pi-backup`;
+  if (!fs.existsSync(backupFile) && !fs.existsSync(legacyBackupFile)) {
+    fs.copyFileSync(settingsFile, backupFile);
+  }
   font.face = fontFamily;
   Object.assign(features, REQUIRED_FONT_FEATURES);
   fs.writeFileSync(settingsFile, `${JSON.stringify(settings, null, 4)}\n`);

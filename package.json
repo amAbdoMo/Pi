@@ -1,14 +1,27 @@
 {
-  "name": "amabdomo-pi",
-  "version": "0.9.4",
+  "name": "pi-workbench",
+  "version": "0.10.0",
   "private": true,
-  "description": "Personal Pi coding agent extensions and theme bundle.",
+  "description": "A polished terminal workbench, theme, and extension suite for Pi.",
   "type": "module",
+  "homepage": "https://github.com/amAbdoMo/Pi#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/amAbdoMo/Pi.git"
+  },
+  "bugs": {
+    "url": "https://github.com/amAbdoMo/Pi/issues"
+  },
   "keywords": [
     "pi-package",
     "pi",
     "pi-extension",
-    "pi-theme"
+    "pi-theme",
+    "terminal-ui",
+    "coding-agent",
+    "mcp",
+    "rtl",
+    "subagents"
   ],
   "pi": {
     "extensions": [

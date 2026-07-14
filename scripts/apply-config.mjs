@@ -8,6 +8,7 @@ const REQUIRED_PACKAGES = [
   "npm:context-mode",
 ];
 const RETIRED_PACKAGES = new Set(["npm:pi-mcp-adapter"]);
+const SETUP_PACKAGE_NAMES = new Set(["pi-workbench", "amabdomo-pi"]);
 
 function readJson(filePath) {
   try {
@@ -33,7 +34,7 @@ function isThisSetupCheckout(packageSpec, agentDir) {
   const checkoutPath = path.resolve(agentDir, source);
   try {
     const manifest = JSON.parse(fs.readFileSync(path.join(checkoutPath, "package.json"), "utf8"));
-    return manifest.name === "amabdomo-pi";
+    return SETUP_PACKAGE_NAMES.has(manifest.name);
   } catch (error) {
     if (error?.code === "ENOENT" || error instanceof SyntaxError) return false;
     throw error;

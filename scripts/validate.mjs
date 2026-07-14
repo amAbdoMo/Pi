@@ -15,8 +15,16 @@ function parseJson(relativePath) {
 const parsedJson = new Map(jsonFiles.map((relativePath) => [relativePath, parseJson(relativePath)]));
 const packageManifest = parsedJson.get("package.json");
 const packageLock = JSON.parse(fs.readFileSync(path.join(root, "package-lock.json"), "utf8"));
-if (packageLock.version !== packageManifest.version || packageLock.packages?.[""]?.version !== packageManifest.version) {
-  throw new Error("package.json and package-lock.json versions do not match");
+if (packageManifest.name !== "pi-workbench") {
+  throw new Error("package.json must use the global pi-workbench package name");
+}
+if (
+  packageLock.name !== packageManifest.name
+  || packageLock.packages?.[""]?.name !== packageManifest.name
+  || packageLock.version !== packageManifest.version
+  || packageLock.packages?.[""]?.version !== packageManifest.version
+) {
+  throw new Error("package.json and package-lock.json metadata do not match");
 }
 const changelog = fs.readFileSync(path.join(root, "CHANGELOG.md"), "utf8");
 if (!changelog.includes(`## ${packageManifest.version}`)) {
