@@ -21,6 +21,7 @@
     "magentaBright": "#C43878",
     "cyan": "#5EC4D4",
     "cyanBright": "#7ED4E0",
+    "green": "#65D17A",
     "shadow": "#1A1A1A"
   },
   "colors": {
@@ -28,7 +29,7 @@
     "border": "orange",
     "borderAccent": "primaryBright",
     "borderMuted": "surface3",
-    "success": "cyan",
+    "success": "green",
     "error": "primaryBright",
     "warning": "yellow",
     "muted": "fg",

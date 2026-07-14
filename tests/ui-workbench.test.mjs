@@ -56,4 +56,6 @@ test("composer and sidebar backgrounds are distinct from the chat canvas", () =>
   assert.notEqual(theme.colors.userMessageBg, theme.vars.bg);
   assert.notEqual(theme.colors.customMessageBg, theme.vars.bg);
   assert.notEqual(theme.colors.userMessageBg, theme.colors.customMessageBg);
+  assert.equal(theme.colors.success, "green");
+  assert.match(theme.vars.green, /^#[0-9A-F]{6}$/i);
 });

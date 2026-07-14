@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.4
+
+- Changed verified success indicators, including connected MCP server dots, from cyan to green.
+
 ## 0.9.3
 
 - Made user message cards fit their rendered content width for short messages while retaining full-width wrapping for long or multiline content.
