@@ -5,6 +5,7 @@ import {
   compactTokenCount,
   sidebarColumnWidth,
   sidebarGutterWidth,
+  sidebarMcpStateLabel,
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
@@ -38,6 +39,19 @@ test("context window sizes use compact token labels", () => {
   assert.equal(compactTokenCount(0), "0");
   assert.equal(compactTokenCount(272_000), "272k");
   assert.equal(compactTokenCount(1_250_000), "1.3m");
+});
+
+test("MCP sidebar states use clear user-facing labels", () => {
+  const cases = [
+    ["connected", "Connected"],
+    ["connecting", "Connecting"],
+    ["disconnected", "Disconnected"],
+    ["disabled", "Disabled"],
+    ["error", "Error"],
+  ];
+  for (const [state, label] of cases) {
+    assert.equal(sidebarMcpStateLabel(state), label);
+  }
 });
 
 test("narrow terminals use a focused overlay layout", () => {

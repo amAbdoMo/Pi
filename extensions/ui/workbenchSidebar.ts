@@ -14,6 +14,7 @@ import {
 } from "@earendil-works/pi-tui";
 
 import { getMcpStatus, subscribeMcpStatus } from "../mcp/status.ts";
+import type { McpServerState } from "../mcp/types.ts";
 import {
   getPlanProgress,
   subscribePlanProgress,
@@ -39,6 +40,7 @@ import {
 import {
   compactTokenCount,
   sidebarGutterWidth,
+  sidebarMcpStateLabel,
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
@@ -46,7 +48,7 @@ import {
 
 const RAIL_MIN_COLUMNS = 118;
 const MAX_VISIBLE_TASKS = 4;
-const MAX_VISIBLE_SERVERS = 4;
+const MAX_VISIBLE_SERVERS = 8;
 
 export class WorkbenchSidebarController {
   private handle?: OverlayHandle;
@@ -251,6 +253,8 @@ export class WorkbenchSidebar implements Component {
       ...this.contextLines(width),
       divider,
       ...this.activityLines(width),
+      divider,
+      ...this.mcpLines(width),
     ];
     const contentRows = lines.slice(0, Math.max(0, rows - 2));
     while (contentRows.length < rows - 2) contentRows.push("");
@@ -282,7 +286,7 @@ export class WorkbenchSidebar implements Component {
     const contextSize = contextWindow > 0
       ? `${compactTokenCount(contextUsed)} / ${compactTokenCount(contextWindow)}`
       : "—";
-    const lines = [
+    return [
       sectionTitle(this.theme, "Context"),
       "",
       alignedStatusLine(
@@ -294,13 +298,6 @@ export class WorkbenchSidebar implements Component {
       "",
       progressLine(this.theme, "Used", contextPercent, width),
     ];
-    if (Number.isFinite(state.chatGptFiveHourUsedPercent)) {
-      lines.push("", progressLine(this.theme, "5h usage", state.chatGptFiveHourUsedPercent, width));
-    }
-    if (Number.isFinite(state.chatGptWeeklyUsedPercent)) {
-      lines.push("", progressLine(this.theme, "7d usage", state.chatGptWeeklyUsedPercent, width));
-    }
-    return lines;
   }
 
   private activityLines(width: number): string[] {
@@ -310,8 +307,6 @@ export class WorkbenchSidebar implements Component {
       ...this.taskActivityLines(width),
       "",
       ...this.agentActivityLines(width),
-      "",
-      ...this.mcpActivityLines(width),
     ];
   }
 
@@ -360,22 +355,23 @@ export class WorkbenchSidebar implements Component {
     ];
   }
 
-  private mcpActivityLines(width: number): string[] {
+  private mcpLines(width: number): string[] {
     const servers = getMcpStatus();
+    const lines = [sectionTitle(this.theme, "MCP"), ""];
     if (servers.length === 0) {
-      return [alignedStatusLine(this.theme, this.theme.fg("dim", "○ MCP"), "none", width)];
+      lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
+      return lines;
     }
-    const connected = servers.filter((server) => server.state === "connected").length;
-    const mcpLabel = this.theme.fg(connected ? "success" : "muted", "● MCP");
-    const lines = [alignedStatusLine(this.theme, mcpLabel, `${connected}/${servers.length}`, width)];
     for (const server of servers.slice(0, MAX_VISIBLE_SERVERS)) {
-      lines.push(...wrapSidebarText(
-        `  ${mcpStatusGlyph(this.theme, server.state)} ${server.name}`,
+      lines.push(alignedStatusLine(
+        this.theme,
+        `${mcpStatusGlyph(this.theme, server.state)} ${server.name}`,
+        sidebarMcpStateLabel(server.state),
         width,
       ));
     }
     if (servers.length > MAX_VISIBLE_SERVERS) {
-      lines.push(this.theme.fg("dim", `  +${servers.length - MAX_VISIBLE_SERVERS} more · /mcp`));
+      lines.push(this.theme.fg("dim", `+${servers.length - MAX_VISIBLE_SERVERS} more · /mcp`));
     }
     return lines;
   }
@@ -434,10 +430,11 @@ function progressBar(theme: Theme, percent: number, width = 5): string {
     theme.fg("borderMuted", "─".repeat(width - filled));
 }
 
-function mcpStatusGlyph(theme: Theme, status: string): string {
+function mcpStatusGlyph(theme: Theme, status: McpServerState): string {
   if (status === "connected") return theme.fg("success", "●");
   if (status === "connecting") return theme.fg("accent", "◉");
   if (status === "error") return theme.fg("error", "×");
+  if (status === "disabled") return theme.fg("dim", "●");
   return theme.fg("dim", "○");
 }
 

@@ -1,3 +1,5 @@
+import type { McpServerState } from "../mcp/types.ts";
+
 const RAIL_MIN_COLUMNS = 118;
 const RAIL_GUTTER_COLUMNS = 1;
 
@@ -38,6 +40,21 @@ export function compactTokenCount(value: number): string {
   }
   if (safeValue >= 1_000) return `${Math.round(safeValue / 1_000)}k`;
   return String(safeValue);
+}
+
+export function sidebarMcpStateLabel(status: McpServerState): string {
+  switch (status) {
+    case "connected":
+      return "Connected";
+    case "connecting":
+      return "Connecting";
+    case "disabled":
+      return "Disabled";
+    case "error":
+      return "Error";
+    case "disconnected":
+      return "Disconnected";
+  }
 }
 
 export function sidebarOverlayOptions(terminalColumns: number): SidebarOverlayLayout {

@@ -39,7 +39,7 @@ The command is safe to run again when this repository changes. It installs the r
 - `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
 - Subagents support optional task-sized child model and thinking profiles while preserving parent inheritance by default
 - Side chat, nested subagents, workflows, fast mode, code-state, and custom tool display
-- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, tool discovery/search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, and `/mcp` management
+- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, tool discovery/search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, `/mcp` management, and a dedicated sidebar section showing every configured server state
 - Explicit task progress states: pending, running, completed with evidence, and failed
 - Companion packages:
   - `npm:@hypabolic/pi-hypa`

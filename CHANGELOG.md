@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- Moved configured MCP servers into a dedicated sidebar section with per-server Connected, Connecting, Disconnected, Disabled, or Error states.
+- Removed five-hour and weekly account-usage rows from the sidebar while keeping them in the message composer.
+- Fixed clean-runner validation by installing locked dependencies before tests and updated GitHub Actions to Node.js 24-based releases.
+
 ## 0.9.0
 
 - Added a full-screen graphite workbench with a fixed responsive sidebar, anchored composer, scrollable chat viewport, coordinated modal layers, and compact OpenCode-inspired message, workflow, side-chat, subagent, and tool surfaces.
