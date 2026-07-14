@@ -1,6 +1,6 @@
 {
   "name": "amabdomo-pi",
-  "version": "0.8.1",
+  "version": "0.9.0",
   "private": true,
   "description": "Personal Pi coding agent extensions and theme bundle.",
   "type": "module",
@@ -21,5 +21,11 @@
   "scripts": {
     "capture": "node scripts/capture-config.mjs",
     "test": "node scripts/validate.mjs && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "arabic-reshaper": "1.1.0",
+    "bidi-js": "1.0.3",
+    "jsonc-parser": "3.3.1"
   }
 }

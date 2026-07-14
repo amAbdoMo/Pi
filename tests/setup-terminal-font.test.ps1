@@ -13,16 +13,16 @@ $warpSettingsFile = Join-Path $testRoot 'warp-settings.toml'
 $versionMarker = Join-Path $fontInstallDirectory 'version'
 $registryPath = "HKCU:\Software\amAbdoMo\PiFontTests\$([guid]::NewGuid())"
 $fontFiles = @(
-  'CaskaydiaMonoNerdFontMono-Regular.ttf',
-  'CaskaydiaMonoNerdFontMono-Bold.ttf',
-  'CaskaydiaMonoNerdFontMono-Italic.ttf',
-  'CaskaydiaMonoNerdFontMono-BoldItalic.ttf'
+  'DejaVuSansMNerdFontMono-Regular.ttf',
+  'DejaVuSansMNerdFontMono-Bold.ttf',
+  'DejaVuSansMNerdFontMono-Oblique.ttf',
+  'DejaVuSansMNerdFontMono-BoldOblique.ttf'
 )
 $registryNames = @(
-  'CaskaydiaMono NFM (TrueType)',
-  'CaskaydiaMono NFM Bold (TrueType)',
-  'CaskaydiaMono NFM Italic (TrueType)',
-  'CaskaydiaMono NFM Bold Italic (TrueType)'
+  'DejaVuSansM Nerd Font Mono (TrueType)',
+  'DejaVuSansM Nerd Font Mono Bold (TrueType)',
+  'DejaVuSansM Nerd Font Mono Oblique (TrueType)',
+  'DejaVuSansM Nerd Font Mono Bold Oblique (TrueType)'
 )
 
 try {
@@ -70,11 +70,14 @@ input_box_type_setting = "universal"
   $configuredSettings = Get-Content -Raw $settingsFile | ConvertFrom-Json
   Assert-Equal $configuredSettings.defaultProfile 'pwsh' 'Default profile was not preserved'
   Assert-Equal $configuredSettings.profiles.defaults.opacity 90 'Profile defaults were not preserved'
-  Assert-Equal $configuredSettings.profiles.defaults.font.face 'CaskaydiaMono NFM' 'Nerd Font was not configured'
+  Assert-Equal $configuredSettings.profiles.defaults.font.face 'DejaVuSansM Nerd Font Mono' 'Nerd Font was not configured'
+  Assert-Equal $configuredSettings.profiles.defaults.font.features.curs 1 'Arabic cursive positioning was not enabled'
+  Assert-Equal $configuredSettings.profiles.defaults.font.features.rlig 1 'Required ligatures were not enabled'
+  Assert-Equal $configuredSettings.profiles.defaults.font.features.liga 1 'Standard ligatures were not enabled'
   if (-not (Test-Path "$settingsFile.amabdomo-pi-backup")) { throw 'Windows Terminal settings backup was not created' }
 
   $configuredWarpSettings = Get-Content -Raw $warpSettingsFile
-  if ($configuredWarpSettings -notmatch 'font_name = "CaskaydiaMono NFM"') { throw 'Warp Nerd Font was not configured' }
+  if ($configuredWarpSettings -notmatch 'font_name = "DejaVuSansM Nerd Font Mono"') { throw 'Warp Nerd Font was not configured' }
   if ($configuredWarpSettings -notmatch 'input_box_type_setting = "classic"') { throw 'Warp classic input was not configured' }
   if (-not (Test-Path "$warpSettingsFile.amabdomo-pi-backup")) { throw 'Warp settings backup was not created' }
 

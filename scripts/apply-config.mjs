@@ -6,8 +6,8 @@ const REQUIRED_PACKAGES = [
   "git:github.com/amAbdoMo/Pi",
   "npm:@hypabolic/pi-hypa",
   "npm:context-mode",
-  "npm:pi-mcp-adapter",
 ];
+const RETIRED_PACKAGES = new Set(["npm:pi-mcp-adapter"]);
 
 function readJson(filePath) {
   try {
@@ -48,6 +48,7 @@ function mergePackages(existingPackages, agentDir) {
     if (isThisSetupCheckout(packageSpec, agentDir)) continue;
 
     const source = packageSource(packageSpec);
+    if (RETIRED_PACKAGES.has(source)) continue;
     if (!REQUIRED_PACKAGES.includes(source)) {
       preservedPackages.push(packageSpec);
       continue;
@@ -69,6 +70,13 @@ function writeJson(filePath, value) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
   console.log(`Updated ${filePath}`);
+}
+
+function ensureMcpConfig(filePath) {
+  if (fs.existsSync(filePath)) return;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, `{\n  // Add local and remote MCP servers here.\n  "mcp": {}\n}\n`);
+  console.log(`Created ${filePath}`);
 }
 
 const agentDir =
@@ -93,6 +101,7 @@ settings.doubleEscapeAction ??= "tree";
 settings.treeFilterMode ??= "no-tools";
 settings.warnings = { ...(settings.warnings || {}), anthropicExtraUsage: true };
 writeJson(settingsFile, settings);
+ensureMcpConfig(path.join(agentDir, "mcp.jsonc"));
 
 const keybindingsFile = path.join(agentDir, "keybindings.json");
 const keybindings = readJson(keybindingsFile);

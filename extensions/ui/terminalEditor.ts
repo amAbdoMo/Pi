@@ -2,12 +2,21 @@ import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   matchesKey,
-  visibleWidth,
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { bold, color, padToWidth } from "./formatting.ts";
-import { buildHeader } from "./header.ts";
+import {
+  background,
+  bold,
+  clipToWidth,
+  color,
+  textWidth,
+} from "./formatting.ts";
+import {
+  buildComposerBodyLine,
+  buildComposerFooter,
+  buildComposerHeader,
+} from "./header.ts";
 import {
   readBestImage,
   readClipboardText,
@@ -15,7 +24,9 @@ import {
 } from "./imagePaste.ts";
 import { highlightPasteMarkers } from "./pasteMarkers.ts";
 import { isEmptyBracketedPaste } from "./terminalCompatibility.ts";
+import { visualRtlText } from "./rtlText.ts";
 import type { KeybindingsManager } from "./types.ts";
+import { composerFrame, directionStatus } from "./workbenchLayout.ts";
 
 function isWarpTerminal(): boolean {
   return (
@@ -100,26 +111,50 @@ export class TerminalEditor extends CustomEditor {
   }
 
   override render(width: number): string[] {
-    const promptSymbol = this.getText().startsWith("!") ? "# " : "> ";
-    const prompt = color("border", "╰─") + color("accent", promptSymbol);
-    const promptWidth = visibleWidth(prompt);
-    const innerWidth = Math.max(1, width - promptWidth);
+    const text = this.getText();
+    const outerPadding = width >= 3 ? 1 : 0;
+    const frame = composerFrame(Math.max(1, width - outerPadding * 2));
+    const direction = directionStatus(text);
+    const isRtl = direction.startsWith("RTL");
+    const promptSymbol = text.startsWith("!") ? "# " : isRtl ? " ‹" : "› ";
+    const prompt = frame.innerWidth >= 3 ? color("accent", promptSymbol) : "";
+    const promptWidth = textWidth(prompt);
+    const editorWidth = Math.max(1, frame.innerWidth - promptWidth);
 
     const stockLines = super
-      .render(innerWidth)
+      .render(editorWidth)
       .filter((line) => !looksLikeEditorBorder(line));
-
     const inputLines = stockLines.length > 0 ? stockLines : [""];
-    const lines: string[] = [buildHeader(width)];
+    const lines = buildComposerHeader(frame.width, direction);
 
-    for (let i = 0; i < inputLines.length; i++) {
-      const prefix = i === 0 ? prompt : " ".repeat(promptWidth);
-      const inputLine = highlightPasteMarkers(inputLines[i], (marker) =>
+    for (let index = 0; index < inputLines.length; index++) {
+      const visualLine = isRtl
+        ? visualRtlText(inputLines[index]!, CURSOR_MARKER)
+        : inputLines[index]!;
+      const inputLine = highlightPasteMarkers(visualLine, (marker) =>
         color("mdCode", bold(marker)),
       );
-      lines.push(padToWidth(prefix + inputLine, width));
+      const content = isRtl
+        ? rtlComposerLine(inputLine, index === 0 ? prompt : "", frame.innerWidth)
+        : `${index === 0 ? prompt : " ".repeat(promptWidth)}${inputLine}`;
+      lines.push(buildComposerBodyLine(content, frame.width));
     }
 
-    return lines;
+    lines.push(buildComposerFooter(frame.width));
+    const horizontalGutter = " ".repeat(outerPadding);
+    const composerLines = lines.map((line) =>
+      `${horizontalGutter}${background("userMessageBg", line)}${horizontalGutter}`
+    );
+    if (outerPadding === 0) return composerLines;
+    const verticalGutter = " ".repeat(width);
+    return [verticalGutter, ...composerLines, verticalGutter];
   }
+}
+
+function rtlComposerLine(text: string, prompt: string, width: number): string {
+  const promptWidth = textWidth(prompt);
+  const contentWidth = Math.max(0, width - promptWidth);
+  const content = clipToWidth(text, contentWidth);
+  const leftPadding = " ".repeat(Math.max(0, contentWidth - textWidth(content)));
+  return `${leftPadding}${content}${prompt}`;
 }

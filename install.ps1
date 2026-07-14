@@ -3,8 +3,7 @@ $ErrorActionPreference = 'Stop'
 $PiPackages = @(
   'git:github.com/amAbdoMo/Pi',
   'npm:@hypabolic/pi-hypa',
-  'npm:context-mode',
-  'npm:pi-mcp-adapter'
+  'npm:context-mode'
 )
 $ConfigScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs'
 $FontSetupScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1'

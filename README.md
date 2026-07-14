@@ -16,12 +16,14 @@ irm https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.ps1 | iex
 curl -fsSL https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.sh | bash
 ```
 
-The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries, and applies the shared configuration. On Windows it also installs the pinned `CaskaydiaMono NFM` Nerd Font for the current user and configures detected Windows Terminal and Warp settings after backing them up. Warp uses terminal-first classic input for a terminal-oriented PowerShell workflow. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
+The command is safe to run again when this repository changes. It installs the required packages, updates extension packages, removes duplicate local Pi checkout entries and the retired external MCP adapter, applies shared configuration, and creates an empty personal `mcp.jsonc` when needed. On Windows it also installs the pinned `DejaVuSansM Nerd Font Mono` for the current user and configures detected Windows Terminal and Warp settings after backing them up. Warp uses terminal-first classic input for a terminal-oriented PowerShell workflow. Existing model and thinking preferences are preserved; repository defaults are used when those values are missing.
 
 ## Included setup
 
-- Custom terminal UI with Nerd Font status icons and the `hypr-waves` theme
-- Verified Windows Nerd Font setup using CaskaydiaMono Nerd Font Mono 3.4.0
+- Full-screen terminal workbench with a fixed responsive sidebar, bottom-anchored composer, scrollable chat viewport, coordinated modal windows, and the `hypr-waves` graphite theme
+- Mouse-wheel and `PageUp`/`PageDown` chat scrolling without cycling composer history
+- Automatic Arabic shaping, RTL visual ordering, right-aligned composition, and LTR preservation for code, paths, commands, and metadata
+- Verified Windows Nerd Font setup using DejaVu Sans Mono Nerd Font 3.4.0, with Arabic cursive and required-ligature features enabled in Windows Terminal
 - Windows Terminal and Warp font configuration, with terminal-first Warp input
 - Codex five-hour and weekly usage indicators when OpenAI returns those windows
 - Color-highlighted clipboard image markers on Windows, including Warp's image-only paste signal
@@ -37,10 +39,11 @@ The command is safe to run again when this repository changes. It installs the r
 - `/skills` opens a scrollable skill picker while individual `/skill:*` entries stay out of `/` autocomplete
 - Subagents support optional task-sized child model and thinking profiles while preserving parent inheritance by default
 - Side chat, nested subagents, workflows, fast mode, code-state, and custom tool display
+- Owned MCP Hub with local stdio and remote streamable-HTTP servers, lazy connections, tool discovery/search/describe/call actions, bounded output, cancellation, metadata caching, config diagnostics, secret redaction, and `/mcp` management
+- Explicit task progress states: pending, running, completed with evidence, and failed
 - Companion packages:
   - `npm:@hypabolic/pi-hypa`
   - `npm:context-mode`
-  - `npm:pi-mcp-adapter`
 - Shared clipboard keybindings and recommended settings
 
 ## Current defaults for a fresh setup
@@ -55,9 +58,46 @@ The command is safe to run again when this repository changes. It installs the r
 
 Change thinking level during a Pi session with `Shift+Tab`. `Ctrl+T` only expands or collapses thinking blocks.
 
+## MCP configuration
+
+Add personal MCP servers to `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc` on Windows). The installer creates this file with an empty `mcp` object when it does not exist and never overwrites an existing personal configuration. The MCP Hub accepts JSON or JSONC, including comments and trailing commas. Its recommended format is compatible with OpenCode:
+
+```jsonc
+{
+  "mcp": {
+    "local-tools": {
+      "type": "local",
+      "command": ["npx", "-y", "example-mcp"],
+      "environment": {
+        "EXAMPLE_TOKEN": "value"
+      },
+      "enabled": true,
+    },
+    "remote-tools": {
+      "type": "remote",
+      "url": "https://example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer value"
+      },
+    },
+  },
+}
+```
+
+The existing `mcpServers` and `servers` containers remain supported, along with `command` plus `args`, `env`, `disabled`, and `stdio` or `streamable-http` transport names. Config files are loaded in this precedence order, with later entries overriding servers of the same name:
+
+1. `~/.config/mcp/mcp.json`, then `mcp.jsonc`
+2. `~/.pi/agent/mcp.json`, then `mcp.jsonc`
+3. Trusted project `.mcp.json`, then `.mcp.jsonc`
+4. Trusted project `.pi/mcp.json`, then `mcp.jsonc`
+
+Open `/mcp` and press `R` after editing a config file, then select a server and press `Enter` to connect. OAuth configuration is detected but not yet supported.
+
+Keep credentials out of this repository. Prefer environment variables inherited by local MCP processes; remote header values are currently literal config values.
+
 ## Repository contents
 
-- `extensions/` — all custom Pi extensions
+- `extensions/` — all custom Pi extensions, including the owned `extensions/mcp/` Hub and full-screen workbench UI
 - `themes/hypr-waves.json` — shared theme
 - `settings.example.json` — safe shared settings defaults
 - `keybindings.json` — shared keybindings

@@ -1780,19 +1780,93 @@ function wrapPlainWithPrefix(text: string, width: number, prefix = ""): string[]
 	return out;
 }
 
-function statusIcon(status: PhaseStatus | WorkflowStatus, theme: any): string {
+export function statusIcon(status: PhaseStatus | WorkflowStatus, theme: any): string {
 	switch (status) {
 		case "pending":
 			return theme.fg("dim", "○");
 		case "running":
-			return theme.fg("warning", "▶");
+			return theme.fg("accent", "◉");
 		case "succeeded":
 			return theme.fg("success", "✓");
 		case "failed":
-			return theme.fg("error", "✗");
+			return theme.fg("error", "✕");
 		case "aborted":
-			return theme.fg("warning", "⊘");
+			return theme.fg("warning", "–");
 	}
+}
+
+function statusRole(status: PhaseStatus | WorkflowStatus): string {
+	switch (status) {
+		case "running": return "accent";
+		case "succeeded": return "success";
+		case "failed": return "error";
+		case "aborted": return "warning";
+		case "pending": return "dim";
+	}
+}
+
+function statusLabel(status: PhaseStatus | WorkflowStatus, theme: any): string {
+	return `${statusIcon(status, theme)} ${theme.fg(statusRole(status), status)}`;
+}
+
+function renderPhaseActivity(phase: PhaseRunState | undefined, width: number, theme: any): string[] {
+	if (!phase || phase.logs.length === 0) {
+		return [theme.fg("dim", "No activity yet. Waiting for this phase to report progress.")];
+	}
+	const lines: string[] = [];
+	for (const log of phase.logs) {
+		if (log.kind === "assistant") {
+			lines.push(...renderMarkdownLines(log.text || " ", width, theme));
+			continue;
+		}
+		const color = log.kind === "error" ? "error" : log.kind === "tool" ? "muted" : log.kind === "steer" ? "warning" : "dim";
+		const prefix = log.kind === "tool" ? "→ " : log.kind === "steer" ? "↪ " : log.kind === "error" ? "✕ " : "· ";
+		lines.push(...wrapPlainWithPrefix(log.text, width, theme.fg(color, prefix)));
+	}
+	return lines;
+}
+
+type BorderPainter = (text: string) => string;
+
+interface WorkflowPanelView {
+	state: WorkflowRunState;
+	width: number;
+	panelWidth: number;
+	innerWidth: number;
+	selected?: PhaseRunState;
+	focused: boolean;
+	theme: any;
+	border: BorderPainter;
+}
+
+interface TailWindow {
+	lines: string[];
+	start: number;
+	total: number;
+	maxScroll: number;
+	scrollOffset: number;
+}
+
+function workflowPanelHeading(view: WorkflowPanelView): string {
+	const maxTitleWidth = Math.max(0, view.innerWidth - 2);
+	const title = truncateToWidth(view.theme.bold(`Workflow / ${view.state.workflowId}`), maxTitleWidth, "", true);
+	const role = view.focused || view.state.status === "running" ? "accent" : "toolTitle";
+	const heading = maxTitleWidth > 0 ? ` ${view.theme.fg(role, title)} ` : "";
+	const ruleWidth = Math.max(0, view.innerWidth - visibleWidth(heading));
+	return view.border("┌") + heading + view.border(`${"─".repeat(ruleWidth)}┐`);
+}
+
+function tailWindow(activityLines: string[], rowCount: number, requestedOffset: number): TailWindow {
+	const maxScroll = Math.max(0, activityLines.length - rowCount);
+	const scrollOffset = Math.max(0, Math.min(requestedOffset, maxScroll));
+	const start = Math.max(0, activityLines.length - rowCount - scrollOffset);
+	return {
+		lines: activityLines.slice(start, start + rowCount),
+		start,
+		total: activityLines.length,
+		maxScroll,
+		scrollOffset,
+	};
 }
 
 function getWorkflowStateFromToolDetails(details: unknown): WorkflowRunState | undefined {
@@ -1810,93 +1884,144 @@ function getWorkflowStateFromToolDetails(details: unknown): WorkflowRunState | u
 	} as WorkflowRunState;
 }
 
-function renderWorkflowPanel(state: WorkflowRunState, width: number, theme: any): string[] {
-	const minWidth = 52;
-	if (width < minWidth) {
-		return [paintPanelLine(theme.fg("accent", `Workflow ${state.workflowId}: ${state.status}`), width, theme)];
-	}
-
-	const outer = Math.max(minWidth, width);
-	const inner = outer - 2;
-	const leftW = Math.min(30, Math.max(20, Math.floor(inner * 0.26)));
-	const rightW = inner - leftW - 1;
-	const sidebarPadStart = 2;
-	const sidebarPadEnd = 1;
-	const bodyPadStart = 2;
-	const bodyPadEnd = 2;
-	const rightContentW = Math.max(1, rightW - bodyPadStart - bodyPadEnd);
-	const selected = getSelectedPhase(state);
+function workflowPanelView(state: WorkflowRunState, width: number, theme: any): WorkflowPanelView {
 	const focused = focusedRunId === state.runId;
-	const borderColor = focused ? (s: string) => theme.fg("accent", s) : (s: string) => theme.fg("border", s);
+	return {
+		state,
+		width,
+		panelWidth: Math.max(4, width),
+		innerWidth: Math.max(4, width) - 2,
+		selected: getSelectedPhase(state),
+		focused,
+		theme,
+		border: focused ? (text) => theme.fg("accent", text) : (text) => theme.fg("border", text),
+	};
+}
 
-	const left: string[] = [];
-	left.push(theme.bold("Phases"));
-	left.push("");
-	for (const phase of state.phases) {
-		const isSelected = phase.id === selected?.id;
-		const label = `${statusIcon(phase.status, theme)} ${phase.id}`;
-		left.push(isSelected ? theme.fg("accent", theme.bold(label)) : label);
+function workflowComposer(view: WorkflowPanelView): string {
+	const { state, theme } = view;
+	if (state.status !== "running") {
+		return `${statusLabel(state.status, theme)} ${theme.fg("dim", "· finished · retained in chat")}`;
 	}
-
-	const right: string[] = [];
-	const phaseTitle = selected?.id === "report" ? "Report" : selected ? `Phase: ${selected.id}` : "Workflow";
-	right.push(theme.bold(phaseTitle));
-	right.push(theme.fg("dim", `Workflow ${state.workflowId} · ${state.status}`));
-	if (selected?.sessionFile) right.push(theme.fg("dim", `Session: ${selected.sessionFile}`));
-	right.push("");
-	if (!selected || selected.logs.length === 0) {
-		right.push(theme.fg("dim", "No progress yet."));
-	} else {
-		for (const log of selected.logs) {
-			if (log.kind === "assistant") {
-				right.push(...renderMarkdownLines(log.text || " ", rightContentW, theme));
-				continue;
-			}
-			const color = log.kind === "error" ? "error" : log.kind === "tool" ? "muted" : log.kind === "steer" ? "warning" : "dim";
-			const prefix = log.kind === "tool" ? "→ " : log.kind === "steer" ? "↪ " : log.kind === "error" ? "✗ " : "• ";
-			right.push(...wrapPlainWithPrefix(log.text, rightContentW, theme.fg(color, prefix)));
-		}
+	if (!view.focused) return theme.fg("dim", "Ctrl+W focus workflow · Ctrl+C abort");
+	if (state.composer.length > 0) {
+		return `${theme.fg("accent", "› ")}${state.composer}${theme.fg("accent", "▌")}`;
 	}
+	return `${theme.fg("accent", "› ▌")} ${theme.fg("dim", "Enter steer · Esc unfocus · ←/→ phase · ↑/↓ scroll · Ctrl+C abort")}`;
+}
 
-	const bodyH = Math.max(12, Math.min(26, Math.max(left.length, Math.min(right.length, 22))));
-	const maxScroll = Math.max(0, right.length - bodyH);
-	state.scrollOffset = Math.max(0, Math.min(state.scrollOffset, maxScroll));
-	const start = Math.max(0, right.length - bodyH - state.scrollOffset);
-	const visibleRight = right.slice(start, start + bodyH);
-	if (maxScroll > 0) {
-		visibleRight[0] = theme.fg("dim", `↑ ${start}/${right.length}`);
-		visibleRight[visibleRight.length - 1] = theme.fg("dim", `↓ ${Math.min(start + bodyH, right.length)}/${right.length}`);
+function selectedPhaseTitle(view: WorkflowPanelView): string {
+	if (view.selected?.id === "report") return "Report";
+	return view.selected ? `Phase / ${view.selected.id}` : "Workflow";
+}
+
+function compactWorkflowBody(view: WorkflowPanelView, contentWidth: number): string[] {
+	const { state, theme } = view;
+	const phaseStrip = state.phases.map((phase) => `${statusIcon(phase.status, theme)} ${phase.id}`).join(theme.fg("dim", "  "));
+	const activityLines = renderPhaseActivity(view.selected, contentWidth, theme);
+	const activityRows = Math.max(3, Math.min(8, activityLines.length));
+	const activityWindow = tailWindow(activityLines, activityRows, state.scrollOffset);
+	state.scrollOffset = activityWindow.scrollOffset;
+	if (activityWindow.maxScroll > 0 && activityWindow.lines.length > 0) {
+		activityWindow.lines[0] = theme.fg("dim", `↑ ${activityWindow.start}/${activityWindow.total}`);
 	}
+	return [
+		`${statusLabel(state.status, theme)} ${theme.fg("dim", `· ${selectedPhaseTitle(view)}`)}`,
+		truncateToWidth(phaseStrip, contentWidth, "…", true),
+		"",
+		...activityWindow.lines,
+	];
+}
 
-	const heavy = "━";
-	const lines: string[] = [];
-	lines.push(borderColor(`┏${heavy.repeat(leftW)}┯${heavy.repeat(rightW)}┓`));
-	for (let i = 0; i < bodyH; i++) {
+function compactWorkflowPanel(view: WorkflowPanelView): string[] {
+	const padX = view.innerWidth >= 4 ? 1 : 0;
+	const contentWidth = Math.max(1, view.innerWidth - padX * 2);
+	const lines = [workflowPanelHeading(view)];
+	for (const row of compactWorkflowBody(view, contentWidth)) {
+		lines.push(view.border("│") + padColumn(row, view.innerWidth, padX, padX) + view.border("│"));
+	}
+	lines.push(view.border(`├${"─".repeat(view.innerWidth)}┤`));
+	lines.push(view.border("│") + padColumn(workflowComposer(view), view.innerWidth, padX, padX) + view.border("│"));
+	lines.push(view.border(`└${"─".repeat(view.innerWidth)}┘`));
+	return lines;
+}
+
+interface WidePanelContent {
+	left: string[];
+	right: string[];
+	leftWidth: number;
+	rightWidth: number;
+	bodyHeight: number;
+}
+
+function workflowPhaseList(view: WorkflowPanelView): string[] {
+	const phaseLines: string[] = [view.theme.bold("Phases"), ""];
+	for (const phase of view.state.phases) {
+		const isSelected = phase.id === view.selected?.id;
+		const markerRole = view.focused ? "accent" : "toolTitle";
+		const marker = isSelected ? view.theme.fg(markerRole, "›") : " ";
+		phaseLines.push(`${marker} ${statusIcon(phase.status, view.theme)} ${isSelected ? view.theme.bold(phase.id) : phase.id}`);
+	}
+	return phaseLines;
+}
+
+function workflowPhaseDetailLines(view: WorkflowPanelView, contentWidth: number): string[] {
+	const { state, theme } = view;
+	const detailLines = [
+		theme.bold(selectedPhaseTitle(view)),
+		view.selected ? `${statusLabel(view.selected.status, theme)} ${theme.fg("dim", `· workflow ${state.status}`)}` : statusLabel(state.status, theme),
+	];
+	if (view.selected?.sessionFile) detailLines.push(theme.fg("dim", `Session · ${view.selected.sessionFile}`));
+	detailLines.push("", ...renderPhaseActivity(view.selected, contentWidth, theme));
+	return detailLines;
+}
+
+function visibleWorkflowDetail(view: WorkflowPanelView, detailLines: string[], bodyHeight: number): string[] {
+	const detailWindow = tailWindow(detailLines, bodyHeight, view.state.scrollOffset);
+	view.state.scrollOffset = detailWindow.scrollOffset;
+	if (detailWindow.maxScroll > 0 && detailWindow.lines.length > 0) {
+		detailWindow.lines[0] = view.theme.fg("dim", `↑ ${detailWindow.start}/${detailWindow.total}`);
+		detailWindow.lines[detailWindow.lines.length - 1] = view.theme.fg("dim", `↓ ${Math.min(detailWindow.start + bodyHeight, detailWindow.total)}/${detailWindow.total}`);
+	}
+	return detailWindow.lines;
+}
+
+function widePanelContent(view: WorkflowPanelView): WidePanelContent {
+	const leftWidth = Math.min(28, Math.max(18, Math.floor(view.innerWidth * 0.26)));
+	const rightWidth = view.innerWidth - leftWidth - 1;
+	const left = workflowPhaseList(view);
+	const detailLines = workflowPhaseDetailLines(view, Math.max(1, rightWidth - 4));
+	const bodyHeight = Math.max(10, Math.min(24, Math.max(left.length, Math.min(detailLines.length, 22))));
+	return {
+		left,
+		right: visibleWorkflowDetail(view, detailLines, bodyHeight),
+		leftWidth,
+		rightWidth,
+		bodyHeight,
+	};
+}
+
+function wideWorkflowPanel(view: WorkflowPanelView): string[] {
+	const content = widePanelContent(view);
+	const lines = [workflowPanelHeading(view)];
+	for (let row = 0; row < content.bodyHeight; row++) {
 		lines.push(
-			borderColor("┃") +
-				padColumn(left[i] ?? "", leftW, sidebarPadStart, sidebarPadEnd) +
-				borderColor("│") +
-				padColumn(visibleRight[i] ?? "", rightW, bodyPadStart, bodyPadEnd) +
-				borderColor("┃"),
+			view.border("│") +
+				padColumn(content.left[row] ?? "", content.leftWidth, 1, 1) +
+				view.border("│") +
+				padColumn(content.right[row] ?? "", content.rightWidth, 2, 2) +
+				view.border("│"),
 		);
 	}
-	lines.push(borderColor(`┣${heavy.repeat(leftW)}┷${heavy.repeat(rightW)}┫`));
+	lines.push(view.border(`├${"─".repeat(content.leftWidth)}┴${"─".repeat(content.rightWidth)}┤`));
+	lines.push(view.border("│") + padColumn(workflowComposer(view), view.innerWidth, 2, 2) + view.border("│"));
+	lines.push(view.border(`└${"─".repeat(view.innerWidth)}┘`));
+	return lines;
+}
 
-	const composerW = inner;
-	let composerText: string;
-	if (state.status === "running") {
-		if (focused) {
-			composerText = state.composer.length > 0
-				? `${state.composer}${theme.fg("accent", "▌")}`
-				: `${theme.fg("accent", "▌")} ${theme.fg("dim", "Enter steer · Esc normal composer · ←/→ phase · ↑/↓ scroll · Ctrl+C abort")}`;
-		} else {
-			composerText = theme.fg("dim", "Ctrl+W focus panel composer · Ctrl+C abort active workflow");
-		}
-	} else {
-		composerText = theme.fg("dim", "Workflow finished · panel retained in chat");
-	}
-	lines.push(borderColor("┃") + padColumn(composerText, composerW, 2, 2) + borderColor("┃"));
-	lines.push(borderColor(`┗${heavy.repeat(composerW)}┛`));
+export function renderWorkflowPanel(state: WorkflowRunState, width: number, theme: any): string[] {
+	const view = workflowPanelView(state, width, theme);
+	const lines = view.panelWidth < 52 ? compactWorkflowPanel(view) : wideWorkflowPanel(view);
 	return lines.map((line) => paintPanelLine(line, width, theme));
 }
 

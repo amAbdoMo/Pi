@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { withWorkbenchModal } from "../../ui/modalState.ts";
 import type { ToolDisplayCapabilities } from "./capabilities.js";
 import { getToolDisplayConfigPath } from "./config-store.js";
 import {
@@ -410,7 +411,7 @@ export async function openSettingsModal(ctx: ExtensionCommandContext, controller
 		import("./settings-inspector-modal.js"),
 	]);
 
-	await ctx.ui.custom<void>(
+	await withWorkbenchModal(() => ctx.ui.custom<void>(
 		(tui, theme, _keybindings, done) => {
 			const inspector = new SplitPaneInspectorModal(
 				{
@@ -449,7 +450,7 @@ export async function openSettingsModal(ctx: ExtensionCommandContext, controller
 			};
 		},
 		{ overlay: true, overlayOptions },
-	);
+	));
 }
 
 export function handleToolDisplayArgs(args: string, ctx: ExtensionCommandContext, controller: ToolDisplayConfigController): boolean {

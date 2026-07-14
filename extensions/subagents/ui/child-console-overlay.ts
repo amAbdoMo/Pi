@@ -24,26 +24,29 @@ export class ChildConsoleOverlay implements Component {
   render(width: number): string[] {
     if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
     const t = this.theme;
-    const innerWidth = Math.max(20, width - 2);
+    const contentWidth = Math.max(1, width - 4);
     const maxRows = this.getBodyRows();
+    const hint = t.fg("dim", "↑↓ scroll · i/s steer · a abort · r refresh · Esc parent");
     const lines = [
-      `${t.fg("toolTitle", t.bold("Sub-agent"))} ${t.fg("accent", this.record.generatedLabel || this.record.id)}`,
-      `${statusText(this.record.status, t)} ${t.fg("dim", `depth ${this.record.depth} · ${formatDuration((this.record.endedAt ?? now()) - this.record.createdAt)}`)}`,
-      t.fg("dim", "i/s compose steer · a abort · r refresh · Esc return to parent"),
+      `${statusText(this.record.status, t)} ${t.fg("dim", `· depth ${this.record.depth} · ${formatDuration((this.record.endedAt ?? now()) - this.record.createdAt)}`)}`,
       "",
     ];
     const rendered = renderToolTree(this.record.events, t, 180, Number.POSITIVE_INFINITY);
-    lines.push(...rendered.slice(this.scroll, this.scroll + Math.max(1, maxRows - 5)));
-    const wrapped = lines
-      .slice(0, maxRows)
-      .map((line) => truncateToWidth(line, innerWidth, "…", true));
+    const visible = rendered.slice(this.scroll, this.scroll + Math.max(1, maxRows - 4));
+    if (visible.length > 0) lines.push(...visible);
+    else lines.push(t.fg("dim", "No activity yet. The sub-agent may still be starting."));
+    const rowLimit = Math.max(1, maxRows);
+    const body = lines.slice(0, Math.max(0, rowLimit - 1));
+    while (body.length < rowLimit - 1) body.push("");
+    body.push(hint);
+    const wrapped = body.map((line) => truncateToWidth(line, contentWidth, "…", true));
     this.cachedWidth = width;
     this.cachedLines = framedPanel(
       t,
-      `Inside sub-agent · ${this.record.generatedLabel || this.record.id}`,
+      `Sub-agent / ${this.record.generatedLabel || this.record.id}`,
       wrapped,
       width,
-      Math.min(maxRows + 2, 26),
+      Math.min(maxRows, 24),
     );
     return this.cachedLines;
   }

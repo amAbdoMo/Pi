@@ -25,11 +25,11 @@ is_settings_sync_enabled = true
 `;
   fs.writeFileSync(settingsFile, original);
 
-  assert.equal(configureWarpSettings(settingsFile, "CaskaydiaMono NFM"), true);
-  assert.equal(configureWarpSettings(settingsFile, "CaskaydiaMono NFM"), false);
+  assert.equal(configureWarpSettings(settingsFile, "DejaVuSansM Nerd Font Mono"), true);
+  assert.equal(configureWarpSettings(settingsFile, "DejaVuSansM Nerd Font Mono"), false);
 
   const configured = fs.readFileSync(settingsFile, "utf8");
-  assert.match(configured, /font_name = "CaskaydiaMono NFM" # retain this explanation/);
+  assert.match(configured, /font_name = "DejaVuSansM Nerd Font Mono" # retain this explanation/);
   assert.match(configured, /input_box_type_setting = "classic"/);
   assert.match(configured, /osc52_clipboard_access = "write_only"/);
   assert.match(configured, /is_settings_sync_enabled = true/);

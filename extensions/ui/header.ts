@@ -1,30 +1,14 @@
 import { getPlanBuildMode } from "../plan-mode/modeState.ts";
 import { chatGptLimitLabels } from "./chatgptUsage.ts";
-import { bold, color, padToWidth, ratioProgressBar } from "./formatting.ts";
+import {
+  bold,
+  clipToWidth,
+  color,
+  padToWidth,
+  textWidth,
+} from "./formatting.ts";
 import { state } from "./state.ts";
-import { subagentsLabel } from "./subagents.ts";
-
-function shortTokens(tokens: number | undefined): string {
-  if (!Number.isFinite(tokens)) return "?";
-  const value = Math.max(0, Number(tokens));
-  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(1))}m`;
-  if (value >= 1_000) return `${Math.round(value / 1_000)}k`;
-  return String(Math.round(value));
-}
-
-function contextLabel(): string {
-  const window = state.contextWindow;
-  if (!window) return "ctx ?/?";
-  const used = state.contextTokens ?? 0;
-  return `ctx ${shortTokens(used)}/${shortTokens(window)}`;
-}
-
-function contextProgressBar(width = 4): string {
-  const window = state.contextWindow ?? 0;
-  const used = state.contextTokens ?? 0;
-  const ratio = window > 0 ? used / window : 0;
-  return ratioProgressBar(ratio, width);
-}
+import { composerFrame } from "./workbenchLayout.ts";
 
 function thinkingColor(level: string): string {
   switch (level) {
@@ -38,56 +22,77 @@ function thinkingColor(level: string): string {
       return "thinkingHigh";
     case "xhigh":
       return "thinkingXhigh";
+    case "max":
+      return "thinkingMax";
     default:
       return "thinkingOff";
   }
 }
 
-function linkColor(text: string): string {
-  return color("mdLink", text);
+function composerTitle(direction: string): string {
+  const directionLabel = direction.startsWith("RTL")
+    ? color("warning", " · RTL ")
+    : "";
+  return color("accent", bold(" message ")) + directionLabel;
 }
 
-function modeLabel(): string {
+function composerStatus(width: number): string {
   const mode = getPlanBuildMode();
-  const token = mode === "plan" ? "warning" : "success";
-  return color(token, "󰒓 ") + color(token, bold(mode.toUpperCase()));
+  const modeRole = mode === "plan" ? "warning" : "success";
+  const fastMode = state.getFastModeActive?.() ?? state.fastModeActive;
+  const modelAndThinking =
+    color("toolTitle", `󰧑 ${state.model}`) +
+    "  " +
+    color(thinkingColor(state.thinking), `think ${state.thinking}`);
+  const fields = [
+    color(modeRole, `󰒓 ${mode.toUpperCase()}`),
+    modelAndThinking,
+    ...(fastMode ? [color("accent", "fast")] : []),
+    ...chatGptLimitLabels(),
+  ];
+  return clipToWidth(fields.join(color("borderMuted", " · ")), width);
 }
 
-function sessionNameLabel(): string | undefined {
-  let name: string | undefined;
-  try {
-    name = state.getSessionName?.();
-  } catch {
-    name = undefined;
-  }
-  const clean = name?.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
-  if (!clean) return undefined;
-  return color("customMessageLabel", " ") + color("accent", clean);
+function topBorder(width: number, direction: string): string {
+  const frame = composerFrame(width);
+  const title = composerTitle(direction);
+  if (!frame.framed) return padToWidth(title, frame.width);
+
+  const fittedTitle = clipToWidth(title, Math.max(0, frame.width - 3));
+  const fillWidth = Math.max(0, frame.width - 3 - textWidth(fittedTitle));
+  return (
+    color("borderMuted", "┌─") +
+    fittedTitle +
+    color("borderMuted", `${"─".repeat(fillWidth)}┐`)
+  );
 }
 
-export function buildHeader(width: number): string {
-  const sep = color("borderMuted", "  │  ");
-  const fastModeActive = state.getFastModeActive?.() ?? state.fastModeActive;
-  const model = [
-    color("toolTitle", "󰧑 "),
-    color("toolTitle", bold(state.model)),
-    color("muted", " • "),
-    color(thinkingColor(state.thinking), state.thinking),
-    fastModeActive ? color("muted", " • ") + linkColor("fast") : "",
-  ].join("");
-  const folder = color("accent", "󰉋 ") + color("accent", state.folder || "~");
-  const branch = color("mdQuoteBorder", " ") + color("mdQuoteBorder", state.branch || "—");
-  const context =
-    color("customMessageLabel", "󰍛 ") +
-    color("customMessageLabel", contextLabel()) +
-    " " +
-    contextProgressBar();
-  const subagents = subagentsLabel();
-  const parts = [folder, branch, modeLabel(), model, context];
-  if (subagents) parts.push(subagents);
-  parts.push(...chatGptLimitLabels());
-  const sessionName = sessionNameLabel();
-  if (sessionName) parts.push(sessionName);
+function horizontalBorder(width: number, left: string, right: string): string {
+  const safeWidth = composerFrame(width).width;
+  if (safeWidth === 0) return "";
+  if (safeWidth === 1) return color("borderMuted", "─");
+  return color("borderMuted", left + "─".repeat(safeWidth - 2) + right);
+}
 
-  return padToWidth(`${color("border", "╭─")} ${parts.join(sep)}`, width);
+export function buildComposerBodyLine(content: string, width: number): string {
+  const frame = composerFrame(width);
+  if (!frame.framed) return padToWidth(content, frame.width);
+  return (
+    color("borderMuted", "│ ") +
+    padToWidth(content, frame.innerWidth) +
+    color("borderMuted", " │")
+  );
+}
+
+export function buildComposerHeader(width: number, direction: string): string[] {
+  const frame = composerFrame(width);
+  return [
+    topBorder(frame.width, direction),
+    buildComposerBodyLine(composerStatus(frame.innerWidth), frame.width),
+    horizontalBorder(frame.width, "├", "┤"),
+  ];
+}
+
+export function buildComposerFooter(width: number): string {
+  return horizontalBorder(width, "└", "┘");
 }

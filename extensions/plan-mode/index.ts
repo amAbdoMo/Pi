@@ -8,29 +8,42 @@
  * - /plan command or Ctrl+Alt+P to toggle
  * - Bash restricted to allowlisted read-only commands
  * - Extracts numbered plan steps from "Plan:" sections
- * - [DONE:n] markers to complete steps during execution
- * - Progress tracking widget during execution
+ * - Explicit task-state updates during execution
+ * - Persistent progress tracking widget
  */
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
+import { StringEnum, type AssistantMessage, type TextContent } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 import {
 	publishPlanBuildMode,
 	subscribePlanBuildModeToggleRequests,
 } from "./modeEvents.ts";
-import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
+import { publishPlanProgress } from "./progressState.ts";
+import {
+	extractTodoItems,
+	getTodoCounts,
+	isSafeCommand,
+	MAX_TODO_EVIDENCE_CHARS,
+	normalizeTodoItems,
+	todoStatusSymbol,
+	TODO_UPDATE_STATES,
+	transitionTodoItems,
+	type TodoItem,
+} from "./utils.ts";
 
 // Tools
+const PLAN_PROGRESS_TOOL = "plan_progress";
 const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls"];
 const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
-const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write"]);
+const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write", PLAN_PROGRESS_TOOL]);
 const PLAN_MANAGED_TOOLS = new Set<string>([...PLAN_MODE_TOOLS, ...NORMAL_MODE_TOOLS]);
 
 interface PlanModeState {
-	enabled: boolean;
-	todos?: TodoItem[];
+	enabled?: boolean;
+	todos?: unknown;
 	executing?: boolean;
 	toolsBeforePlanMode?: string[];
 }
@@ -48,6 +61,20 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
+function renderTodoLine(ctx: ExtensionContext, todoItem: TodoItem): string {
+	const symbol = todoStatusSymbol(todoItem.status);
+	switch (todoItem.status) {
+		case "running":
+			return `${ctx.ui.theme.fg("accent", symbol)} ${todoItem.text}`;
+		case "completed":
+			return `${ctx.ui.theme.fg("success", symbol)} ${ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(todoItem.text))}`;
+		case "failed":
+			return `${ctx.ui.theme.fg("error", symbol)} ${todoItem.text}`;
+		default:
+			return `${ctx.ui.theme.fg("muted", symbol)} ${todoItem.text}`;
+	}
+}
+
 export default function planModeExtension(pi: ExtensionAPI): void {
 	let activeContext: ExtensionContext | undefined;
 	let planModeEnabled = false;
@@ -63,31 +90,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function updateStatus(ctx: ExtensionContext): void {
 		publishPlanBuildMode(pi.events, planModeEnabled ? "plan" : "build");
+		publishPlanProgress(todoItems, executionMode);
+		const counts = getTodoCounts(todoItems);
 
-		// Footer status
-		if (executionMode && todoItems.length > 0) {
-			const completed = todoItems.filter((t) => t.completed).length;
-			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("accent", `📋 ${completed}/${todoItems.length}`));
+		if (executionMode && counts.total > 0) {
+			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("accent", `📋 ${counts.completed}/${counts.total}`));
 		} else if (planModeEnabled) {
 			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ plan"));
+		} else if (counts.total > 0) {
+			const role = counts.completed === counts.total ? "success" : "muted";
+			ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg(role, `📋 ${counts.completed}/${counts.total}`));
 		} else {
 			ctx.ui.setStatus("plan-mode", undefined);
 		}
 
-		// Widget showing todo list
-		if (executionMode && todoItems.length > 0) {
-			const lines = todoItems.map((item) => {
-				if (item.completed) {
-					return (
-						ctx.ui.theme.fg("success", "☑ ") + ctx.ui.theme.fg("muted", ctx.ui.theme.strikethrough(item.text))
-					);
-				}
-				return `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`;
-			});
-			ctx.ui.setWidget("plan-todos", lines);
-		} else {
-			ctx.ui.setWidget("plan-todos", undefined);
-		}
+		ctx.ui.setWidget(
+			"plan-todos",
+			counts.total > 0 ? todoItems.map((todoItem) => renderTodoLine(ctx, todoItem)) : undefined,
+		);
 	}
 
 	function uniqueToolNames(toolNames: string[]): string[] {
@@ -128,10 +148,43 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		});
 	}
 
+	pi.registerTool({
+		name: PLAN_PROGRESS_TOOL,
+		label: "Plan Progress",
+		description:
+			"Update one tracked plan step during execution. Start pending or failed work before completing it. Completion requires concise evidence.",
+		promptSnippet: "Record explicit running, completed, or failed states for tracked plan steps",
+		promptGuidelines: [
+			"Use plan_progress while executing a tracked plan: mark a step running before work starts, then completed with concise evidence after verification, or failed if it cannot be completed.",
+		],
+		parameters: Type.Object({
+			step: Type.Integer({ minimum: 1, description: "Number of the tracked plan step" }),
+			status: StringEnum(TODO_UPDATE_STATES, {
+				description: "running = work started; completed = verified done; failed = attempt did not complete",
+			}),
+			evidence: Type.Optional(
+				Type.String({
+					maxLength: MAX_TODO_EVIDENCE_CHARS,
+					description: "Required for completed: a concise description of the verification or concrete outcome",
+				}),
+			),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			if (!executionMode || todoItems.length === 0) throw new Error("No tracked plan is currently executing.");
+			todoItems = transitionTodoItems(todoItems, params.step, params.status, params.evidence);
+			const updatedItem = todoItems.find((todoItem) => todoItem.step === params.step)!;
+			updateStatus(ctx);
+			persistState();
+			return {
+				content: [{ type: "text", text: `Step ${params.step} is now ${params.status}: ${updatedItem.text}` }],
+				details: updatedItem,
+			};
+		},
+	});
+
 	function enterBuildMode(ctx: ExtensionContext, message = "Build mode enabled. Full access restored."): void {
 		planModeEnabled = false;
 		executionMode = false;
-		todoItems = [];
 		restoreNormalModeTools();
 		ctx.ui.notify(message);
 		updateStatus(ctx);
@@ -174,7 +227,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 				ctx.ui.notify("No todos. Create a plan first with /plan", "info");
 				return;
 			}
-			const list = todoItems.map((item, i) => `${i + 1}. ${item.completed ? "✓" : "○"} ${item.text}`).join("\n");
+			const list = todoItems
+				.map((todoItem) => {
+					const evidence = todoItem.evidence ? ` — ${todoItem.evidence}` : "";
+					return `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}${evidence}`;
+				})
+				.join("\n");
 			ctx.ui.notify(`Plan Progress:\n${list}`, "info");
 		},
 	});
@@ -252,8 +310,10 @@ Do NOT attempt to make changes - just describe what you would do.`,
 		}
 
 		if (executionMode && todoItems.length > 0) {
-			const remaining = todoItems.filter((t) => !t.completed);
-			const todoList = remaining.map((t) => `${t.step}. ${t.text}`).join("\n");
+			const remaining = todoItems.filter((todoItem) => todoItem.status !== "completed");
+			const todoList = remaining
+				.map((todoItem) => `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}`)
+				.join("\n");
 			return {
 				message: {
 					customType: "plan-execution-context",
@@ -262,40 +322,28 @@ Do NOT attempt to make changes - just describe what you would do.`,
 Remaining steps:
 ${todoList}
 
-Execute each step in order.
-After completing a step, include a [DONE:n] tag in your response.`,
+Execute each step in order. Use plan_progress to mark a step running before work starts. Mark it completed with concise evidence only after verification, or failed if the attempt cannot be completed.`,
 					display: false,
 				},
 			};
 		}
 	});
 
-	// Track progress after each turn
-	pi.on("turn_end", async (event, ctx) => {
-		if (!executionMode || todoItems.length === 0) return;
-		if (!isAssistantMessage(event.message)) return;
-
-		const text = getTextContent(event.message);
-		if (markCompletedSteps(text, todoItems) > 0) {
-			updateStatus(ctx);
-		}
-		persistState();
-	});
-
 	// Handle plan completion and plan mode UI
 	pi.on("agent_end", async (event, ctx) => {
 		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
-			if (todoItems.every((t) => t.completed)) {
-				const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
+			if (todoItems.every((todoItem) => todoItem.status === "completed")) {
+				const completedList = todoItems
+					.map((todoItem) => `✓ ${todoItem.text}${todoItem.evidence ? ` — ${todoItem.evidence}` : ""}`)
+					.join("\n");
+				executionMode = false;
+				updateStatus(ctx);
+				persistState();
 				pi.sendMessage(
 					{ customType: "plan-complete", content: `**Plan Complete!** ✓\n\n${completedList}`, display: true },
 					{ triggerTurn: false },
 				);
-				executionMode = false;
-				todoItems = [];
-				updateStatus(ctx);
-				persistState(); // Save cleared state so resume doesn't restore old execution mode
 			}
 			return;
 		}
@@ -312,10 +360,13 @@ After completing a step, include a [DONE:n] tag in your response.`,
 		}
 
 		if (todoItems.length === 0) return;
+		updateStatus(ctx);
 		persistState();
 
 		// Show plan steps and prompt for next action
-		const todoListText = todoItems.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
+		const todoListText = todoItems
+			.map((todoItem) => `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}`)
+			.join("\n");
 		const planTodoListMessage = {
 			customType: "plan-todo-list",
 			content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
@@ -338,14 +389,16 @@ After completing a step, include a [DONE:n] tag in your response.`,
 			updateStatus(ctx);
 			persistState();
 
-			const remainingList = todoItems.map((t) => `${t.step}. ${t.text}`).join("\n");
+			const remainingList = todoItems
+				.map((todoItem) => `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}`)
+				.join("\n");
 			const execMessage = `Execute the plan.
 
 Remaining steps:
 ${remainingList}
 
 Start with: ${firstTodoItem.text}
-After completing a step, include a [DONE:n] tag in your response.`;
+Use plan_progress to mark the step running before work starts, then completed with concise evidence after verification, or failed if the attempt cannot be completed.`;
 			pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
 			pi.sendMessage(
 				{ customType: "plan-mode-execute", content: execMessage, display: true },
@@ -376,35 +429,13 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
 		if (planModeEntry?.data) {
 			planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
-			todoItems = planModeEntry.data.todos ?? todoItems;
+			todoItems = normalizeTodoItems(planModeEntry.data.todos);
 			executionMode = planModeEntry.data.executing ?? executionMode;
 			toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
 		}
 
-		// On resume: re-scan messages to rebuild completion state
-		// Only scan messages AFTER the last "plan-mode-execute" to avoid picking up [DONE:n] from previous plans
-		const isResume = planModeEntry !== undefined;
-		if (isResume && executionMode && todoItems.length > 0) {
-			// Find the index of the last plan-mode-execute entry (marks when current execution started)
-			let executeIndex = -1;
-			for (let i = entries.length - 1; i >= 0; i--) {
-				const entry = entries[i] as { type: string; customType?: string };
-				if (entry.customType === "plan-mode-execute") {
-					executeIndex = i;
-					break;
-				}
-			}
-
-			// Only scan messages after the execute marker
-			const messages: AssistantMessage[] = [];
-			for (let i = executeIndex + 1; i < entries.length; i++) {
-				const entry = entries[i];
-				if (entry.type === "message" && "message" in entry && isAssistantMessage(entry.message as AgentMessage)) {
-					messages.push(entry.message as AssistantMessage);
-				}
-			}
-			const allText = messages.map(getTextContent).join("\n");
-			markCompletedSteps(allText, todoItems);
+		if (executionMode && todoItems.every((todoItem) => todoItem.status === "completed")) {
+			executionMode = false;
 		}
 
 		if (planModeEnabled) {
@@ -415,5 +446,6 @@ After completing a step, include a [DONE:n] tag in your response.`;
 
 	pi.on("session_shutdown", async () => {
 		activeContext = undefined;
+		publishPlanProgress([], false);
 	});
 }

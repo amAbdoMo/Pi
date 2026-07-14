@@ -3,8 +3,7 @@
   "packages": [
     "git:github.com/amAbdoMo/Pi",
     "npm:@hypabolic/pi-hypa",
-    "npm:context-mode",
-    "npm:pi-mcp-adapter"
+    "npm:context-mode"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",

@@ -39,6 +39,8 @@ test("package reconciliation preserves user filters and unrelated local packages
         filteredContextMode,
         filteredHypa,
         "npm:@hypabolic/pi-hypa",
+        "npm:pi-mcp-adapter",
+        { source: "npm:pi-mcp-adapter", extensions: ["legacy-adapter"] },
       ],
       defaultModel: "keep-model",
       defaultThinkingLevel: "minimal",
@@ -63,6 +65,8 @@ test("package reconciliation preserves user filters and unrelated local packages
   assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:@hypabolic/pi-hypa"), filteredHypa);
   assert.equal(sources.filter((source) => source === "npm:context-mode").length, 1);
   assert.equal(sources.filter((source) => source === "npm:@hypabolic/pi-hypa").length, 1);
+  assert.equal(sources.includes("npm:pi-mcp-adapter"), false);
+  assert.match(fs.readFileSync(path.join(agentDir, "mcp.jsonc"), "utf8"), /"mcp"\s*:\s*\{\}/);
   assert.equal(settings.defaultModel, "keep-model");
   assert.equal(settings.defaultThinkingLevel, "minimal");
 });

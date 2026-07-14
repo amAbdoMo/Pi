@@ -12,21 +12,21 @@ param(
 $ErrorActionPreference = 'Stop'
 $WarpSettingsFilesProvided = $PSBoundParameters.ContainsKey('WarpSettingsFiles')
 
-$FontFamily = 'CaskaydiaMono NFM'
+$FontFamily = 'DejaVuSansM Nerd Font Mono'
 $FontVersion = '3.4.0'
-$FontArchiveUrl = "https://github.com/ryanoasis/nerd-fonts/releases/download/v$FontVersion/CascadiaMono.tar.xz"
-$FontArchiveSha256 = '7c22db8c8460ef62abffbb6d5c7b212507de0798a4a762fa2a005a8bc4c90fc6'
+$FontArchiveUrl = "https://github.com/ryanoasis/nerd-fonts/releases/download/v$FontVersion/DejaVuSansMono.tar.xz"
+$FontArchiveSha256 = '0e58ff9c1f9378922b7f324fdba953929d88d61b36aedd80ee43964567b226cc'
 $FontFiles = @(
-  'CaskaydiaMonoNerdFontMono-Regular.ttf',
-  'CaskaydiaMonoNerdFontMono-Bold.ttf',
-  'CaskaydiaMonoNerdFontMono-Italic.ttf',
-  'CaskaydiaMonoNerdFontMono-BoldItalic.ttf'
+  'DejaVuSansMNerdFontMono-Regular.ttf',
+  'DejaVuSansMNerdFontMono-Bold.ttf',
+  'DejaVuSansMNerdFontMono-Oblique.ttf',
+  'DejaVuSansMNerdFontMono-BoldOblique.ttf'
 )
 $FontRegistryNames = @{
-  'CaskaydiaMonoNerdFontMono-Regular.ttf' = 'CaskaydiaMono NFM (TrueType)'
-  'CaskaydiaMonoNerdFontMono-Bold.ttf' = 'CaskaydiaMono NFM Bold (TrueType)'
-  'CaskaydiaMonoNerdFontMono-Italic.ttf' = 'CaskaydiaMono NFM Italic (TrueType)'
-  'CaskaydiaMonoNerdFontMono-BoldItalic.ttf' = 'CaskaydiaMono NFM Bold Italic (TrueType)'
+  'DejaVuSansMNerdFontMono-Regular.ttf' = 'DejaVuSansM Nerd Font Mono (TrueType)'
+  'DejaVuSansMNerdFontMono-Bold.ttf' = 'DejaVuSansM Nerd Font Mono Bold (TrueType)'
+  'DejaVuSansMNerdFontMono-Oblique.ttf' = 'DejaVuSansM Nerd Font Mono Oblique (TrueType)'
+  'DejaVuSansMNerdFontMono-BoldOblique.ttf' = 'DejaVuSansM Nerd Font Mono Bold Oblique (TrueType)'
 }
 
 if (-not $FontInstallDirectory) {
@@ -36,7 +36,7 @@ if (-not $FontRegistryPath) {
   $FontRegistryPath = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'
 }
 if (-not $FontVersionMarkerFile) {
-  $FontVersionMarkerFile = Join-Path $FontInstallDirectory '.amabdomo-caskaydiamono-nfm-version'
+  $FontVersionMarkerFile = Join-Path $FontInstallDirectory '.amabdomo-dejavusansm-nfm-version'
 }
 if (-not $TerminalSettingsScript) {
   $TerminalSettingsScript = Join-Path $PSScriptRoot 'set-terminal-font.mjs'
@@ -129,7 +129,7 @@ try {
     if (-not $FontSourceDirectory) {
       $temporaryDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "amabdomo-pi-font-$([guid]::NewGuid())"
       New-Item -ItemType Directory -Path $temporaryDirectory | Out-Null
-      $archiveFile = Join-Path $temporaryDirectory 'CascadiaMono.tar.xz'
+      $archiveFile = Join-Path $temporaryDirectory 'DejaVuSansMono.tar.xz'
       Invoke-WebRequest -UseBasicParsing -Uri $FontArchiveUrl -OutFile $archiveFile
       if ((Get-FileSha256 $archiveFile) -ne $FontArchiveSha256) {
         throw 'Downloaded Nerd Font archive failed SHA-256 verification.'

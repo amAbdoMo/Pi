@@ -5,7 +5,6 @@ PI_PACKAGES=(
   "git:github.com/amAbdoMo/Pi"
   "npm:@hypabolic/pi-hypa"
   "npm:context-mode"
-  "npm:pi-mcp-adapter"
 )
 CONFIG_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs"
 FONT_SETUP_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1"
@@ -50,7 +49,7 @@ case "$(uname -s)" in
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$FONT_SETUP_SCRIPT_FILE")" -TerminalSettingsScript "$(cygpath -w "$TERMINAL_SETTINGS_SCRIPT_FILE")" -WarpSettingsScript "$(cygpath -w "$WARP_SETTINGS_SCRIPT_FILE")"
     ;;
   *)
-    echo "Nerd Font note: configure a Nerd Font such as CaskaydiaMono NFM to render Pi status icons."
+    echo "Nerd Font note: configure DejaVuSansM Nerd Font Mono to render Pi icons and joined Arabic text."
     ;;
 esac
 

@@ -36,15 +36,15 @@ export class AgentsOverlay implements Component {
     const records = this.sortedRecords();
     if (this.selected >= records.length)
       this.selected = Math.max(0, records.length - 1);
-    const innerWidth = Math.max(20, width - 2);
+    const contentWidth = Math.max(1, width - 4);
     const bodyRows = this.getBodyRows();
     const body =
       this.mode === "detail" && records[this.selected]
-        ? this.renderDetail(innerWidth, records[this.selected], bodyRows)
-        : this.renderList(innerWidth, records, bodyRows);
+        ? this.renderDetail(contentWidth, records[this.selected], bodyRows)
+        : this.renderList(contentWidth, records, bodyRows);
     const title =
       this.mode === "detail" && records[this.selected]
-        ? `Sub-agent · ${this.label(records[this.selected])}`
+        ? `Sub-agent / ${this.label(records[this.selected])}`
         : "Sub-agents";
     const lines = framedPanel(
       this.theme,
@@ -134,6 +134,7 @@ export class AgentsOverlay implements Component {
 
   private renderList(width: number, records: SubagentRecord[], maxRows: number): string[] {
     const t = this.theme;
+    const hint = t.fg("dim", "↑↓ select · Enter details · s steer · a abort · e enter · r refresh · Esc close");
     this.clampListScroll(records, maxRows);
     const visibleCount = this.visibleRecordCount(maxRows);
     const end = Math.min(records.length, this.listScroll + visibleCount);
@@ -142,26 +143,28 @@ export class AgentsOverlay implements Component {
         "dim",
         `${records.length} active direct child${records.length === 1 ? "" : "ren"}${records.length > visibleCount ? ` · showing ${this.listScroll + 1}-${end}` : ""}`,
       ),
-      t.fg("dim", "Alt+S / /agents · Enter details · s compose · a abort · e enter · r refresh · Esc close"),
       "",
     ];
     if (records.length === 0) {
-      lines.push(t.fg("muted", "No active sub-agents."));
-      return lines;
+      lines.push(
+        t.fg("muted", "No active sub-agents."),
+        t.fg("dim", "Start one with the delegate tool, then reopen /agents."),
+      );
+      return this.withHint(lines, hint, maxRows);
     }
     if (this.listScroll > 0) lines.push(t.fg("dim", "↑ more"));
-    const bodyWidth = Math.max(20, width - 4);
     for (let i = this.listScroll; i < end; i++)
-      lines.push(...this.renderRecord(records[i], i === this.selected, bodyWidth));
+      lines.push(...this.renderRecord(records[i], i === this.selected, width));
     if (end < records.length) lines.push(t.fg("dim", "↓ more"));
-    return lines.slice(0, maxRows);
+    return this.withHint(lines, hint, maxRows);
   }
 
   private renderRecord(record: SubagentRecord, selected: boolean, bodyWidth: number): string[] {
     const t = this.theme;
     const prefix = selected ? t.fg("accent", "› ") : t.fg("dim", "  ");
     const elapsed = formatDuration((record.endedAt ?? now()) - record.createdAt);
-    const title = `${prefix}${t.fg("toolTitle", t.bold("Sub-agent"))} ${t.fg("accent", this.label(record))}`;
+    const label = t.fg(selected ? "accent" : "toolTitle", this.label(record));
+    const title = `${prefix}${t.fg("toolTitle", t.bold("Sub-agent"))} ${label}`;
     const meta = [
       statusText(record.status, t),
       `t+${elapsed}`,
@@ -186,18 +189,26 @@ export class AgentsOverlay implements Component {
 
   private renderDetail(width: number, record: SubagentRecord, maxRows: number): string[] {
     const t = this.theme;
+    const hint = t.fg("dim", "↑↓ scroll · s steer · a abort · e enter · Esc back");
     const lines = [
-      `${t.fg("toolTitle", t.bold("Sub-agent"))} ${t.fg("accent", this.label(record))}`,
-      `${statusText(record.status, t)} ${t.fg("dim", `depth ${record.depth} · ${formatDuration((record.endedAt ?? now()) - record.createdAt)}`)}`,
+      `${statusText(record.status, t)} ${t.fg("dim", `· depth ${record.depth} · ${formatDuration((record.endedAt ?? now()) - record.createdAt)}`)}`,
       "",
     ];
     const renderedEvents = renderToolTree(record.events, t, 180, Number.POSITIVE_INFINITY);
-    const pageRows = Math.max(1, maxRows - 5);
+    const pageRows = Math.max(1, maxRows - 4);
     const visible = renderedEvents.slice(this.scroll, this.scroll + pageRows);
     if (visible.length > 0) lines.push(...visible);
-    lines.push("", t.fg("dim", "↑↓ scroll • s compose • a abort • e enter • Esc back"));
-    return lines
-      .slice(0, maxRows)
-      .map((line) => truncateToWidth(line, Math.max(20, width - 2), "…", true));
+    else lines.push(t.fg("dim", "No activity yet. The sub-agent may still be starting."));
+    return this.withHint(lines, hint, maxRows).map((line) =>
+      truncateToWidth(line, width, "…", true),
+    );
+  }
+
+  private withHint(lines: string[], hint: string, maxRows: number): string[] {
+    const rowLimit = Math.max(1, maxRows);
+    if (rowLimit === 1) return [hint];
+    const body = lines.slice(0, rowLimit - 1);
+    while (body.length < rowLimit - 1) body.push("");
+    return [...body, hint];
   }
 }

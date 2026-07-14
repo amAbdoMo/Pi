@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Key } from "@earendil-works/pi-tui";
 import {
   requestPlanBuildModeToggle,
   subscribePlanBuildModeChanges,
@@ -13,7 +14,7 @@ import {
 } from "./chatgptUsage.ts";
 import { editors, notifyEditors } from "./editorRegistry.ts";
 import { updateBranch } from "./git.ts";
-import { bigPiHeader } from "./piHeader.ts";
+import { workbenchHeader } from "./piHeader.ts";
 import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
 import { updateState } from "./state.ts";
 import { hasActiveSubagents, subscribeSubagents } from "./subagents.ts";
@@ -24,14 +25,26 @@ import {
 } from "./usagePolling.ts";
 import { clearTerminal } from "./terminal.ts";
 import type { UiTheme } from "./types.ts";
+import { WorkbenchSidebarController } from "./workbenchSidebar.ts";
 
 // UI extension: startup header, terminal-style editor, and footer cleanup.
 let unsubscribePlanBuildMode: (() => void) | undefined;
 let unsubscribeSubagents: (() => void) | undefined;
 let subagentUsagePoller: UsageRefreshPoller | undefined;
+const workbenchSidebar = new WorkbenchSidebarController();
 
 export default function uiExtension(pi: ExtensionAPI) {
   subscribePlanBuildModeChanges(pi.events, setPlanBuildMode);
+
+  pi.registerCommand("sidebar", {
+    description: "Toggle the Pi workspace sidebar",
+    handler: async (_args, ctx) => workbenchSidebar.toggle(ctx),
+  });
+
+  pi.registerShortcut(Key.ctrlAlt("w"), {
+    description: "Toggle the Pi workspace sidebar",
+    handler: async (ctx) => workbenchSidebar.toggle(ctx),
+  });
 
   pi.on("session_start", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
@@ -51,13 +64,15 @@ export default function uiExtension(pi: ExtensionAPI) {
     );
     const syncSubagentUsage = () => {
       notifyEditors();
+      workbenchSidebar.invalidate();
       subagentUsagePoller?.setActive(hasActiveSubagents());
     };
     unsubscribeSubagents = subscribeSubagents(syncSubagentUsage);
     syncSubagentUsage();
+    workbenchSidebar.dispose();
 
     ctx.ui.setHeader((_tui, theme) => ({
-      render: () => bigPiHeader(theme as unknown as UiTheme),
+      render: (width) => workbenchHeader(theme as unknown as UiTheme, width),
       invalidate: () => {},
     }));
 
@@ -68,16 +83,18 @@ export default function uiExtension(pi: ExtensionAPI) {
         keybindings,
         () => requestPlanBuildModeToggle(pi.events),
       );
+      workbenchSidebar.attachDocked(tui, ctx.ui.theme);
       editors.add(editor);
       return editor;
     });
 
-    // Move the model/thinking/folder/branch/context information into the editor
-    // header, so the default footer does not duplicate it under the prompt.
+    // The workbench surfaces own runtime status, so the stock footer stays empty.
     ctx.ui.setFooter((_tui, _theme) => ({
       render: () => [],
       invalidate: () => {},
     }));
+
+    workbenchSidebar.mount(ctx);
   });
 
   pi.on("input", (event) => {
@@ -100,12 +117,14 @@ export default function uiExtension(pi: ExtensionAPI) {
     updateState(ctx, pi);
     void refreshChatGptUsage(ctx, { force: true });
     notifyEditors();
+    workbenchSidebar.invalidate();
   });
 
   pi.on("thinking_level_select", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     updateState(ctx, pi);
     notifyEditors();
+    workbenchSidebar.invalidate();
   });
 
   pi.on("message_end", async (event, ctx) => {
@@ -113,6 +132,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     updateState(ctx, pi);
     if (event.message.role === "assistant") void refreshChatGptUsage(ctx);
     notifyEditors();
+    workbenchSidebar.invalidate();
   });
 
   pi.on("agent_end", async (_event, ctx) => {
@@ -121,6 +141,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     void updateBranch(pi);
     void refreshChatGptUsage(ctx);
     notifyEditors();
+    workbenchSidebar.invalidate();
   });
 
   pi.on("session_shutdown", async () => {
@@ -131,6 +152,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     unsubscribeSubagents = undefined;
     subagentUsagePoller?.dispose();
     subagentUsagePoller = undefined;
+    workbenchSidebar.dispose();
     editors.clear();
   });
 }

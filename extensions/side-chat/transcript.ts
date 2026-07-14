@@ -21,7 +21,7 @@ function renderItem(theme: Theme, item: ChatItem, width: number): string[] {
     return [label(theme, "You (side)", "accent"), ...wrapBody(item.text, width)];
   }
   if (item.kind === "assistant") return renderAssistant(theme, item, width);
-  if (item.kind === "tool") return [renderTool(theme, item)];
+  if (item.kind === "tool") return wrapTextWithAnsi(renderTool(theme, item), Math.max(1, width));
 
   const color = item.level === "error" ? "error" : item.level === "warning" ? "warning" : "dim";
   return wrapTextWithAnsi(theme.fg(color, `ⓘ ${item.text}`), width);
@@ -32,7 +32,7 @@ function renderAssistant(
   item: Extract<ChatItem, { kind: "assistant" }>,
   width: number,
 ): string[] {
-  const suffix = item.running ? theme.fg("warning", "  ●") : "";
+  const suffix = item.running ? theme.fg("accent", "  ◉ answering") : "";
   const body = item.text || (item.running ? "…" : "(no text)");
   const lines = [label(theme, "Pi (side)", "toolTitle") + suffix, ...wrapBody(body, width)];
   if (item.stopReason && !["stop", "toolUse"].includes(item.stopReason)) {
@@ -55,9 +55,9 @@ function renderTool(
   theme: Theme,
   item: Extract<ChatItem, { kind: "tool" }>,
 ): string {
-  const color = item.status === "error" ? "error" : item.status === "done" ? "success" : "warning";
-  const icon = item.status === "running" ? "…" : item.status === "done" ? "✓" : "✗";
-  return theme.fg(color, `${icon} side tool: ${item.text}`);
+  const color = item.status === "error" ? "error" : item.status === "done" ? "success" : "accent";
+  const state = item.status === "running" ? "◉ running" : item.status === "done" ? "✓ completed" : "✕ failed";
+  return theme.fg(color, `${state} · side tool: ${item.text}`);
 }
 
 function label(theme: Theme, text: string, color: "accent" | "toolTitle"): string {

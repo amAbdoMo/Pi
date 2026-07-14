@@ -12,6 +12,11 @@ type SubagentsStatus = {
   listeners: Set<() => void>;
 };
 
+export type SubagentsSnapshot = Pick<
+  SubagentsStatus,
+  "running" | "total" | "waiting" | "nested" | "inside"
+>;
+
 function subagentsStatus(): SubagentsStatus {
   const root = globalThis as any;
   root[SUBAGENTS_GLOBAL_STATUS_KEY] ??= {
@@ -37,6 +42,11 @@ export function subagentsLabel(): string | undefined {
     color("customMessageLabel", "agents"),
     color("muted", bits.join(" · ")),
   ].join(" ");
+}
+
+export function getSubagentsSnapshot(): SubagentsSnapshot {
+  const { running, total, waiting, nested, inside } = subagentsStatus();
+  return { running, total, waiting, nested, inside };
 }
 
 export function hasActiveSubagents(): boolean {

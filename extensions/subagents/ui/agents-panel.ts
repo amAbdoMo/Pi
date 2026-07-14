@@ -6,6 +6,7 @@ import type { SubagentRecord } from "../types.ts";
 import { abortChild, sendToChild } from "../runtime/records.ts";
 import type { SubagentRuntimeState } from "../runtime/state.ts";
 import { activeRecords, updateStatus } from "../runtime/status-ui.ts";
+import { withWorkbenchModal } from "../../ui/modalState.ts";
 
 export async function openAgentsModal(
   state: SubagentRuntimeState,
@@ -16,7 +17,7 @@ export async function openAgentsModal(
     return;
   }
   while (true) {
-    const result = await ctx.ui.custom<
+    const result = await withWorkbenchModal(() => ctx.ui.custom<
       { action: "steer" | "abort" | "enter"; id: string } | undefined
     >(
       (tui: TUI, theme: Theme, _kb, done) =>
@@ -36,7 +37,7 @@ export async function openAgentsModal(
           margin: 1,
         },
       },
-    );
+    ));
     if (!result) return;
     const record = state.active.get(result.id);
     if (!record) {
@@ -90,7 +91,7 @@ export async function enterChildMode(
   try {
     while (state.active.has(id)) {
       const current = state.active.get(id)!;
-      const action = await ctx.ui.custom<{ action: "send" | "abort" } | undefined>(
+      const action = await withWorkbenchModal(() => ctx.ui.custom<{ action: "send" | "abort" } | undefined>(
         (tui, theme, _kb, done) =>
           new ChildConsoleOverlay(
             theme,
@@ -108,7 +109,7 @@ export async function enterChildMode(
             margin: 1,
           },
         },
-      );
+      ));
       if (!action) return;
       if (action.action === "send") await promptAndSteer(ctx, current);
       if (action.action === "abort") await promptAndAbort(state, ctx, current);

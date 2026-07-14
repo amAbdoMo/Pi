@@ -9,7 +9,7 @@ import {
   type Focusable,
 } from "@earendil-works/pi-tui";
 
-import { SideChatController } from "./controller.ts";
+import type { SideChatController } from "./controller.ts";
 import { framedPanel } from "./frame.ts";
 import { renderTranscript } from "./transcript.ts";
 
@@ -57,14 +57,14 @@ export class SideChatOverlay implements Component, Focusable {
   render(width: number): string[] {
     if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
 
-    const panelWidth = Math.max(20, width);
-    const contentWidth = Math.max(10, panelWidth - 6);
+    const panelWidth = Math.max(4, width);
+    const contentWidth = Math.max(1, panelWidth - 4);
     const rows = Math.max(10, this.getBodyRows());
     const transcript = renderTranscript(this.theme, this.controller.items, contentWidth);
-    const visible = this.visibleTranscript(transcript, Math.max(3, rows - 6));
+    const visible = this.visibleTranscript(transcript, Math.max(2, rows - 7));
     const body = this.renderBody(contentWidth, rows, visible);
 
-    this.cachedLines = framedPanel(this.theme, "/btw side chat", body, panelWidth);
+    this.cachedLines = framedPanel(this.theme, "Side chat", body, panelWidth);
     this.cachedWidth = width;
     return this.cachedLines;
   }
@@ -99,15 +99,16 @@ export class SideChatOverlay implements Component, Focusable {
 
   private renderBody(width: number, rows: number, visible: VisibleTranscript): string[] {
     const body = [
-      this.theme.fg("warning", "SIDE CHAT — not saved to main history"),
+      this.theme.fg("warning", "Unsaved side thread · main history is unchanged"),
       this.theme.fg("dim", this.modelLine()),
+      this.statusLine(),
       visible.hiddenBefore > 0
         ? this.theme.fg("dim", `↑ ${visible.hiddenBefore} earlier line${visible.hiddenBefore === 1 ? "" : "s"}`)
         : "",
       ...visible.lines,
     ];
 
-    while (body.length < Math.max(0, rows - 3)) body.push("");
+    while (body.length < Math.max(0, rows - 2)) body.push("");
     body.push(this.theme.fg("dim", this.hintText()));
     body.push(this.renderInput(width));
     return body;
@@ -116,20 +117,27 @@ export class SideChatOverlay implements Component, Focusable {
   private modelLine(): string {
     const snapshot = this.controller.snapshot;
     const model = `${snapshot.model.provider}/${snapshot.model.id}`;
-    const context = `${snapshot.inheritedMessages.length} inherited msgs`;
-    return `${model} · ${context} · Esc closes`;
+    const count = snapshot.inheritedMessages.length;
+    const context = `${count} inherited message${count === 1 ? "" : "s"}`;
+    return `${model} · ${context}`;
+  }
+
+  private statusLine(): string {
+    return this.controller.isBusy
+      ? this.theme.fg("accent", "◉ Answering")
+      : this.theme.fg("dim", "○ Ready");
   }
 
   private renderInput(width: number): string {
     const prefix = this.theme.fg("accent", "› ");
-    const inputWidth = Math.max(8, width - visibleWidth(prefix));
+    const inputWidth = Math.max(1, width - visibleWidth(prefix));
     const rendered = this.input.render(inputWidth)[0] ?? "";
     return truncateToWidth(prefix + rendered, width, "…", true);
   }
 
   private hintText(): string {
     return this.controller.isBusy
-      ? "Answering… you can draft; press Enter after it finishes."
-      : "Type a side follow-up and press Enter.";
+      ? "Draft while Pi answers · Enter sends when ready · Esc closes"
+      : "Enter send · ↑↓ transcript · Esc close";
   }
 }

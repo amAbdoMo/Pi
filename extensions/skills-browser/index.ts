@@ -10,6 +10,7 @@ import {
 	type AutocompleteProvider,
 	type SelectItem,
 } from "@earendil-works/pi-tui";
+import { withWorkbenchModal } from "../ui/modalState.ts";
 import {
 	skillChoices,
 	withoutSkillCommandSuggestions,
@@ -46,7 +47,7 @@ function hideSkillCommands(current: AutocompleteProvider): AutocompleteProvider 
 
 async function showSkillPicker(ctx: ExtensionContext, choices: SkillChoice[]): Promise<string | null> {
 	const items: SelectItem[] = choices;
-	return ctx.ui.custom<string | null>((tui, theme, _keybindings, done) => {
+	return withWorkbenchModal(() => ctx.ui.custom<string | null>((tui, theme, _keybindings, done) => {
 		const container = new Container();
 		container.addChild(new DynamicBorder((text) => theme.fg("accent", text)));
 		container.addChild(new Text(theme.fg("accent", theme.bold(`Skills (${items.length})`)), 1, 0));
@@ -64,7 +65,7 @@ async function showSkillPicker(ctx: ExtensionContext, choices: SkillChoice[]): P
 				tui.requestRender();
 			},
 		};
-	});
+	}));
 }
 
 export default function skillsBrowserExtension(pi: ExtensionAPI): void {

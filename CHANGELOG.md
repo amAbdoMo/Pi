@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.0
+
+- Added a full-screen graphite workbench with a fixed responsive sidebar, anchored composer, scrollable chat viewport, coordinated modal layers, and compact OpenCode-inspired message, workflow, side-chat, subagent, and tool surfaces.
+- Added mouse-wheel and page-key chat scrolling, responsive sidebar sizing, context token totals, activity summaries, and explicit pending, running, completed-with-evidence, and failed task states.
+- Added Arabic shaping and bidirectional terminal rendering while preserving logical submitted text and LTR code, path, command, and metadata runs.
+- Replaced the external MCP adapter with the owned MCP Hub: JSON/JSONC and OpenCode-style configuration, local and remote transports, lazy connections, discovery/search/describe/call actions, cancellation, bounded output, metadata caching, diagnostics, secret redaction, and `/mcp` management.
+- Retired `npm:pi-mcp-adapter` from shared settings and both installers; repeated setup now removes legacy adapter entries and safely creates an empty personal `mcp.jsonc` only when absent.
+- Switched the pinned Windows terminal font to DejaVu Sans Mono Nerd Font 3.4.0 and enabled Arabic cursive and required-ligature features while preserving Windows Terminal and Warp backups.
+- Expanded regression coverage for MCP configuration and security, modal coordination, plan progress, sidebar/workbench layout, RTL behavior, mouse input, and terminal configuration.
+
 ## 0.8.1
 
 - Removed the bundled `adaptive-delegation` skill from this Pi package so custom skills can live in their own repository.

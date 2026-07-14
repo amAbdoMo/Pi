@@ -6,6 +6,7 @@ import type {
 import { SideChatController } from "./controller.ts";
 import { SideChatOverlay } from "./overlay.ts";
 import { createSnapshot } from "./snapshot.ts";
+import { withWorkbenchModal } from "../ui/modalState.ts";
 
 export async function openSideChat(
   args: string,
@@ -26,7 +27,7 @@ export async function openSideChat(
   let submittedInitial = false;
 
   try {
-    await ctx.ui.custom<void>(
+    await withWorkbenchModal(() => ctx.ui.custom<void>(
       (tui, theme, _keybindings, done) => {
         const overlay = new SideChatOverlay(
           theme,
@@ -52,7 +53,7 @@ export async function openSideChat(
         },
         onHandle: (handle) => handle.focus(),
       },
-    );
+    ));
   } finally {
     await controller.dispose();
   }

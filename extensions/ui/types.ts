@@ -5,6 +5,7 @@ export type UiTheme = {
   bg?: (color: string, text: string) => string;
   bold?: (text: string) => string;
   getFgAnsi?: (color: string) => string;
+  getBgAnsi?: (color: string) => string;
   getColorMode?: () => "truecolor" | "256color";
 };
 

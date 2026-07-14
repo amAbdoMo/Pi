@@ -2,6 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+const REQUIRED_FONT_FEATURES = { curs: 1, rlig: 1, liga: 1 };
+
 function removeJsonComments(jsonc) {
   let output = "";
   let inString = false;
@@ -110,11 +112,15 @@ export function configureTerminalSettings(settingsFile, fontFamily) {
   const profiles = objectProperty(settings, "profiles", settingsFile);
   const defaults = objectProperty(profiles, "defaults", settingsFile);
   const font = objectProperty(defaults, "font", settingsFile);
-  if (font.face === fontFamily) return false;
+  const features = objectProperty(font, "features", settingsFile);
+  const featuresConfigured = Object.entries(REQUIRED_FONT_FEATURES)
+    .every(([feature, setting]) => features[feature] === setting);
+  if (font.face === fontFamily && featuresConfigured) return false;
 
   const backupFile = `${settingsFile}.amabdomo-pi-backup`;
   if (!fs.existsSync(backupFile)) fs.copyFileSync(settingsFile, backupFile);
   font.face = fontFamily;
+  Object.assign(features, REQUIRED_FONT_FEATURES);
   fs.writeFileSync(settingsFile, `${JSON.stringify(settings, null, 4)}\n`);
   console.log(`Configured ${settingsFile} to use ${fontFamily}`);
   return true;

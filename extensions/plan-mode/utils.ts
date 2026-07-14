@@ -100,10 +100,114 @@ export function isSafeCommand(command: string): boolean {
 	return !isDestructive && isSafe;
 }
 
+export const TODO_STATES = ["pending", "running", "completed", "failed"] as const;
+export const TODO_UPDATE_STATES = ["running", "completed", "failed"] as const;
+export const MAX_TODO_EVIDENCE_CHARS = 160;
+
+export type TodoStatus = (typeof TODO_STATES)[number];
+export type TodoUpdateStatus = (typeof TODO_UPDATE_STATES)[number];
+
 export interface TodoItem {
 	step: number;
 	text: string;
-	completed: boolean;
+	status: TodoStatus;
+	evidence?: string;
+}
+
+export interface TodoCounts {
+	total: number;
+	pending: number;
+	running: number;
+	completed: number;
+	failed: number;
+}
+
+const TODO_TRANSITIONS: Record<TodoStatus, readonly TodoStatus[]> = {
+	pending: ["running"],
+	running: ["completed", "failed"],
+	completed: [],
+	failed: ["running"],
+};
+
+const TODO_STATUS_SYMBOLS: Record<TodoStatus, string> = {
+	pending: "○",
+	running: "◉",
+	completed: "✓",
+	failed: "✕",
+};
+
+function isRecord(candidate: unknown): candidate is Record<string, unknown> {
+	return typeof candidate === "object" && candidate !== null;
+}
+
+function persistedTodoStatus(candidate: Record<string, unknown>): TodoStatus {
+	if (TODO_STATES.includes(candidate.status as TodoStatus)) return candidate.status as TodoStatus;
+	return candidate.completed === true ? "completed" : "pending";
+}
+
+function normalizedEvidence(candidate: unknown): string | undefined {
+	if (typeof candidate !== "string") return undefined;
+	const evidence = candidate.replace(/\s+/g, " ").trim();
+	return evidence ? evidence.slice(0, MAX_TODO_EVIDENCE_CHARS) : undefined;
+}
+
+function evidenceForTransition(status: TodoStatus, evidence?: string): string | undefined {
+	const conciseEvidence = evidence?.replace(/\s+/g, " ").trim();
+	if (status === "completed" && !conciseEvidence) {
+		throw new Error("Completed tasks require concise evidence.");
+	}
+	if (conciseEvidence && conciseEvidence.length > MAX_TODO_EVIDENCE_CHARS) {
+		throw new Error(`Task evidence must be ${MAX_TODO_EVIDENCE_CHARS} characters or fewer.`);
+	}
+	return status === "completed" ? conciseEvidence : undefined;
+}
+
+export function todoStatusSymbol(status: TodoStatus): string {
+	return TODO_STATUS_SYMBOLS[status];
+}
+
+export function normalizeTodoItems(persistedItems: unknown): TodoItem[] {
+	if (!Array.isArray(persistedItems)) return [];
+	const normalizedItems: TodoItem[] = [];
+	for (const candidate of persistedItems) {
+		if (!isRecord(candidate) || typeof candidate.text !== "string") continue;
+		const text = candidate.text.trim();
+		if (!text) continue;
+		const status = persistedTodoStatus(candidate);
+		const evidence = status === "completed" ? normalizedEvidence(candidate.evidence) : undefined;
+		normalizedItems.push({ step: normalizedItems.length + 1, text, status, ...(evidence ? { evidence } : {}) });
+	}
+	return normalizedItems;
+}
+
+export function getTodoCounts(todoItems: readonly TodoItem[]): TodoCounts {
+	const counts: TodoCounts = { total: todoItems.length, pending: 0, running: 0, completed: 0, failed: 0 };
+	for (const todoItem of todoItems) counts[todoItem.status]++;
+	return counts;
+}
+
+export function transitionTodoItems(
+	todoItems: readonly TodoItem[],
+	step: number,
+	status: TodoUpdateStatus,
+	evidence?: string,
+): TodoItem[] {
+	const currentItem = todoItems.find((todoItem) => todoItem.step === step);
+	if (!currentItem) throw new Error(`Plan step ${step} does not exist.`);
+	if (currentItem.status !== status && !TODO_TRANSITIONS[currentItem.status].includes(status)) {
+		throw new Error(`Plan step ${step} cannot transition from ${currentItem.status} to ${status}.`);
+	}
+	const completionEvidence = evidenceForTransition(status, evidence);
+	return todoItems.map((todoItem) =>
+		todoItem.step === step
+			? {
+					step: todoItem.step,
+					text: todoItem.text,
+					status,
+					...(completionEvidence ? { evidence: completionEvidence } : {}),
+				}
+			: todoItem,
+	);
 }
 
 export function cleanStepText(text: string): string {
@@ -127,9 +231,9 @@ export function cleanStepText(text: string): string {
 }
 
 export function extractTodoItems(message: string): TodoItem[] {
-	const items: TodoItem[] = [];
+	const todoItems: TodoItem[] = [];
 	const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/i);
-	if (!headerMatch) return items;
+	if (!headerMatch) return todoItems;
 
 	const planSection = message.slice(message.indexOf(headerMatch[0]) + headerMatch[0].length);
 	const numberedPattern = /^\s*(\d+)[.)]\s+\*{0,2}([^*\n]+)/gm;
@@ -142,27 +246,9 @@ export function extractTodoItems(message: string): TodoItem[] {
 		if (text.length > 5 && !text.startsWith("`") && !text.startsWith("/") && !text.startsWith("-")) {
 			const cleaned = cleanStepText(text);
 			if (cleaned.length > 3) {
-				items.push({ step: items.length + 1, text: cleaned, completed: false });
+				todoItems.push({ step: todoItems.length + 1, text: cleaned, status: "pending" });
 			}
 		}
 	}
-	return items;
-}
-
-export function extractDoneSteps(message: string): number[] {
-	const steps: number[] = [];
-	for (const match of message.matchAll(/\[DONE:(\d+)\]/gi)) {
-		const step = Number(match[1]);
-		if (Number.isFinite(step)) steps.push(step);
-	}
-	return steps;
-}
-
-export function markCompletedSteps(text: string, items: TodoItem[]): number {
-	const doneSteps = extractDoneSteps(text);
-	for (const step of doneSteps) {
-		const item = items.find((t) => t.step === step);
-		if (item) item.completed = true;
-	}
-	return doneSteps.length;
+	return todoItems;
 }

@@ -36,10 +36,10 @@
     "text": "fg",
     "thinkingText": "softFg",
 
-    "selectedBg": "#111111",
-    "userMessageBg": "#000000",
+    "selectedBg": "#1a1e24",
+    "userMessageBg": "#14171c",
     "userMessageText": "fg",
-    "customMessageBg": "#000000",
+    "customMessageBg": "#0f1216",
     "customMessageText": "fg",
     "customMessageLabel": "magentaBright",
     "toolPendingBg": "#000000",

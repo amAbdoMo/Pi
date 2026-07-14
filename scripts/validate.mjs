@@ -31,8 +31,14 @@ for (const resourceGroup of ["extensions", "themes"]) {
 }
 
 const requiredFiles = [
+  "extensions/mcp/index.ts",
+  "extensions/mcp/config.ts",
+  "extensions/mcp/hub.ts",
   "extensions/ui/imagePaste.ts",
+  "extensions/ui/rtlText.ts",
   "extensions/ui/terminalEditor.ts",
+  "extensions/ui/workbenchShell.ts",
+  "extensions/ui/workbenchSidebar.ts",
   "extensions/plan-mode/index.ts",
   "extensions/skills-browser/index.ts",
   "extensions/subagents/child-profile.ts",
@@ -49,14 +55,17 @@ for (const relativePath of requiredFiles) {
   if (!fs.existsSync(path.join(root, relativePath))) throw new Error(`Missing required file: ${relativePath}`);
 }
 
-const headerSource = fs.readFileSync(path.join(root, "extensions/ui/header.ts"), "utf8");
-const requiredHeaderIcons = ["󰉋", "", "󰒓", "󰧑", "󰍛", ""];
-for (const icon of requiredHeaderIcons) {
-  if (!headerSource.includes(icon)) throw new Error(`Missing required header icon: ${icon}`);
+const statusSurfaceSource = [
+  "extensions/ui/header.ts",
+  "extensions/ui/workbenchSidebar.ts",
+].map((relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8")).join("\n");
+const requiredStatusIcons = ["󰉋", "", "󰒓", "󰧑", "󰍛", ""];
+for (const icon of requiredStatusIcons) {
+  if (!statusSurfaceSource.includes(icon)) throw new Error(`Missing required status icon: ${icon}`);
 }
 
 const fontSetupSource = fs.readFileSync(path.join(root, "scripts/setup-terminal-font.ps1"), "utf8");
-for (const requiredFontSetting of ["CaskaydiaMono NFM", "3.4.0", "7c22db8c8460ef62abffbb6d5c7b212507de0798a4a762fa2a005a8bc4c90fc6"]) {
+for (const requiredFontSetting of ["DejaVuSansM Nerd Font Mono", "3.4.0", "0e58ff9c1f9378922b7f324fdba953929d88d61b36aedd80ee43964567b226cc"]) {
   if (!fontSetupSource.includes(requiredFontSetting)) {
     throw new Error(`Missing pinned Nerd Font setting: ${requiredFontSetting}`);
   }
@@ -76,6 +85,9 @@ for (const installer of ["install.ps1", "install.sh"]) {
       throw new Error(`${installer} does not provision ${requiredReference}`);
     }
   }
+  if (installerSource.includes("pi-mcp-adapter")) {
+    throw new Error(`${installer} still installs the retired pi-mcp-adapter package`);
+  }
 }
 
 const settings = parsedJson.get("settings.example.json");
@@ -83,10 +95,15 @@ const requiredPackages = [
   "git:github.com/amAbdoMo/Pi",
   "npm:@hypabolic/pi-hypa",
   "npm:context-mode",
-  "npm:pi-mcp-adapter",
 ];
 for (const packageSpec of requiredPackages) {
   if (!settings.packages?.includes(packageSpec)) throw new Error(`Missing recommended package: ${packageSpec}`);
+}
+if (settings.packages?.includes("npm:pi-mcp-adapter")) {
+  throw new Error("The retired pi-mcp-adapter package must not be reinstalled");
+}
+for (const dependency of ["@modelcontextprotocol/sdk", "arabic-reshaper", "bidi-js", "jsonc-parser"]) {
+  if (!packageManifest.dependencies?.[dependency]) throw new Error(`Missing runtime dependency: ${dependency}`);
 }
 
 console.log("Pi setup validation passed.");
