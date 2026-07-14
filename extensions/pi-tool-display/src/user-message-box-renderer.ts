@@ -10,6 +10,10 @@ import {
   type PatchableUserMessagePrototype,
 } from "./user-message-box-patch.js";
 import {
+  fitUserMessageWidth,
+  MIN_USER_MESSAGE_WIDTH,
+} from "./user-message-box-layout.js";
+import {
   extractUserMessageMarkdownState,
   type UserMessageMarkdownState,
 } from "./user-message-box-markdown.js";
@@ -52,11 +56,10 @@ interface CachedUserMessageBodyLines {
   lines: string[];
 }
 
-const MIN_BORDER_WIDTH = 8;
 const TITLE_TEXT = " user ";
 const CONTENT_HORIZONTAL_PADDING_COLUMNS = 1;
 const USER_MESSAGE_TOP_MARGIN_LINES = 1;
-const USER_MESSAGE_PATCH_VERSION = 8;
+const USER_MESSAGE_PATCH_VERSION = 9;
 const MAX_USER_MESSAGE_MARKDOWN_TEXT_LENGTH = 100_000;
 const MAX_USER_MESSAGE_MARKDOWN_LINE_COUNT = 2_000;
 
@@ -123,6 +126,13 @@ function getUserMessageContentWidth(totalWidth: number): number {
     1,
     totalWidth - 2 - CONTENT_HORIZONTAL_PADDING_COLUMNS * 2,
   );
+}
+
+function widestUserMessageLine(lines: readonly string[]): number {
+  return lines.reduce((widest, line) => {
+    const normalizedLine = normalizeUserMessageContentLine(line);
+    return Math.max(widest, visibleWidth(normalizedLine));
+  }, 0);
 }
 
 function wrapContentLine(
@@ -360,7 +370,7 @@ export function patchNativeUserMessagePrototype(
     (originalRender) =>
       function renderWithNativeUserBorder(width: number): string[] {
         const safeWidth = Math.max(0, Math.floor(width));
-        if (!isEnabled() || safeWidth < MIN_BORDER_WIDTH) {
+        if (!isEnabled() || safeWidth < MIN_USER_MESSAGE_WIDTH) {
           return originalRender.call(this, safeWidth);
         }
 
@@ -389,17 +399,21 @@ export function patchNativeUserMessagePrototype(
           originalBodyLineCache,
         );
         const contentLines = normalizeUserMessageContentLines(lines);
-        const paddedContentLines = addUserMessageVerticalPadding(
-          contentLines.length > 0 ? contentLines : [""],
+        const renderedContentLines = contentLines.length > 0 ? contentLines : [""];
+        const messageWidth = fitUserMessageWidth(
+          safeWidth,
+          widestUserMessageLine(renderedContentLines),
+          CONTENT_HORIZONTAL_PADDING_COLUMNS,
         );
+        const paddedContentLines = addUserMessageVerticalPadding(renderedContentLines);
 
         const output = [
           ...Array.from({ length: USER_MESSAGE_TOP_MARGIN_LINES }, () => ""),
-          buildTopBorder(safeWidth, theme),
+          buildTopBorder(messageWidth, theme),
           ...paddedContentLines.map((renderLine) =>
-            wrapContentLine(renderLine, safeWidth, theme),
+            wrapContentLine(renderLine, messageWidth, theme),
           ),
-          buildBottomBorder(safeWidth, theme),
+          buildBottomBorder(messageWidth, theme),
         ];
 
         if (canCacheFinalOutput) {

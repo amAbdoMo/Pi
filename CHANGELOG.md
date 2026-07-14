@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.3
+
+- Made user message cards fit their rendered content width for short messages while retaining full-width wrapping for long or multiline content.
+
 ## 0.9.2
 
 - Restored native mouse text selection and copy by removing application mouse-capture mode; `PageUp` and `PageDown` continue to scroll chat while alternate-screen wheel input no longer cycles composer history.

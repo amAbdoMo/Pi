@@ -20,7 +20,7 @@ The command is safe to run again when this repository changes. It installs the r
 
 ## Included setup
 
-- Full-screen terminal workbench with a fixed responsive sidebar, bottom-anchored composer, scrollable chat viewport, coordinated modal windows, and the `hypr-waves` graphite theme
+- Full-screen terminal workbench with a fixed responsive sidebar, bottom-anchored composer, scrollable chat viewport, content-fitted user message cards, coordinated modal windows, and the `hypr-waves` graphite theme
 - Native mouse text selection and copy, with `PageUp`/`PageDown` chat scrolling and alternate-screen wheel input kept out of composer history
 - Automatic Arabic shaping, RTL visual ordering, right-aligned composition, and LTR preservation for code, paths, commands, and metadata
 - Verified Windows Nerd Font setup using DejaVu Sans Mono Nerd Font 3.4.0, with Arabic cursive and required-ligature features enabled in Windows Terminal
