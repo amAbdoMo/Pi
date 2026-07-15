@@ -33,18 +33,6 @@ export function sidebarPanelContentWidth(panelWidth: number): number {
   return Math.max(1, innerWidth - horizontalPadding * 2);
 }
 
-export function sidebarSectionContentWidth(sectionWidth: number): number {
-  const safeWidth = Math.max(0, Math.floor(sectionWidth));
-  return safeWidth >= 4 ? safeWidth - 4 : safeWidth;
-}
-
-export function sidebarSectionTopBorder(sectionWidth: number): string {
-  const safeWidth = Math.max(0, Math.floor(sectionWidth));
-  if (safeWidth === 0) return "";
-  if (safeWidth === 1) return "─";
-  return `┌${"─".repeat(safeWidth - 2)}┐`;
-}
-
 export function compactTokenCount(value: number): string {
   const safeValue = Math.max(0, Math.round(value));
   if (safeValue >= 1_000_000) {

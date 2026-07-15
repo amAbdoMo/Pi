@@ -2,7 +2,7 @@
 
 ## 0.10.0
 
-- Framed the Session, Context, Activity, and MCP sidebar sections as compact boxes with continuous top borders and titled first rows.
+- Styled the Session, Context, Activity, and MCP headings as full-width message-like title rules without surrounding section boxes.
 - Rebranded the package as Pi Workbench with global, community-facing package metadata and a humanized README that clearly separates stock Pi capabilities from the bundled workbench additions.
 - Documented the complete custom interface, workflow, MCP, tool, RTL, terminal, installation, update, privacy, and development experience.
 - Renamed new temporary files, backups, and installed font artifacts to the `pi-workbench` namespace while preserving recognition of legacy package and backup names during upgrades.

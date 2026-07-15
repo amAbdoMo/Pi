@@ -44,8 +44,6 @@ import {
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
-  sidebarSectionContentWidth,
-  sidebarSectionTopBorder,
 } from "./workbenchSidebarLayout.ts";
 
 const RAIL_MIN_COLUMNS = 118;
@@ -249,16 +247,23 @@ export class WorkbenchSidebar implements Component {
 
   private bodyLines(width: number, rows: number): string[] {
     const divider = this.theme.fg("borderMuted", "─".repeat(width));
-    const sectionContentWidth = sidebarSectionContentWidth(width);
     const lines = [
       "",
-      ...framedSection(this.theme, "Session", this.sessionLines(sectionContentWidth), width),
+      sectionHeading(this.theme, "Session", width),
       "",
-      ...framedSection(this.theme, "Context", this.contextLines(sectionContentWidth), width),
+      ...this.sessionLines(width),
       "",
-      ...framedSection(this.theme, "Activity", this.activityLines(sectionContentWidth), width),
+      sectionHeading(this.theme, "Context", width),
       "",
-      ...framedSection(this.theme, "MCP", this.mcpLines(sectionContentWidth), width),
+      ...this.contextLines(width),
+      "",
+      sectionHeading(this.theme, "Activity", width),
+      "",
+      ...this.activityLines(width),
+      "",
+      sectionHeading(this.theme, "MCP", width),
+      "",
+      ...this.mcpLines(width),
     ];
     const contentRows = lines.slice(0, Math.max(0, rows - 2));
     while (contentRows.length < rows - 2) contentRows.push("");
@@ -380,6 +385,14 @@ function sectionTitle(theme: Theme, text: string): string {
   return theme.fg("toolTitle", theme.bold(text.toUpperCase()));
 }
 
+function sectionHeading(theme: Theme, title: string, width: number): string {
+  if (width < 3) return truncateToWidth(sectionTitle(theme, title), width, "", true);
+
+  const heading = truncateToWidth(` ${sectionTitle(theme, title)} `, width - 2, "", true);
+  const fill = "─".repeat(Math.max(0, width - 2 - visibleWidth(heading)));
+  return theme.fg("borderMuted", "──") + heading + theme.fg("borderMuted", fill);
+}
+
 function todoStatusRole(status: TodoStatus): string {
   switch (status) {
     case "completed":
@@ -431,26 +444,6 @@ function mcpStatusGlyph(theme: Theme, status: McpServerState): string {
   if (status === "error") return theme.fg("error", "×");
   if (status === "disabled") return theme.fg("dim", "●");
   return theme.fg("dim", "○");
-}
-
-function framedSection(theme: Theme, title: string, body: string[], width: number): string[] {
-  if (width < 4) {
-    return [
-      truncateToWidth(sectionTitle(theme, title), width, "", true),
-      ...body.map((line) => truncateToWidth(line, width, "", true)),
-    ];
-  }
-
-  const contentWidth = sidebarSectionContentWidth(width);
-  const border = (text: string) => theme.fg("borderMuted", text);
-  const lines = [border(sidebarSectionTopBorder(width))];
-  for (const line of [sectionTitle(theme, title), ...body]) {
-    const content = truncateToWidth(line, contentWidth, "…", true);
-    const fill = " ".repeat(Math.max(0, contentWidth - visibleWidth(content)));
-    lines.push(`${border("│ ")}${content}${fill}${border(" │")}`);
-  }
-  lines.push(border(`└${"─".repeat(width - 2)}┘`));
-  return lines;
 }
 
 function framedPanel(theme: Theme, title: string, body: string[], width: number): string[] {
