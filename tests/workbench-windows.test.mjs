@@ -105,6 +105,12 @@ const { SideChatOverlay } = await import(
 const { renderWorkflowPanel, statusIcon } = await import(
   "../extensions/workflow/index.ts"
 );
+const { installWorkbenchShell } = await import(
+  "../extensions/ui/workbenchShell.ts"
+);
+const { beginWorkbenchModal } = await import(
+  "../extensions/ui/modalState.ts"
+);
 
 const theme = {
   fg: (_role, text) => text,
@@ -248,5 +254,104 @@ test("workflow panel preserves status semantics from narrow to wide terminals", 
     const lines = renderWorkflowPanel(state, width, theme);
     assertWidthSafe(lines, width);
     assert.match(lines.join("\n"), /failed/);
+  }
+});
+
+function component(lines) {
+  return {
+    render: () => [...lines],
+    invalidate() {},
+  };
+}
+
+function chatRows(tui) {
+  return tui.render(80).slice(0, 4).map((line) => line.trimEnd());
+}
+
+function createWorkbenchTui() {
+  let listener;
+  const writes = [];
+  const tui = {
+    terminal: {
+      columns: 80,
+      rows: 8,
+      write: (sequence) => writes.push(sequence),
+    },
+    children: [
+      component(Array.from({ length: 20 }, (_, index) => `chat-${index + 1}`)),
+      component(["dock-1"]),
+      component(["dock-2"]),
+      component(["dock-3"]),
+      component(["dock-4"]),
+    ],
+    render: (width) => [`fallback-${width}`],
+    start() {},
+    stop() {},
+    setClearOnShrink: () => {},
+    requestRender: () => { tui.renderRequests += 1; },
+    addInputListener: (nextListener) => {
+      listener = nextListener;
+      return () => { listener = undefined; };
+    },
+    renderRequests: 0,
+  };
+  return { tui, writes, input: (data) => listener?.(data) };
+}
+
+test("workbench shell consumes wheel input for chat scrolling before composer history", () => {
+  const { tui, writes, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]));
+
+  try {
+    assert.match(writes.join(""), /\x1b\[\?1006h\x1b\[\?1000h/);
+    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+
+    const result = input("\x1b[<64;10;4M\x1b[<64;10;4M");
+
+    assert.deepEqual(result, { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-11", "chat-12", "chat-13", "chat-14"]);
+    assert.ok(tui.renderRequests >= 2);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("workbench shell strips non-wheel mouse sequences without dropping mixed input", () => {
+  const { tui, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]));
+
+  try {
+    assert.deepEqual(input(`a\x1b[<0;10;4Mz`), { data: "az" });
+    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("workbench shell leaves modal wheel events stripped but unscrolled", () => {
+  const { tui, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]));
+  const releaseModal = beginWorkbenchModal();
+
+  try {
+    assert.deepEqual(input("\x1b[<64;10;4M"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+  } finally {
+    releaseModal();
+    handle.dispose();
+  }
+});
+
+test("workbench shell keeps PageUp and PageDown chat scrolling", () => {
+  const { tui, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]));
+
+  try {
+    assert.deepEqual(input("pageup"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-12", "chat-13", "chat-14", "chat-15"]);
+    assert.deepEqual(input("pagedown"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+  } finally {
+    handle.dispose();
   }
 });

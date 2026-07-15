@@ -2,6 +2,7 @@
 
 ## 0.10.0
 
+- Routed mouse-wheel input to chat history instead of composer message history, without adding a custom scrollbar; native selection remains available with `Shift+drag`.
 - Organized sidebar tasks with zero-padded plan order, status markers, and hanging indentation for wrapped descriptions.
 - Changed disabled MCP servers to a solid red status dot while disconnected servers remain hollow and muted.
 - Restored content-fitted sent-message cards by ignoring renderer-added right padding when measuring short messages.
