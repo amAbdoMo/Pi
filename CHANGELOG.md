@@ -2,6 +2,7 @@
 
 ## 0.10.0
 
+- Added mouse-wheel chat scrolling and an in-app position scrollbar; terminal-native selection remains available with `Shift+drag`.
 - Restored content-fitted sent-message cards by ignoring renderer-added right padding when measuring short messages.
 - Connected the outer Pi workspace title and all four section titles to complete message-style box borders.
 - Rebranded the package as Pi Workbench with global, community-facing package metadata and a humanized README that clearly separates stock Pi capabilities from the bundled workbench additions.
