@@ -45,6 +45,7 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
+  sidebarSectionTopBorder,
 } from "./workbenchSidebarLayout.ts";
 
 const RAIL_MIN_COLUMNS = 118;
@@ -272,7 +273,6 @@ export class WorkbenchSidebar implements Component {
     const sessionName = state.getSessionName?.() || "Current session";
     const location = `󰉋 ${state.folder || "~"}   ${state.branch || "—"}`;
     return [
-      "",
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),
       ...wrapSidebarText(this.theme.fg("muted", location), width),
     ];
@@ -288,7 +288,6 @@ export class WorkbenchSidebar implements Component {
       ? `${compactTokenCount(contextUsed)} / ${compactTokenCount(contextWindow)}`
       : "—";
     return [
-      "",
       alignedStatusLine(
         this.theme,
         this.theme.fg("muted", "󰍛 Window"),
@@ -301,7 +300,6 @@ export class WorkbenchSidebar implements Component {
 
   private activityLines(width: number): string[] {
     return [
-      "",
       ...this.taskActivityLines(width),
       ...this.agentActivityLines(width),
     ];
@@ -354,7 +352,7 @@ export class WorkbenchSidebar implements Component {
 
   private mcpLines(width: number): string[] {
     const servers = getMcpStatus();
-    const lines = [""];
+    const lines: string[] = [];
     if (servers.length === 0) {
       lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
       return lines;
@@ -444,11 +442,9 @@ function framedSection(theme: Theme, title: string, body: string[], width: numbe
   }
 
   const contentWidth = sidebarSectionContentWidth(width);
-  const heading = truncateToWidth(` ${sectionTitle(theme, title)} `, width - 3, "", true);
-  const topFill = "─".repeat(Math.max(0, width - 3 - visibleWidth(heading)));
   const border = (text: string) => theme.fg("borderMuted", text);
-  const lines = [border("┌─") + heading + border(`${topFill}┐`)];
-  for (const line of body) {
+  const lines = [border(sidebarSectionTopBorder(width))];
+  for (const line of [sectionTitle(theme, title), ...body]) {
     const content = truncateToWidth(line, contentWidth, "…", true);
     const fill = " ".repeat(Math.max(0, contentWidth - visibleWidth(content)));
     lines.push(`${border("│ ")}${content}${fill}${border(" │")}`);

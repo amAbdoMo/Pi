@@ -10,6 +10,7 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
+  sidebarSectionTopBorder,
 } from "../extensions/ui/workbenchSidebarLayout.ts";
 import {
   getPlanProgress,
@@ -36,6 +37,12 @@ test("sidebar body and section widths match their framed content areas", () => {
   assert.equal(sidebarPanelContentWidth(4), 2);
   assert.equal(sidebarSectionContentWidth(34), 30);
   assert.equal(sidebarSectionContentWidth(3), 3);
+});
+
+test("sidebar section top borders remain continuous across their full width", () => {
+  assert.equal(sidebarSectionTopBorder(8), "┌──────┐");
+  assert.equal(sidebarSectionTopBorder(1), "─");
+  assert.equal(sidebarSectionTopBorder(0), "");
 });
 
 test("context window sizes use compact token labels", () => {
