@@ -45,7 +45,7 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
-  sidebarSectionTitleRule,
+  sidebarTitleRule,
 } from "./workbenchSidebarLayout.ts";
 
 const RAIL_MIN_COLUMNS = 118;
@@ -434,7 +434,7 @@ function mcpStatusGlyph(theme: Theme, status: McpServerState): string {
 }
 
 function framedSection(theme: Theme, title: string, body: string[], width: number): string[] {
-  const titleRule = sidebarSectionTitleRule(width, title);
+  const titleRule = sidebarTitleRule(width, title.toUpperCase());
   if (!titleRule.left) {
     return [
       sectionTitle(theme, titleRule.title),
@@ -460,10 +460,11 @@ function framedPanel(theme: Theme, title: string, body: string[], width: number)
   const innerWidth = Math.max(2, width - 2);
   const horizontalPadding = innerWidth >= 4 ? 2 : 0;
   const contentWidth = sidebarPanelContentWidth(width);
-  const heading = truncateToWidth(` ${theme.bold(title)} `, innerWidth, "", true);
-  const topFill = "─".repeat(Math.max(0, innerWidth - visibleWidth(heading)));
+  const titleRule = sidebarTitleRule(width, title);
   const border = (text: string) => theme.fg("border", text);
-  const lines = [border("┌") + theme.fg("accent", heading) + border(`${topFill}┐`)];
+  const lines = [
+    border(titleRule.left) + theme.fg("accent", theme.bold(titleRule.title)) + border(titleRule.right),
+  ];
   const padding = " ".repeat(horizontalPadding);
   for (const line of body) {
     const content = truncateToWidth(line, contentWidth, "…", true);

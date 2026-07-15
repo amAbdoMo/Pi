@@ -10,7 +10,7 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
-  sidebarSectionTitleRule,
+  sidebarTitleRule,
 } from "../extensions/ui/workbenchSidebarLayout.ts";
 import {
   getPlanProgress,
@@ -39,14 +39,22 @@ test("sidebar body and section widths match their framed content areas", () => {
   assert.equal(sidebarSectionContentWidth(3), 3);
 });
 
-test("sidebar section titles stay connected to complete box borders", () => {
-  const rule = sidebarSectionTitleRule(20, "Session");
-  assert.deepEqual(rule, {
+test("sidebar titles stay connected to complete box borders", () => {
+  const sectionRule = sidebarTitleRule(20, "SESSION");
+  assert.deepEqual(sectionRule, {
     left: "┌─",
     title: " SESSION ",
     right: "────────┐",
   });
-  assert.equal(rule.left.length + rule.title.length + rule.right.length, 20);
+  assert.equal(sectionRule.left.length + sectionRule.title.length + sectionRule.right.length, 20);
+
+  const workspaceRule = sidebarTitleRule(20, "Pi workspace");
+  assert.deepEqual(workspaceRule, {
+    left: "┌─",
+    title: " Pi workspace ",
+    right: "───┐",
+  });
+  assert.equal(workspaceRule.left.length + workspaceRule.title.length + workspaceRule.right.length, 20);
 });
 
 test("context window sizes use compact token labels", () => {

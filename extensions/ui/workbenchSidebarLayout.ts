@@ -13,7 +13,7 @@ export interface SidebarOverlayLayout {
   nonCapturing: boolean;
 }
 
-export interface SidebarSectionTitleRule {
+export interface SidebarTitleRule {
   left: string;
   title: string;
   right: string;
@@ -44,17 +44,16 @@ export function sidebarSectionContentWidth(sectionWidth: number): number {
   return safeWidth >= 4 ? safeWidth - 4 : safeWidth;
 }
 
-export function sidebarSectionTitleRule(
+export function sidebarTitleRule(
   sectionWidth: number,
   title: string,
-): SidebarSectionTitleRule {
+): SidebarTitleRule {
   const safeWidth = Math.max(0, Math.floor(sectionWidth));
-  const normalizedTitle = title.toUpperCase();
   if (safeWidth < 4) {
-    return { left: "", title: normalizedTitle.slice(0, safeWidth), right: "" };
+    return { left: "", title: title.slice(0, safeWidth), right: "" };
   }
 
-  const fittedTitle = ` ${normalizedTitle} `.slice(0, safeWidth - 3);
+  const fittedTitle = ` ${title} `.slice(0, safeWidth - 3);
   const fillWidth = Math.max(0, safeWidth - 3 - fittedTitle.length);
   return {
     left: "┌─",
