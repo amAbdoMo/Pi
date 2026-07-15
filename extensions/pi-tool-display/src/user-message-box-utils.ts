@@ -1,4 +1,5 @@
 import { ANSI_SGR_PATTERN, sanitizeAnsiForThemedOutput } from "./ansi-utils.js";
+import { trimUserMessageRightPadding } from "./user-message-box-layout.js";
 
 const OSC_PROMPT_CONTROL_SEQUENCE_PATTERN = /\x1b\](?:133|633);[A-Z](?:;[^\x07\x1b]*)?(?:\x07|\x1b\\)/g;
 const USER_MESSAGE_BACKGROUND = "userMessageBg";
@@ -92,7 +93,7 @@ export function normalizeUserMessageContentLine(line: string): string {
     return "";
   }
 
-  return sanitizeUserMessageAnsi(line);
+  return trimUserMessageRightPadding(sanitizeUserMessageAnsi(line));
 }
 
 export function addUserMessageVerticalPadding(lines: string[]): string[] {
