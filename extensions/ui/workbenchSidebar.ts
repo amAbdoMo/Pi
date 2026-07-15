@@ -22,6 +22,7 @@ import {
 import {
   getTodoCounts,
   todoStatusSymbol,
+  type TodoItem,
   type TodoStatus,
 } from "../plan-mode/utils.ts";
 import {
@@ -41,10 +42,14 @@ import {
   compactTokenCount,
   sidebarGutterWidth,
   sidebarMcpStateLabel,
+  sidebarMcpStatusSymbol,
+  sidebarMcpStatusTone,
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
+  sidebarTaskIndentWidth,
+  sidebarTaskOrdinal,
   sidebarTitleRule,
 } from "./workbenchSidebarLayout.ts";
 
@@ -314,6 +319,7 @@ export class WorkbenchSidebar implements Component {
     const summary = counts.running > 0
       ? `${counts.running} running`
       : `${counts.completed}/${counts.total}`;
+    const visibleItems = progress.items.slice(0, MAX_VISIBLE_TASKS);
     const lines = [
       alignedStatusLine(
         this.theme,
@@ -321,15 +327,16 @@ export class WorkbenchSidebar implements Component {
         summary,
         width,
       ),
-      ...progress.items.slice(0, MAX_VISIBLE_TASKS).flatMap((item) =>
-        wrapSidebarText(
-          `  ${this.theme.fg(todoStatusRole(item.status), todoStatusSymbol(item.status))} ${item.text}`,
-          width,
-        ),
+      ...visibleItems.flatMap((item) =>
+        sidebarTaskLines(this.theme, item, counts.total, width)
       ),
     ];
-    if (progress.items.length > MAX_VISIBLE_TASKS) {
-      lines.push(this.theme.fg("dim", `  +${progress.items.length - MAX_VISIBLE_TASKS} more · /todos`));
+    if (progress.items.length > visibleItems.length) {
+      const indent = " ".repeat(sidebarTaskIndentWidth(counts.total, counts.total));
+      lines.push(this.theme.fg(
+        "dim",
+        `${indent}+${progress.items.length - visibleItems.length} more · /todos`,
+      ));
     }
     return lines;
   }
@@ -380,6 +387,23 @@ function sectionTitle(theme: Theme, text: string): string {
   return theme.fg("toolTitle", theme.bold(text.toUpperCase()));
 }
 
+function sidebarTaskLines(
+  theme: Theme,
+  item: TodoItem,
+  total: number,
+  width: number,
+): string[] {
+  const ordinal = sidebarTaskOrdinal(item.step, total);
+  const prefix = `  ${theme.fg("dim", ordinal)} ${theme.fg(
+    todoStatusRole(item.status),
+    todoStatusSymbol(item.status),
+  )} `;
+  const prefixWidth = sidebarTaskIndentWidth(item.step, total);
+  const continuation = " ".repeat(prefixWidth);
+  return wrapSidebarText(item.text, Math.max(1, width - prefixWidth))
+    .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
+}
+
 function todoStatusRole(status: TodoStatus): string {
   switch (status) {
     case "completed":
@@ -426,11 +450,7 @@ function progressBar(theme: Theme, percent: number, width = 5): string {
 }
 
 function mcpStatusGlyph(theme: Theme, status: McpServerState): string {
-  if (status === "connected") return theme.fg("success", "●");
-  if (status === "connecting") return theme.fg("accent", "◉");
-  if (status === "error") return theme.fg("error", "×");
-  if (status === "disabled") return theme.fg("dim", "●");
-  return theme.fg("dim", "○");
+  return theme.fg(sidebarMcpStatusTone(status), sidebarMcpStatusSymbol(status));
 }
 
 function framedSection(theme: Theme, title: string, body: string[], width: number): string[] {

@@ -4,6 +4,7 @@ const RAIL_MIN_COLUMNS = 118;
 const RAIL_GUTTER_COLUMNS = 1;
 
 export type SidebarPresentation = "rail" | "overlay";
+export type SidebarMcpStatusTone = "success" | "accent" | "error" | "dim";
 
 export interface SidebarOverlayLayout {
   anchor: "top-right" | "center";
@@ -62,6 +63,15 @@ export function sidebarTitleRule(
   };
 }
 
+export function sidebarTaskOrdinal(step: number, total: number): string {
+  const width = Math.max(2, String(Math.max(step, total)).length);
+  return String(step).padStart(width, "0");
+}
+
+export function sidebarTaskIndentWidth(step: number, total: number): number {
+  return sidebarTaskOrdinal(step, total).length + 5;
+}
+
 export function compactTokenCount(value: number): string {
   const safeValue = Math.max(0, Math.round(value));
   if (safeValue >= 1_000_000) {
@@ -69,6 +79,34 @@ export function compactTokenCount(value: number): string {
   }
   if (safeValue >= 1_000) return `${Math.round(safeValue / 1_000)}k`;
   return String(safeValue);
+}
+
+export function sidebarMcpStatusSymbol(status: McpServerState): string {
+  switch (status) {
+    case "connected":
+    case "disabled":
+      return "●";
+    case "connecting":
+      return "◉";
+    case "error":
+      return "×";
+    case "disconnected":
+      return "○";
+  }
+}
+
+export function sidebarMcpStatusTone(status: McpServerState): SidebarMcpStatusTone {
+  switch (status) {
+    case "connected":
+      return "success";
+    case "connecting":
+      return "accent";
+    case "error":
+    case "disabled":
+      return "error";
+    case "disconnected":
+      return "dim";
+  }
 }
 
 export function sidebarMcpStateLabel(status: McpServerState): string {
