@@ -44,6 +44,7 @@ import {
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
+  sidebarSectionContentWidth,
 } from "./workbenchSidebarLayout.ts";
 
 const RAIL_MIN_COLUMNS = 118;
@@ -247,14 +248,16 @@ export class WorkbenchSidebar implements Component {
 
   private bodyLines(width: number, rows: number): string[] {
     const divider = this.theme.fg("borderMuted", "─".repeat(width));
+    const sectionContentWidth = sidebarSectionContentWidth(width);
     const lines = [
-      ...this.sessionLines(width),
-      divider,
-      ...this.contextLines(width),
-      divider,
-      ...this.activityLines(width),
-      divider,
-      ...this.mcpLines(width),
+      "",
+      ...framedSection(this.theme, "Session", this.sessionLines(sectionContentWidth), width),
+      "",
+      ...framedSection(this.theme, "Context", this.contextLines(sectionContentWidth), width),
+      "",
+      ...framedSection(this.theme, "Activity", this.activityLines(sectionContentWidth), width),
+      "",
+      ...framedSection(this.theme, "MCP", this.mcpLines(sectionContentWidth), width),
     ];
     const contentRows = lines.slice(0, Math.max(0, rows - 2));
     while (contentRows.length < rows - 2) contentRows.push("");
@@ -269,8 +272,6 @@ export class WorkbenchSidebar implements Component {
     const sessionName = state.getSessionName?.() || "Current session";
     const location = `󰉋 ${state.folder || "~"}   ${state.branch || "—"}`;
     return [
-      "",
-      sectionTitle(this.theme, "Session"),
       "",
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),
       ...wrapSidebarText(this.theme.fg("muted", location), width),
@@ -288,8 +289,6 @@ export class WorkbenchSidebar implements Component {
       : "—";
     return [
       "",
-      sectionTitle(this.theme, "Context"),
-      "",
       alignedStatusLine(
         this.theme,
         this.theme.fg("muted", "󰍛 Window"),
@@ -302,8 +301,6 @@ export class WorkbenchSidebar implements Component {
 
   private activityLines(width: number): string[] {
     return [
-      "",
-      sectionTitle(this.theme, "Activity"),
       "",
       ...this.taskActivityLines(width),
       ...this.agentActivityLines(width),
@@ -357,7 +354,7 @@ export class WorkbenchSidebar implements Component {
 
   private mcpLines(width: number): string[] {
     const servers = getMcpStatus();
-    const lines = ["", sectionTitle(this.theme, "MCP"), ""];
+    const lines = [""];
     if (servers.length === 0) {
       lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
       return lines;
@@ -436,6 +433,28 @@ function mcpStatusGlyph(theme: Theme, status: McpServerState): string {
   if (status === "error") return theme.fg("error", "×");
   if (status === "disabled") return theme.fg("dim", "●");
   return theme.fg("dim", "○");
+}
+
+function framedSection(theme: Theme, title: string, body: string[], width: number): string[] {
+  if (width < 4) {
+    return [
+      truncateToWidth(sectionTitle(theme, title), width, "", true),
+      ...body.map((line) => truncateToWidth(line, width, "", true)),
+    ];
+  }
+
+  const contentWidth = sidebarSectionContentWidth(width);
+  const heading = truncateToWidth(` ${sectionTitle(theme, title)} `, width - 3, "", true);
+  const topFill = "─".repeat(Math.max(0, width - 3 - visibleWidth(heading)));
+  const border = (text: string) => theme.fg("borderMuted", text);
+  const lines = [border("┌─") + heading + border(`${topFill}┐`)];
+  for (const line of body) {
+    const content = truncateToWidth(line, contentWidth, "…", true);
+    const fill = " ".repeat(Math.max(0, contentWidth - visibleWidth(content)));
+    lines.push(`${border("│ ")}${content}${fill}${border(" │")}`);
+  }
+  lines.push(border(`└${"─".repeat(width - 2)}┘`));
+  return lines;
 }
 
 function framedPanel(theme: Theme, title: string, body: string[], width: number): string[] {
