@@ -8,21 +8,14 @@ import {
 
 import { isWorkbenchModalActive } from "./modalState.ts";
 import {
-  clampScrollOffset,
   fixedViewport,
-  parseWorkbenchMouseInput,
-  renderChatScrollbar,
-  viewportMetrics,
   workbenchDimensions,
-  workbenchMainContentWidth,
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
-  type ParsedWorkbenchMouseInput,
 } from "./workbenchShellLayout.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
 const DOCK_CHILD_COUNT = 4;
-const MOUSE_WHEEL_SCROLL_ROWS = 3;
 
 export interface WorkbenchShellHandle {
   setSidebar(component: Component): void;
@@ -39,11 +32,6 @@ interface MainViewportRequest {
   width: number;
   height: number;
   scrollOffset: number;
-}
-
-interface MainViewportParts {
-  scrollLines: string[];
-  dockLines: string[];
 }
 
 interface ColumnRequest {
@@ -74,17 +62,15 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private readonly originalStart: () => void;
   private readonly originalStop: () => void;
   private readonly removeScrollListener: () => void;
-  private readonly tui: TUI;
   private sidebar: Component;
   private sidebarVisible = true;
   private scrollOffset = 0;
   private alternateScreenActive = false;
 
   constructor(
-    tui: TUI,
+    private readonly tui: TUI,
     sidebar: Component,
   ) {
-    this.tui = tui;
     this.sidebar = sidebar;
     this.originalRender = tui.render.bind(tui);
     this.originalStart = tui.start.bind(tui);
@@ -152,52 +138,21 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     });
   }
 
-  private handleScrollInput(input: string): { consume?: true; data?: string } | undefined {
-    if (isWorkbenchModalActive()) {
-      return mouseListenerResult(parseWorkbenchMouseInput(input));
-    }
-    const mouseResult = this.applyMouseScroll(input);
-    if (mouseResult) return mouseResult;
-    const pageResult = this.applyPageScroll(input);
-    if (pageResult) return pageResult;
-    if (this.scrollOffset > 0) this.scrollOffset = 0;
-    return undefined;
-  }
-
-  private applyMouseScroll(input: string): { consume?: true; data?: string } | undefined {
-    const mouseInput = parseWorkbenchMouseInput(input);
-    if (mouseInput.wheelNotches !== 0) {
-      this.scrollOffset = this.clampScrollOffset(
-        this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
-      );
-      this.tui.requestRender();
-    }
-    return mouseListenerResult(mouseInput);
-  }
-
-  private applyPageScroll(input: string): { consume: true } | undefined {
+  private handleScrollInput(input: string): { consume: true } | undefined {
+    if (isWorkbenchModalActive()) return undefined;
     const pageSize = Math.max(3, Math.floor(this.tui.terminal.rows * 0.7));
     if (matchesKey(input, "pageup")) {
-      this.scrollOffset = this.clampScrollOffset(this.scrollOffset + pageSize);
+      this.scrollOffset += pageSize;
       this.tui.requestRender();
       return { consume: true };
     }
-    if (!matchesKey(input, "pagedown")) return undefined;
-    this.scrollOffset = this.clampScrollOffset(this.scrollOffset - pageSize);
-    this.tui.requestRender();
-    return { consume: true };
-  }
-
-  private clampScrollOffset(scrollOffset: number): number {
-    const dimensions = workbenchDimensions(
-      this.tui.terminal.columns,
-      this.tui.terminal.rows,
-      this.sidebarVisible,
-    );
-    const contentWidth = workbenchMainContentWidth(dimensions.mainWidth);
-    const { scrollLines, dockLines } = mainViewportParts(this.tui, this.originalRender, contentWidth);
-    const metrics = viewportMetrics(scrollLines, dockLines, dimensions.height, scrollOffset);
-    return clampScrollOffset(scrollOffset, metrics.maxOffset);
+    if (matchesKey(input, "pagedown")) {
+      this.scrollOffset = Math.max(0, this.scrollOffset - pageSize);
+      this.tui.requestRender();
+      return { consume: true };
+    }
+    if (this.scrollOffset > 0) this.scrollOffset = 0;
+    return undefined;
   }
 
   private enterAlternateScreen(): void {
@@ -213,34 +168,17 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 }
 
-function mouseListenerResult(
-  mouseInput: ParsedWorkbenchMouseInput,
-): { consume?: true; data?: string } | undefined {
-  if (mouseInput.mouseSequences === 0) return undefined;
-  return mouseInput.data.length === 0 ? { consume: true } : { data: mouseInput.data };
-}
-
 function renderMainViewport(request: MainViewportRequest): string[] {
   const { tui, fallbackRender, width, height, scrollOffset } = request;
-  const contentWidth = workbenchMainContentWidth(width);
-  const { scrollLines, dockLines } = mainViewportParts(tui, fallbackRender, contentWidth);
-  const contentLines = fixedViewport(scrollLines, dockLines, height, scrollOffset)
-    .map((line) => fitLine(line, contentWidth));
-  if (contentWidth === width) return contentLines;
-
-  const scrollbar = renderChatScrollbar(scrollLines, dockLines, height, scrollOffset);
-  return contentLines.map((line, index) => line + (scrollbar[index] ?? " "));
-}
-
-function mainViewportParts(tui: TUI, fallbackRender: RenderFunction, width: number): MainViewportParts {
   if (tui.children.length < DOCK_CHILD_COUNT) {
-    return { scrollLines: fallbackRender(width), dockLines: [] };
+    return fixedViewport(fallbackRender(width), [], height, scrollOffset)
+      .map((line) => fitLine(line, width));
   }
   const dockStart = tui.children.length - DOCK_CHILD_COUNT;
-  return {
-    scrollLines: renderComponents(tui.children.slice(0, dockStart), width),
-    dockLines: renderComponents(tui.children.slice(dockStart), width),
-  };
+  const scrollLines = renderComponents(tui.children.slice(0, dockStart), width);
+  const dockLines = renderComponents(tui.children.slice(dockStart), width);
+  return fixedViewport(scrollLines, dockLines, height, scrollOffset)
+    .map((line) => fitLine(line, width));
 }
 
 function renderComponents(components: readonly Component[], width: number): string[] {
