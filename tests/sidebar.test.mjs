@@ -9,6 +9,8 @@ import {
   sidebarOverlayOptions,
   sidebarPanelContentWidth,
   sidebarPresentation,
+  sidebarSectionContentWidth,
+  sidebarSectionTitleRule,
 } from "../extensions/ui/workbenchSidebarLayout.ts";
 import {
   getPlanProgress,
@@ -30,9 +32,21 @@ test("wide terminals use a non-capturing right rail", () => {
   });
 });
 
-test("sidebar body width matches the framed panel content area", () => {
+test("sidebar body and section widths match their framed content areas", () => {
   assert.equal(sidebarPanelContentWidth(40), 34);
   assert.equal(sidebarPanelContentWidth(4), 2);
+  assert.equal(sidebarSectionContentWidth(34), 30);
+  assert.equal(sidebarSectionContentWidth(3), 3);
+});
+
+test("sidebar section titles stay connected to complete box borders", () => {
+  const rule = sidebarSectionTitleRule(20, "Session");
+  assert.deepEqual(rule, {
+    left: "┌─",
+    title: " SESSION ",
+    right: "────────┐",
+  });
+  assert.equal(rule.left.length + rule.title.length + rule.right.length, 20);
 });
 
 test("context window sizes use compact token labels", () => {

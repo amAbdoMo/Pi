@@ -13,6 +13,12 @@ export interface SidebarOverlayLayout {
   nonCapturing: boolean;
 }
 
+export interface SidebarSectionTitleRule {
+  left: string;
+  title: string;
+  right: string;
+}
+
 export function sidebarPresentation(terminalColumns: number): SidebarPresentation {
   return terminalColumns >= RAIL_MIN_COLUMNS ? "rail" : "overlay";
 }
@@ -31,6 +37,30 @@ export function sidebarPanelContentWidth(panelWidth: number): number {
   const innerWidth = Math.max(2, panelWidth - 2);
   const horizontalPadding = innerWidth >= 4 ? 2 : 0;
   return Math.max(1, innerWidth - horizontalPadding * 2);
+}
+
+export function sidebarSectionContentWidth(sectionWidth: number): number {
+  const safeWidth = Math.max(0, Math.floor(sectionWidth));
+  return safeWidth >= 4 ? safeWidth - 4 : safeWidth;
+}
+
+export function sidebarSectionTitleRule(
+  sectionWidth: number,
+  title: string,
+): SidebarSectionTitleRule {
+  const safeWidth = Math.max(0, Math.floor(sectionWidth));
+  const normalizedTitle = title.toUpperCase();
+  if (safeWidth < 4) {
+    return { left: "", title: normalizedTitle.slice(0, safeWidth), right: "" };
+  }
+
+  const fittedTitle = ` ${normalizedTitle} `.slice(0, safeWidth - 3);
+  const fillWidth = Math.max(0, safeWidth - 3 - fittedTitle.length);
+  return {
+    left: "┌─",
+    title: fittedTitle,
+    right: `${"─".repeat(fillWidth)}┐`,
+  };
 }
 
 export function compactTokenCount(value: number): string {
