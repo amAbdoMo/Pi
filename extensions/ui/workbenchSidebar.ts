@@ -272,7 +272,6 @@ export class WorkbenchSidebar implements Component {
       sectionTitle(this.theme, "Session"),
       "",
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),
-      "",
       ...wrapSidebarText(this.theme.fg("muted", location), width),
     ];
   }
@@ -295,7 +294,6 @@ export class WorkbenchSidebar implements Component {
         contextSize,
         width,
       ),
-      "",
       progressLine(this.theme, "Used", contextPercent, width),
     ];
   }
@@ -305,7 +303,6 @@ export class WorkbenchSidebar implements Component {
       sectionTitle(this.theme, "Activity"),
       "",
       ...this.taskActivityLines(width),
-      "",
       ...this.agentActivityLines(width),
     ];
   }
