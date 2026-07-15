@@ -269,6 +269,7 @@ export class WorkbenchSidebar implements Component {
     const sessionName = state.getSessionName?.() || "Current session";
     const location = `󰉋 ${state.folder || "~"}   ${state.branch || "—"}`;
     return [
+      "",
       sectionTitle(this.theme, "Session"),
       "",
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),
@@ -286,6 +287,7 @@ export class WorkbenchSidebar implements Component {
       ? `${compactTokenCount(contextUsed)} / ${compactTokenCount(contextWindow)}`
       : "—";
     return [
+      "",
       sectionTitle(this.theme, "Context"),
       "",
       alignedStatusLine(
@@ -300,6 +302,7 @@ export class WorkbenchSidebar implements Component {
 
   private activityLines(width: number): string[] {
     return [
+      "",
       sectionTitle(this.theme, "Activity"),
       "",
       ...this.taskActivityLines(width),
@@ -354,7 +357,7 @@ export class WorkbenchSidebar implements Component {
 
   private mcpLines(width: number): string[] {
     const servers = getMcpStatus();
-    const lines = [sectionTitle(this.theme, "MCP"), ""];
+    const lines = ["", sectionTitle(this.theme, "MCP"), ""];
     if (servers.length === 0) {
       lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
       return lines;

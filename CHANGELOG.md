@@ -2,7 +2,7 @@
 
 ## 0.10.0
 
-- Tightened the sidebar's paired session, context, and activity rows by removing unnecessary blank lines.
+- Refined sidebar spacing with compact paired detail rows and a clear gap above each section heading.
 - Rebranded the package as Pi Workbench with global, community-facing package metadata and a humanized README that clearly separates stock Pi capabilities from the bundled workbench additions.
 - Documented the complete custom interface, workflow, MCP, tool, RTL, terminal, installation, update, privacy, and development experience.
 - Renamed new temporary files, backups, and installed font artifacts to the `pi-workbench` namespace while preserving recognition of legacy package and backup names during upgrades.
