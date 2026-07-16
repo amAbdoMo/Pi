@@ -3,7 +3,8 @@
 ## 0.10.0
 
 - Routed mouse-wheel input to chat history instead of composer message history, without adding a custom scrollbar; native selection remains available with `Shift+drag`.
-- Organized sidebar tasks with zero-padded plan order, status markers, and hanging indentation for wrapped descriptions.
+- Moved the plan todo surface into chat scroll history and restyled it as a compact, content-fitted grey card.
+- Simplified sidebar tasks to aligned status dots and completion checks with hanging indentation for wrapped descriptions.
 - Changed disabled MCP servers to a solid red status dot while disconnected servers remain hollow and muted.
 - Restored content-fitted sent-message cards by ignoring renderer-added right padding when measuring short messages.
 - Connected the outer Pi workspace title and all four section titles to complete message-style box borders.

@@ -12,8 +12,6 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
-  sidebarTaskIndentWidth,
-  sidebarTaskOrdinal,
   sidebarTitleRule,
 } from "../extensions/ui/workbenchSidebarLayout.ts";
 import {
@@ -65,14 +63,6 @@ test("context window sizes use compact token labels", () => {
   assert.equal(compactTokenCount(0), "0");
   assert.equal(compactTokenCount(272_000), "272k");
   assert.equal(compactTokenCount(1_250_000), "1.3m");
-});
-
-test("sidebar tasks use stable plan order and hanging indentation", () => {
-  assert.equal(sidebarTaskOrdinal(1, 14), "01");
-  assert.equal(sidebarTaskOrdinal(12, 14), "12");
-  assert.equal(sidebarTaskOrdinal(7, 120), "007");
-  assert.equal(sidebarTaskIndentWidth(1, 14), 7);
-  assert.equal(sidebarTaskIndentWidth(7, 120), 8);
 });
 
 test("disabled MCP servers use a solid red indicator", () => {

@@ -25,6 +25,11 @@ export interface ViewportMetrics {
   end: number;
 }
 
+export interface WorkbenchChildGroups<T> {
+  scrollChildren: T[];
+  dockChildren: T[];
+}
+
 export function workbenchDimensions(
   terminalWidth: number,
   terminalHeight: number,
@@ -39,6 +44,32 @@ export function workbenchDimensions(
     mainWidth: Math.max(1, width - sidebarWidth),
     sidebarWidth,
     showSidebar,
+  };
+}
+
+export function splitWorkbenchChildren<T>(children: readonly T[]): WorkbenchChildGroups<T> {
+  // InteractiveMode mounts fixed bottom chrome as:
+  // status, above-editor widgets, editor, below-editor widgets, footer.
+  // The above-editor widget container belongs to chat history so plan todos scroll away,
+  // while status/editor/below-editor/footer remain docked at the bottom.
+  if (children.length >= 9) {
+    const dockStart = children.length - 5;
+    const statusChild = children[dockStart];
+    const aboveEditorWidgetChild = children[dockStart + 1];
+    const dockTail = children.slice(dockStart + 2);
+    return {
+      scrollChildren: [...children.slice(0, dockStart), aboveEditorWidgetChild!],
+      dockChildren: [statusChild!, ...dockTail],
+    };
+  }
+
+  // Smaller test/custom TUI instances predate the full workbench child shape and
+  // keep the historical "last four children are docked" behavior.
+  if (children.length < 4) return { scrollChildren: [...children], dockChildren: [] };
+  const dockStart = children.length - 4;
+  return {
+    scrollChildren: [...children.slice(0, dockStart)],
+    dockChildren: [...children.slice(dockStart)],
   };
 }
 

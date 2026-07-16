@@ -40,7 +40,7 @@ Pi can support all of this through its extension system; the difference is that 
 ### Agent workflows
 
 - **Plan/build mode** with direct `Tab` switching and read-only planning
-- **Task progress** using explicit pending, running, completed-with-evidence, and failed states
+- **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
 - **Subagents** with optional task-specific model and thinking profiles
 - **Side chat** for temporary questions that do not enter the main conversation context
 - **Workflows** for reusable multi-step operations

@@ -48,8 +48,6 @@ import {
   sidebarPanelContentWidth,
   sidebarPresentation,
   sidebarSectionContentWidth,
-  sidebarTaskIndentWidth,
-  sidebarTaskOrdinal,
   sidebarTitleRule,
 } from "./workbenchSidebarLayout.ts";
 
@@ -328,14 +326,13 @@ export class WorkbenchSidebar implements Component {
         width,
       ),
       ...visibleItems.flatMap((item) =>
-        sidebarTaskLines(this.theme, item, counts.total, width)
+        sidebarTaskLines(this.theme, item, width)
       ),
     ];
     if (progress.items.length > visibleItems.length) {
-      const indent = " ".repeat(sidebarTaskIndentWidth(counts.total, counts.total));
       lines.push(this.theme.fg(
         "dim",
-        `${indent}+${progress.items.length - visibleItems.length} more · /todos`,
+        `  +${progress.items.length - visibleItems.length} more · /todos`,
       ));
     }
     return lines;
@@ -390,17 +387,14 @@ function sectionTitle(theme: Theme, text: string): string {
 function sidebarTaskLines(
   theme: Theme,
   item: TodoItem,
-  total: number,
   width: number,
 ): string[] {
-  const ordinal = sidebarTaskOrdinal(item.step, total);
-  const prefix = `  ${theme.fg("dim", ordinal)} ${theme.fg(
+  const prefix = `${theme.fg(
     todoStatusRole(item.status),
     todoStatusSymbol(item.status),
   )} `;
-  const prefixWidth = sidebarTaskIndentWidth(item.step, total);
-  const continuation = " ".repeat(prefixWidth);
-  return wrapSidebarText(item.text, Math.max(1, width - prefixWidth))
+  const continuation = "  ";
+  return wrapSidebarText(item.text, Math.max(1, width - continuation.length))
     .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
 }
 

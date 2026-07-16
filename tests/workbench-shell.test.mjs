@@ -4,6 +4,7 @@ import test from "node:test";
 import { parseTerminalMouseInput } from "../extensions/ui/terminalCompatibility.ts";
 import {
   fixedViewport,
+  splitWorkbenchChildren,
   workbenchDimensions,
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
@@ -43,6 +44,43 @@ test("chat viewport keeps recent lines and supports paging into older output", (
 
   assert.deepEqual(fixedViewport(chat, dock, 4), ["4", "5", "6", "composer"]);
   assert.deepEqual(fixedViewport(chat, dock, 4, 2), ["2", "3", "4", "composer"]);
+});
+
+test("above-editor widgets scroll while status editor and footer stay docked", () => {
+  const children = [
+    "header",
+    "resources",
+    "chat",
+    "pending",
+    "status",
+    "above-editor-widget",
+    "editor",
+    "below-editor-widget",
+    "footer",
+  ];
+
+  assert.deepEqual(splitWorkbenchChildren(children), {
+    scrollChildren: ["header", "resources", "chat", "pending", "above-editor-widget"],
+    dockChildren: ["status", "editor", "below-editor-widget", "footer"],
+  });
+});
+
+test("empty above-editor widget slot still scrolls instead of taking dock space", () => {
+  const children = [
+    "header",
+    "resources",
+    "chat",
+    "pending",
+    "status",
+    "above-editor-empty-spacer",
+    "editor",
+    "below-editor-empty",
+    "footer",
+  ];
+  const groups = splitWorkbenchChildren(children);
+
+  assert.deepEqual(groups.scrollChildren.slice(-1), ["above-editor-empty-spacer"]);
+  assert.deepEqual(groups.dockChildren, ["status", "editor", "below-editor-empty", "footer"]);
 });
 
 test("terminal mouse parser extracts repeated modified wheel events and keeps mixed input", () => {

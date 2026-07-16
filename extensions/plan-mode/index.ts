@@ -33,6 +33,7 @@ import {
 	transitionTodoItems,
 	type TodoItem,
 } from "./utils.ts";
+import { PlanTodoWidget } from "./todoWidget.ts";
 
 // Tools
 const PLAN_PROGRESS_TOOL = "plan_progress";
@@ -104,10 +105,19 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			ctx.ui.setStatus("plan-mode", undefined);
 		}
 
-		ctx.ui.setWidget(
-			"plan-todos",
-			counts.total > 0 ? todoItems.map((todoItem) => renderTodoLine(ctx, todoItem)) : undefined,
-		);
+		if (counts.total === 0) {
+			ctx.ui.setWidget("plan-todos", undefined);
+		} else if (ctx.mode === "tui") {
+			ctx.ui.setWidget(
+				"plan-todos",
+				(_tui, theme) => new PlanTodoWidget(todoItems, theme),
+			);
+		} else {
+			ctx.ui.setWidget(
+				"plan-todos",
+				todoItems.map((todoItem) => renderTodoLine(ctx, todoItem)),
+			);
+		}
 	}
 
 	function uniqueToolNames(toolNames: string[]): string[] {

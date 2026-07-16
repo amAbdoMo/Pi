@@ -63,15 +63,6 @@ export function sidebarTitleRule(
   };
 }
 
-export function sidebarTaskOrdinal(step: number, total: number): string {
-  const width = Math.max(2, String(Math.max(step, total)).length);
-  return String(step).padStart(width, "0");
-}
-
-export function sidebarTaskIndentWidth(step: number, total: number): number {
-  return sidebarTaskOrdinal(step, total).length + 5;
-}
-
 export function compactTokenCount(value: number): string {
   const safeValue = Math.max(0, Math.round(value));
   if (safeValue >= 1_000_000) {

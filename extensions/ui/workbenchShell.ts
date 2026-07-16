@@ -10,6 +10,7 @@ import { isWorkbenchModalActive } from "./modalState.ts";
 import {
   clampScrollOffset,
   fixedViewport,
+  splitWorkbenchChildren,
   viewportMetrics,
   workbenchDimensions,
   WORKBENCH_ENTER_SEQUENCE,
@@ -21,7 +22,6 @@ import {
 } from "./terminalCompatibility.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
-const DOCK_CHILD_COUNT = 4;
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
 
 export interface WorkbenchShellHandle {
@@ -230,13 +230,13 @@ function renderMainViewport(request: MainViewportRequest): string[] {
 }
 
 function mainViewportParts(tui: TUI, fallbackRender: RenderFunction, width: number): MainViewportParts {
-  if (tui.children.length < DOCK_CHILD_COUNT) {
+  const { scrollChildren, dockChildren } = splitWorkbenchChildren(tui.children);
+  if (dockChildren.length === 0) {
     return { scrollLines: fallbackRender(width), dockLines: [] };
   }
-  const dockStart = tui.children.length - DOCK_CHILD_COUNT;
   return {
-    scrollLines: renderComponents(tui.children.slice(0, dockStart), width),
-    dockLines: renderComponents(tui.children.slice(dockStart), width),
+    scrollLines: renderComponents(scrollChildren, width),
+    dockLines: renderComponents(dockChildren, width),
   };
 }
 
