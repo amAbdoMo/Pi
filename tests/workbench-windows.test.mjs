@@ -4,6 +4,7 @@ import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test from "node:test";
 
 const tuiStub = String.raw`
+  export const CURSOR_MARKER = "";
   export const Key = { escape: "escape", up: "up", down: "down", enter: "enter" };
   export function matchesKey(data, key) { return data === key; }
   export function isKeyRelease() { return false; }
@@ -46,9 +47,28 @@ const tuiStub = String.raw`
   }
 `;
 
+const codingAgentStub = String.raw`
+  export function getMarkdownTheme() { return {}; }
+  export class CustomEditor {
+    constructor(tui) {
+      this.tui = tui;
+      this.text = "";
+      this.autocompleteVisible = false;
+      this.handledInputs = [];
+    }
+    getText() { return this.text; }
+    setText(text) { this.text = text; }
+    isShowingAutocomplete() { return this.autocompleteVisible; }
+    setAutocompleteVisible(visible) { this.autocompleteVisible = visible; }
+    handleInput(data) { this.handledInputs.push(data); }
+    invalidate() {}
+    render() { return [this.text]; }
+  }
+`;
+
 const moduleStubs = new Map([
   ["@earendil-works/pi-tui", tuiStub],
-  ["@earendil-works/pi-coding-agent", "export function getMarkdownTheme() { return {}; }"],
+  ["@earendil-works/pi-coding-agent", codingAgentStub],
   ["@earendil-works/pi-ai", "export function StringEnum() { return {}; }"],
   ["typebox", "export const Type = new Proxy({}, { get: () => () => ({}) });"],
 ]);
@@ -107,6 +127,9 @@ const { renderWorkflowPanel, statusIcon } = await import(
 );
 const { installWorkbenchShell } = await import(
   "../extensions/ui/workbenchShell.ts"
+);
+const { TerminalEditor } = await import(
+  "../extensions/ui/terminalEditor.ts"
 );
 
 const theme = {
@@ -320,4 +343,40 @@ test("workbench shell keeps PageUp and PageDown chat scrolling", () => {
   } finally {
     handle.dispose();
   }
+});
+
+function createTerminalEditor() {
+  let modeToggles = 0;
+  const editor = new TerminalEditor(
+    { requestRender() {} },
+    {},
+    {},
+    () => { modeToggles += 1; },
+  );
+  return { editor, modeToggles: () => modeToggles };
+}
+
+test("terminal editor delegates slash and visible autocomplete Tab input", () => {
+  const { editor, modeToggles } = createTerminalEditor();
+
+  editor.setText("/workflow");
+  editor.handleInput("tab");
+  editor.setText("@README");
+  editor.setAutocompleteVisible(true);
+  editor.handleInput("tab");
+
+  assert.deepEqual(editor.handledInputs, ["tab", "tab"]);
+  assert.equal(modeToggles(), 0);
+});
+
+test("terminal editor keeps PLAN/BUILD Tab toggling for ordinary and empty prompts", () => {
+  const { editor, modeToggles } = createTerminalEditor();
+
+  editor.setText("ordinary prompt");
+  editor.handleInput("tab");
+  editor.setText("");
+  editor.handleInput("tab");
+
+  assert.deepEqual(editor.handledInputs, []);
+  assert.equal(modeToggles(), 2);
 });
