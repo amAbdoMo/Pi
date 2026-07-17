@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.11.1
+
+- Made `Tab` complete active and slash-command autocomplete before falling back to PLAN/BUILD mode switching.
+
 ## 0.11.0
 
 - Added an always-on feature-verification gate that detects runtime changes, invalidates stale evidence after later edits, requires successful command checks, and enforces browser-based user journeys for UI work.

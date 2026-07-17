@@ -39,7 +39,7 @@ Pi can support all of this through its extension system; the difference is that 
 
 ### Agent workflows
 
-- **Plan/build mode** with direct `Tab` switching and read-only planning
+- **Plan/build mode** with context-aware `Tab` switching outside command autocomplete and read-only planning
 - **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
 - **Automatic feature verification** with post-change checks, real browser user journeys for UI work, and bounded repair/retest loops
 - **Subagents** with optional task-specific model and thinking profiles
@@ -119,7 +119,7 @@ Select `hypr-waves` from Pi settings if it is not already active.
 
 | Control | Action |
 | --- | --- |
-| `Tab` | Switch between plan and build modes |
+| `Tab` | Complete active or slash-command autocomplete; otherwise switch between plan and build modes |
 | `Shift+Tab` | Change thinking level |
 | `PageUp` / `PageDown` | Scroll the chat viewport |
 | Drag | Select terminal text normally for copy |

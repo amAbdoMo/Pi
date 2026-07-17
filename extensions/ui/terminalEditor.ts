@@ -69,7 +69,12 @@ export class TerminalEditor extends CustomEditor {
 
   override handleInput(inputSequence: string): void {
     if (matchesKey(inputSequence, "tab")) {
-      this.togglePlanBuildMode();
+      const slashCommand = this.getText().trimStart().startsWith("/");
+      if (this.isShowingAutocomplete() || slashCommand) {
+        super.handleInput(inputSequence);
+      } else {
+        this.togglePlanBuildMode();
+      }
       return;
     }
 
