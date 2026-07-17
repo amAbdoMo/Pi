@@ -108,9 +108,6 @@ const { renderWorkflowPanel, statusIcon } = await import(
 const { installWorkbenchShell } = await import(
   "../extensions/ui/workbenchShell.ts"
 );
-const { beginWorkbenchModal } = await import(
-  "../extensions/ui/modalState.ts"
-);
 
 const theme = {
   fg: (_role, text) => text,
@@ -298,46 +295,15 @@ function createWorkbenchTui() {
   return { tui, writes, input: (data) => listener?.(data) };
 }
 
-test("workbench shell consumes wheel input for chat scrolling before composer history", () => {
+test("workbench shell leaves mouse input to terminal-native selection", () => {
   const { tui, writes, input } = createWorkbenchTui();
   const handle = installWorkbenchShell(tui, component([]));
 
   try {
-    assert.match(writes.join(""), /\x1b\[\?1006h\x1b\[\?1000h/);
-    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
-
-    const result = input("\x1b[<64;10;4M\x1b[<64;10;4M");
-
-    assert.deepEqual(result, { consume: true });
-    assert.deepEqual(chatRows(tui), ["chat-11", "chat-12", "chat-13", "chat-14"]);
-    assert.ok(tui.renderRequests >= 2);
-  } finally {
-    handle.dispose();
-  }
-});
-
-test("workbench shell strips non-wheel mouse sequences without dropping mixed input", () => {
-  const { tui, input } = createWorkbenchTui();
-  const handle = installWorkbenchShell(tui, component([]));
-
-  try {
-    assert.deepEqual(input(`a\x1b[<0;10;4Mz`), { data: "az" });
+    assert.doesNotMatch(writes.join(""), /\x1b\[\?100[0236]h/);
+    assert.equal(input("\x1b[<64;10;4M"), undefined);
     assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
   } finally {
-    handle.dispose();
-  }
-});
-
-test("workbench shell leaves modal wheel events stripped but unscrolled", () => {
-  const { tui, input } = createWorkbenchTui();
-  const handle = installWorkbenchShell(tui, component([]));
-  const releaseModal = beginWorkbenchModal();
-
-  try {
-    assert.deepEqual(input("\x1b[<64;10;4M"), { consume: true });
-    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
-  } finally {
-    releaseModal();
     handle.dispose();
   }
 });

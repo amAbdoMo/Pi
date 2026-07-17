@@ -10,10 +10,10 @@ export interface WorkbenchDimensions {
   showSidebar: boolean;
 }
 
-// SGR mouse mode lets Windows Terminal and Warp deliver wheel events to Pi while
-// preserving terminal-native text selection through the standard Shift+drag escape hatch.
-export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[?1006h\x1b[?1000h\x1b[2J\x1b[H";
-export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1000l\x1b[?1006l\x1b[?1007h\x1b[?1049l";
+// Keep application mouse tracking disabled so Windows Terminal, Warp, and other
+// terminals retain normal drag selection while the workbench uses alternate-screen mode.
+export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[2J\x1b[H";
+export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1007h\x1b[?1049l";
 
 export interface ViewportMetrics {
   viewportHeight: number;

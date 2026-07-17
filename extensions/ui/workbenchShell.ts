@@ -16,13 +16,8 @@ import {
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
 } from "./workbenchShellLayout.ts";
-import {
-  parseTerminalMouseInput,
-  type ParsedTerminalMouseInput,
-} from "./terminalCompatibility.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
-const MOUSE_WHEEL_SCROLL_ROWS = 3;
 
 export interface WorkbenchShellHandle {
   setSidebar(component: Component): void;
@@ -150,28 +145,14 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     });
   }
 
-  private handleScrollInput(input: string): { consume?: true; data?: string } | undefined {
-    const mouseInput = parseTerminalMouseInput(input);
-    if (isWorkbenchModalActive()) return mouseListenerResult(mouseInput);
-
-    const mouseResult = this.applyMouseScroll(mouseInput);
-    if (mouseResult) return mouseResult;
+  private handleScrollInput(input: string): { consume: true } | undefined {
+    if (isWorkbenchModalActive()) return undefined;
 
     const pageResult = this.applyPageScroll(input);
     if (pageResult) return pageResult;
 
     if (this.scrollOffset > 0) this.scrollOffset = 0;
     return undefined;
-  }
-
-  private applyMouseScroll(mouseInput: ParsedTerminalMouseInput): { consume?: true; data?: string } | undefined {
-    if (mouseInput.wheelNotches !== 0) {
-      this.scrollOffset = this.clampScrollOffset(
-        this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
-      );
-      this.tui.requestRender();
-    }
-    return mouseListenerResult(mouseInput);
   }
 
   private applyPageScroll(input: string): { consume: true } | undefined {
@@ -213,13 +194,6 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.tui.terminal.write(WORKBENCH_LEAVE_SEQUENCE);
     this.alternateScreenActive = false;
   }
-}
-
-function mouseListenerResult(
-  mouseInput: ParsedTerminalMouseInput,
-): { consume?: true; data?: string } | undefined {
-  if (mouseInput.mouseSequences === 0) return undefined;
-  return mouseInput.data.length === 0 ? { consume: true } : { data: mouseInput.data };
 }
 
 function renderMainViewport(request: MainViewportRequest): string[] {

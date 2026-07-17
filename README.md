@@ -34,7 +34,7 @@ Pi can support all of this through its extension system; the difference is that 
 - Content-fitted user message cards that grow only as wide as their rendered content
 - Compact assistant, tool, workflow, side-chat, and subagent presentation
 - Coordinated overlays for MCP, skills, agents, child consoles, side chat, workflows, and display settings
-- Mouse-wheel and `PageUp`/`PageDown` chat navigation without an in-app scrollbar; use `Shift+drag` for terminal-native selection and copy
+- `PageUp`/`PageDown` chat navigation without an in-app scrollbar, with normal terminal-native drag selection and copy
 - Graphite-black `hypr-waves` theme with orange structure, red accents, and green verified-success states
 
 ### Agent workflows
@@ -109,8 +109,8 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | --- | --- |
 | `Tab` | Switch between plan and build modes |
 | `Shift+Tab` | Change thinking level |
-| Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport |
-| `Shift+drag` | Select terminal text while wheel reporting is active |
+| `PageUp` / `PageDown` | Scroll the chat viewport |
+| Drag | Select terminal text normally for copy |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
 | `/agents` | Open subagent management |

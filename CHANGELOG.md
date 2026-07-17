@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- Restored reliable terminal-native text selection with normal drag by disabling application mouse capture; `PageUp` and `PageDown` continue to scroll chat history.
+
 ## 0.10.0
 
 - Routed mouse-wheel input to chat history instead of composer message history, without adding a custom scrollbar; native selection remains available with `Shift+drag`.
