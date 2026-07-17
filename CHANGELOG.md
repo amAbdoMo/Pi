@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0
+
+- Added an always-on feature-verification gate that detects runtime changes, invalidates stale evidence after later edits, requires successful command checks, and enforces browser-based user journeys for UI work.
+- Added bounded automatic repair/retest follow-ups, explicit blocked-state reporting, persistent session status, `/verification` controls, and regression coverage for the verification state machine and extension wiring.
+
 ## 0.10.1
 
 - Restored reliable terminal-native text selection with normal drag by disabling application mouse capture; `PageUp` and `PageDown` continue to scroll chat history.

@@ -50,6 +50,7 @@ const requiredFiles = [
   "extensions/plan-mode/index.ts",
   "extensions/skills-browser/index.ts",
   "extensions/subagents/child-profile.ts",
+  "extensions/verification-loop/index.ts",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
   "scripts/setup-terminal-font.ps1",

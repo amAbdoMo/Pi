@@ -41,10 +41,22 @@ Pi can support all of this through its extension system; the difference is that 
 
 - **Plan/build mode** with direct `Tab` switching and read-only planning
 - **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
+- **Automatic feature verification** with post-change checks, real browser user journeys for UI work, and bounded repair/retest loops
 - **Subagents** with optional task-specific model and thinking profiles
 - **Side chat** for temporary questions that do not enter the main conversation context
 - **Workflows** for reusable multi-step operations
 - **Fast mode**, code-state undo/redo, and custom tool rendering
+
+### Automatic feature verification
+
+The verification loop is enabled by default. It watches successful edit/write operations and Git workspace changes, invalidates stale evidence after later edits, and requires the agent to call `verification_report` before claiming a changed feature is complete.
+
+- Functional changes require a successful test, lint, build, type-check, or focused command-level check after the latest mutation.
+- UI changes additionally require browser navigation, an accessibility snapshot, user interaction or viewport resizing, then clean console and network inspection followed by a final screenshot.
+- Failed or incomplete verification automatically starts another repair turn, up to three attempts. The agent must fix discovered issues and repeat all checks after the fix.
+- A genuine environment blocker must be reported explicitly instead of being presented as a successful result.
+
+UI journeys use a configured MCP browser that exposes `browser_*` tools. The workbench does not install or silently enable a browser server. Use `/verification status` to inspect missing evidence, `/verification reset` to retry, or explicitly disable the gate for the current session with `/verification off`.
 
 ### Tools and integrations
 
@@ -113,6 +125,7 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | Drag | Select terminal text normally for copy |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
+| `/verification` | Inspect, enable, disable, or reset automatic feature verification |
 | `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
 | `/workflow` | Open reusable workflows |
