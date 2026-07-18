@@ -156,6 +156,8 @@ You can also provide the workspace and task inline:
 
 Local folders do not have to be Git repositories. The pipeline confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools instead of assuming a local project. While a phase is active, the panel and status line show an animated `running` heartbeat with elapsed time, including periods when the model has not emitted text.
 
+Workflow phases remain isolated RPC processes, but their observable activity is projected into the parent Workbench: workflow delegates contribute to the Agents sidebar, MCP calls show phase-scoped running/succeeded/failed entries without changing the parent hub's connection state, and Codex usage refreshes throughout the run and once after settlement. Optional planning/review discovery failures can fall back to local evidence; edit, execution, and required verification failures remain fatal.
+
 The built-in definition is always available. Lowercase YAML files in `~/.pi/workflows` override or extend built-ins globally; files in a trusted project's `.pi/workflows` directory take final precedence. Invalid overrides are reported rather than silently falling back to a different definition.
 
 ## MCP configuration

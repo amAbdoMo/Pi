@@ -15,10 +15,16 @@ phases:
       - web_fetch
       - mcp
       - delegate
+    nonFatalTools:
+      - web_search
+      - web_fetch
+      - mcp
+      - delegate
     system: |
       You are the planning phase of a multi-phase engineering workflow.
       Inspect files, search, and delegate exploration, but do not modify the worktree.
-      Prefer small focused parallel delegate calls for independent exploration streams so the main phase keeps a compact context.
+      For local tasks, establish the plan from local files and project evidence first; use external discovery only to close a specific evidence gap.
+      Prefer small focused parallel delegate calls for independent exploration streams so the main phase keeps a compact context, but continue locally if optional discovery or delegation is unavailable.
     prompt: |
       Task:
       {{input}}
@@ -28,7 +34,7 @@ phases:
       Process:
       1. Follow the workflow execution context exactly. For a local workspace, identify relevant files with read-only inspection; confirm a .git entry before any Git command and do not require Git when absent. For live/remote mode, do not inspect a local project or run Git; identify the target through web_fetch, web_search, or configured MCP tools.
       2. Delegate independent exploration streams where useful. Each delegate must inherit the same local-vs-live and Git restrictions and be told explicitly: read-only, no edits, return exact evidence, risks, and acceptance criteria.
-      3. Use current external/library documentation only when the implementation or live target does not answer a question.
+      3. Use current external/library documentation only when local implementation evidence or the live target does not answer a question. If optional web, MCP, or delegate discovery fails, record the limitation and finish the best supported plan from local evidence.
       4. Reply with the final report. Nothing else. No questions, no "Here's the final report:". Only the report content.
 
   - id: execute
@@ -55,9 +61,13 @@ phases:
       - web_fetch
       - mcp
       - delegate
+    nonFatalTools:
+      - web_search
+      - web_fetch
     system: |
       You are the execution/orchestration phase.
       Decompose the plan and delegate independent implementation streams as much as possible.
+      For local tasks, use the selected workspace and its project evidence as the source of truth; external web discovery is optional and must not replace direct local inspection.
       Prefer not to edit or explore directly unless a tiny coordination fix is safer than another delegate call.
       In a local workspace, work directly in the selected directory and obey the Git gate from the execution context. In live/remote mode, use only appropriate remote/web/MCP operations and never Git or a local project worktree.
     prompt: |
@@ -73,7 +83,7 @@ phases:
       Previous review feedback, if this is a re-run after review failed:
       {{phase.review.output?}}
 
-      Execute the plan through coordination and delegation. If previous verification or review feedback is present, focus on remediating those failures before making unrelated changes.
+      Execute the plan through coordination and delegation. If optional web discovery is unavailable, continue from the plan and local project evidence. If previous verification or review feedback is present, focus on remediating those failures before making unrelated changes.
 
   - id: verify
     thinking: medium
@@ -210,12 +220,18 @@ phases:
       - find
       - ls
       - bash
+      - web_search
       - web_fetch
       - mcp
+      - delegate
+    nonFatalTools:
+      - web_search
+      - web_fetch
       - delegate
     system: |
       You are the final code review phase.
       Do not edit files and do not post comments externally. Run a strict multi-agent-style review and return only verified, actionable findings in the phase report.
+      For local tasks, review actual local source and runtime evidence first. Web research and delegates are optional accelerators; if unavailable, perform the strongest direct local review instead.
       This phase follows the multi-agent PR review flow defined below: bug-hunter consensus, architecture/security reviewers, fact-checker, and judge quality gate.
       Do not duplicate end-to-end verification work; focus on code correctness, architecture/API contracts, and security.
     prompt: |
@@ -235,7 +251,7 @@ phases:
 
       Process:
       1. Establish the strongest review evidence available for the workspace mode. Use changed files against a default branch only when a local .git entry has first been confirmed. For local non-Git workspaces, review the task-relevant files and execution report without requiring a repository baseline. For live/remote tasks, review observable live behavior, configuration, and remote artifacts through web/MCP tools without any Git command.
-      2. Spawn 6 read-only agents in parallel when the available workspace and tools make that useful:
+      2. Spawn 6 read-only agents in parallel when the available workspace and tools make that useful. If delegate execution is unavailable, run the same review roles sequentially yourself against local evidence and state that fallback in the report:
          - 4 Bug-Hunters and give them different file ordering.
          - Architecture Reviewer.
          - Security Reviewer.

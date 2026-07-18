@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { RpcPhaseTransport } from "../rpc-client.ts";
+import { beginWorkflowActivity, getWorkflowActivitySnapshot } from "../activity.ts";
 import { WorkflowRunner, extractTerminalStructuredResult, snapshotRunState, type PersistedRunSnapshot } from "../runner.ts";
 import { PANEL_ENTRY_TYPE, RUN_STATE_ENTRY, SNAPSHOT_VERSION, validateWorkflow, type WorkflowRunState } from "../schema.ts";
 
@@ -70,6 +71,13 @@ function textMessages(text: string): any[] {
 	return [{ role: "assistant", content: [{ type: "text", text }], stopReason: "stop" }];
 }
 
+function messagesWithToolFailure(toolName: string, toolCallId: string): any[] {
+	return [
+		{ role: "toolResult", toolName, toolCallId, isError: true, content: [{ type: "text", text: `${toolName} unavailable` }] },
+		...textMessages("completed from local evidence"),
+	];
+}
+
 function structuredMessages(count = 1): any[] {
 	const messages: any[] = [];
 	for (let index = 0; index < count; index++) {
@@ -82,6 +90,12 @@ function structuredMessages(count = 1): any[] {
 
 function workflow(output?: unknown) {
 	return validateWorkflow({ phases: [{ id: "run", prompt: "Do {{input}}", ...(output === undefined ? {} : { output }) }] }, "/tmp/test.yaml", "global");
+}
+
+function workflowWithToolPolicy(nonFatalTools: string[]) {
+	return validateWorkflow({
+		phases: [{ id: "run", prompt: "Do {{input}}", tools: ["read", "bash", "web_fetch"], nonFatalTools }],
+	}, "/tmp/test.yaml", "global");
 }
 
 function harness(
@@ -187,6 +201,27 @@ describe("workflow state machine", () => {
 		expect(state.phases.find((phase) => phase.id === "run")?.status).toBe("failed");
 	});
 
+	test("configured optional failures recover from live events and get_messages fallback", async () => {
+		const fromEvent = harness(() => new FakeClient({
+			events: [{ type: "tool_execution_end", toolName: "web_fetch", toolCallId: "w1", isError: true }],
+		}));
+		const eventState = await fromEvent.runner.run({ workflow: workflowWithToolPolicy(["web_fetch"]), input: "x", ctx: fromEvent.ctx, displayPanel: false });
+		expect(eventState.status).toBe("succeeded");
+		expect(eventState.phases[0].logs.some((log) => log.text.includes("optional tool web_fetch") && log.text.includes("continuing"))).toBe(true);
+
+		const fromMessages = harness(() => new FakeClient({ messages: messagesWithToolFailure("web_fetch", "w2") }));
+		const messageState = await fromMessages.runner.run({ workflow: workflowWithToolPolicy(["web_fetch"]), input: "x", ctx: fromMessages.ctx, displayPanel: false });
+		expect(messageState.status).toBe("succeeded");
+		expect(messageState.phases[0].logs.some((log) => log.text.includes("web_fetch unavailable"))).toBe(true);
+	});
+
+	test("unconfigured failures remain fatal when another tool is optional", async () => {
+		const h = harness(() => new FakeClient({ messages: messagesWithToolFailure("bash", "b1") }));
+		const state = await h.runner.run({ workflow: workflowWithToolPolicy(["web_fetch"]), input: "x", ctx: h.ctx, displayPanel: false });
+		expect(state.status).toBe("failed");
+		expect(state.error).toContain("Tool bash (b1) failed: bash unavailable");
+	});
+
 	test("accepts only one correlated terminal structured result", async () => {
 		const contract = { type: "structured", status: { enum: ["PASS", "FAIL"] }, data: { fields: { count: { type: "integer" } } } };
 		const valid = harness(() => new FakeClient({ messages: structuredMessages(1) }));
@@ -205,6 +240,41 @@ describe("workflow state machine", () => {
 		expect(() => extractTerminalStructuredResult(sibling)).toThrow(/only tool/);
 		const followed = [...structuredMessages(1), ...textMessages("later")];
 		expect(() => extractTerminalStructuredResult(followed)).toThrow(/terminal/);
+	});
+
+	test("projects delegate and MCP child events through the runner", async () => {
+		const h = harness(() => new FakeClient({ blocked: true, events: [
+			{ type: "tool_execution_start", toolName: "delegate", toolCallId: "d1", args: { task: "inspect" } },
+			{ type: "extension_ui_request", method: "setStatus", statusKey: "subagents", statusText: "agents 2/3 running · 1 waiting · 1 nested" },
+			{ type: "tool_execution_start", toolName: "mcp", toolCallId: "m1", args: { action: "call", server: "github", tool: "get_issue" } },
+		] }));
+		const run = h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, displayPanel: false });
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(getWorkflowActivitySnapshot()?.delegates).toEqual({ running: 2, total: 3, waiting: 1, nested: 1 });
+		expect(getWorkflowActivitySnapshot()?.mcpCalls).toEqual([expect.objectContaining({ id: "m1", action: "call", server: "github", tool: "get_issue" })]);
+		h.clients[0].onEvent?.({ type: "tool_execution_end", toolName: "mcp", toolCallId: "m1", isError: false });
+		expect(getWorkflowActivitySnapshot()?.mcpCalls).toEqual([expect.objectContaining({ id: "m1", status: "succeeded" })]);
+		h.clients[0].settle();
+		expect((await run).status).toBe("succeeded");
+	});
+
+	test("projects the active runner phase and clears activity after abort", async () => {
+		const h = harness(() => new FakeClient({ blocked: true }));
+		const run = h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, displayPanel: false });
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(getWorkflowActivitySnapshot()).toMatchObject({ workflowId: "test", phaseId: "run" });
+		h.runner.getActiveState()?.abort?.();
+		expect((await run).status).toBe("aborted");
+		expect(getWorkflowActivitySnapshot()).toBeUndefined();
+	});
+
+	test("clears activity after phase setup failure and restore", async () => {
+		const h = harness(() => { throw new Error("spawn setup failed"); });
+		expect((await h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, displayPanel: false })).status).toBe("failed");
+		expect(getWorkflowActivitySnapshot()).toBeUndefined();
+		beginWorkflowActivity("stale", "pipeline");
+		h.runner.restore(h.ctx);
+		expect(getWorkflowActivitySnapshot()).toBeUndefined();
 	});
 
 	test("pre-abort and inter-phase abort never spawn a later child", async () => {
@@ -272,6 +342,7 @@ describe("workflow state machine", () => {
 		expect((await run).status).toBe("aborted");
 		const snapshots = h.appended.filter((entry) => entry.type === RUN_STATE_ENTRY);
 		expect(snapshots.at(-1)?.data.state.status).toBe("aborted");
+		expect(getWorkflowActivitySnapshot()).toBeUndefined();
 	});
 
 	test("teardown failure cannot reverse an aborted workflow or phase", async () => {

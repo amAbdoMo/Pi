@@ -1,6 +1,6 @@
 {
   "name": "pi-workbench",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "private": true,
   "description": "A polished terminal workbench, theme, and extension suite for Pi.",
   "type": "module",

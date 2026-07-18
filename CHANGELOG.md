@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.2
+
+- Projected workflow-child delegate activity into the parent Agents sidebar while preserving RPC process isolation and direct-agent counts.
+- Added parent-visible workflow MCP activity with running/succeeded/failed outcomes without changing the parent hub's real connection state.
+- Extended Codex usage polling across complete workflow runs with immediate, periodic, and final refreshes.
+- Added explicit per-phase `nonFatalTools` policy so optional pipeline discovery failures such as `web_search` can fall back to local evidence while execution and verification failures remain strict.
+
 ## 0.12.1
 
 - Added interactive and command-line workflow workspace selection with explicit local-folder and live/remote modes; non-Git workspaces no longer fail from unconditional Git commands.

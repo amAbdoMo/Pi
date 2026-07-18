@@ -22,6 +22,7 @@ Intentional packaging and portability differences:
 - Runtime dependencies (`yaml` and `typebox`) are pinned in the root package instead of a nested machine-local workflow package.
 - Tests run through the root npm validation gate with Vitest rather than upstream's Bun- and `/home/h4ni0`-specific scripts.
 - Windows workflow shutdown uses bounded `taskkill /T /F` process-tree termination; POSIX retains process-group TERM→KILL cleanup.
+- Pi Workbench adds parent-visible workflow delegate/MCP activity, workflow-aware Codex usage polling, and explicit per-phase `nonFatalTools` fallback policy; child execution remains process-isolated.
 - Upstream's machine-specific audit/deployment files, external `workflow-ui`, operator `SPECS.md`, and copied `node_modules` are not packaged.
 
 ### GPT-5.6 Fast mode

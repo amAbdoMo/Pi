@@ -16,6 +16,11 @@ import {
 import { getMcpStatus, subscribeMcpStatus } from "../mcp/status.ts";
 import type { McpServerState } from "../mcp/types.ts";
 import {
+  getWorkflowActivitySnapshot,
+  type WorkflowActivitySnapshot,
+  type WorkflowMcpActivity,
+} from "../workflow/activity.ts";
+import {
   getPlanProgress,
   subscribePlanProgress,
 } from "../plan-mode/progressState.ts";
@@ -37,6 +42,7 @@ import {
 import {
   getSubagentsSnapshot,
   subscribeSubagents,
+  type SubagentsSnapshot,
 } from "./subagents.ts";
 import {
   compactTokenCount,
@@ -344,7 +350,7 @@ export class WorkbenchSidebar implements Component {
       return [alignedStatusLine(this.theme, this.theme.fg("dim", "○ Agents"), "none", width)];
     }
     const summary = `${agents.running}/${agents.total}${agents.waiting ? ` · ${agents.waiting} waiting` : ""}`;
-    return [
+    const lines = [
       alignedStatusLine(
         this.theme,
         this.theme.fg(agents.running ? "accent" : "muted", "◉ Agents"),
@@ -352,13 +358,17 @@ export class WorkbenchSidebar implements Component {
         width,
       ),
     ];
+    const workflowLine = workflowDelegateLine(this.theme, agents.workflow, width);
+    if (workflowLine) lines.push(workflowLine);
+    return lines;
   }
 
   private mcpLines(width: number): string[] {
     const servers = getMcpStatus();
-    const lines: string[] = [];
+    const workflowLines = workflowMcpLines(this.theme, getWorkflowActivitySnapshot(), width);
+    const lines: string[] = [...workflowLines];
     if (servers.length === 0) {
-      lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
+      if (lines.length === 0) lines.push(this.theme.fg("dim", "No servers configured · /mcp"));
       return lines;
     }
     for (const server of servers.slice(0, MAX_VISIBLE_SERVERS)) {
@@ -396,6 +406,85 @@ function sidebarTaskLines(
   const continuation = "  ";
   return wrapSidebarText(item.text, Math.max(1, width - continuation.length))
     .map((line, index) => `${index === 0 ? prefix : continuation}${line}`);
+}
+
+function workflowDelegateLine(
+  theme: Theme,
+  workflow: SubagentsSnapshot["workflow"],
+  width: number,
+): string | undefined {
+  if (!workflow || workflow.total === 0 && workflow.nested === 0) return undefined;
+  const location = workflowLocationLabel(workflow.workflowId, workflow.phaseId);
+  const bits = [`${workflow.running}/${workflow.total}`];
+  if (workflow.waiting) bits.push(`${workflow.waiting} waiting`);
+  if (workflow.nested) bits.push(`${workflow.nested} nested`);
+  return truncateToWidth(
+    theme.fg("dim", `  workflow ${location} · ${bits.join(" · ")}`),
+    width,
+    "…",
+    true,
+  );
+}
+
+function workflowMcpLines(
+  theme: Theme,
+  workflow: WorkflowActivitySnapshot | undefined,
+  width: number,
+): string[] {
+  if (!workflow?.mcpCalls.length) return [];
+  const visibleCalls = workflow.mcpCalls.slice(0, 2);
+  const lines = visibleCalls.map((call) =>
+    alignedStatusLine(
+      theme,
+      theme.fg(workflowMcpTone(call.status), `${workflowMcpSymbol(call.status)} Workflow MCP`),
+      workflowMcpValue(workflow, call),
+      width,
+    )
+  );
+  if (workflow.mcpCalls.length > visibleCalls.length) {
+    lines.push(theme.fg("dim", `+${workflow.mcpCalls.length - visibleCalls.length} workflow MCP more`));
+  }
+  return lines;
+}
+
+function workflowMcpValue(
+  workflow: WorkflowActivitySnapshot,
+  call: WorkflowMcpActivity,
+): string {
+  const phase = workflow.phaseId ? sanitizeSidebarText(workflow.phaseId) : sanitizeSidebarText(workflow.workflowId);
+  const server = sanitizeSidebarText(call.server ?? "server");
+  const action = sanitizeSidebarText(call.action ?? "action");
+  const tool = sanitizeSidebarText(call.tool ?? "tool");
+  return `${phase} · ${server} ${action}/${tool} · ${call.status}`;
+}
+
+function workflowMcpSymbol(status: WorkflowMcpActivity["status"]): string {
+  if (status === "succeeded") return "✓";
+  if (status === "failed") return "✕";
+  return "◉";
+}
+
+function workflowMcpTone(status: WorkflowMcpActivity["status"]): "accent" | "success" | "error" {
+  if (status === "succeeded") return "success";
+  if (status === "failed") return "error";
+  return "accent";
+}
+
+function workflowLocationLabel(workflowId: string, phaseId: string | undefined): string {
+  const workflow = sanitizeSidebarText(workflowId);
+  const phase = phaseId ? sanitizeSidebarText(phaseId) : undefined;
+  return phase ? `${workflow}/${phase}` : workflow;
+}
+
+function sanitizeSidebarText(value: string): string {
+  return value
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b[P_X^][\s\S]*?\x1b\\/g, "")
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\x1b[@-_]/g, "")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "—";
 }
 
 function todoStatusRole(status: TodoStatus): string {

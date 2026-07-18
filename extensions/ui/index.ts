@@ -8,6 +8,7 @@ import {
   setPlanBuildMode,
   subscribePlanBuildMode,
 } from "../plan-mode/modeState.ts";
+import { hasActiveWorkflowActivity } from "../workflow/activity.ts";
 import {
   refreshChatGptUsage,
   resetChatGptUsage,
@@ -62,13 +63,15 @@ export default function uiExtension(pi: ExtensionAPI) {
     subagentUsagePoller = createUsageRefreshPoller(() =>
       refreshChatGptUsage(ctx, { force: true }),
     );
-    const syncSubagentUsage = () => {
+    const syncUsageActivity = () => {
       notifyEditors();
       workbenchSidebar.invalidate();
-      subagentUsagePoller?.setActive(hasActiveSubagents());
+      subagentUsagePoller?.setActive(
+        hasActiveSubagents() || hasActiveWorkflowActivity(),
+      );
     };
-    unsubscribeSubagents = subscribeSubagents(syncSubagentUsage);
-    syncSubagentUsage();
+    unsubscribeSubagents = subscribeSubagents(syncUsageActivity);
+    syncUsageActivity();
     workbenchSidebar.dispose();
 
     ctx.ui.setHeader((_tui, theme) => ({

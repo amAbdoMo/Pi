@@ -5,7 +5,14 @@ import test from "node:test";
 
 const tuiStub = String.raw`
   export const CURSOR_MARKER = "";
-  export const Key = { escape: "escape", up: "up", down: "down", enter: "enter" };
+  export const Key = {
+    escape: "escape",
+    up: "up",
+    down: "down",
+    enter: "enter",
+    ctrl: (key) => "ctrl+" + key,
+    ctrlAlt: (key) => "ctrl+alt+" + key,
+  };
   export function matchesKey(data, key) { return data === key; }
   export function isKeyRelease() { return false; }
   export function visibleWidth(text) {
@@ -149,12 +156,61 @@ const { installWorkbenchShell } = await import(
 const { TerminalEditor } = await import(
   "../extensions/ui/terminalEditor.ts"
 );
+const { WorkbenchSidebar } = await import(
+  "../extensions/ui/workbenchSidebar.ts"
+);
+const { publishMcpStatus } = await import(
+  "../extensions/mcp/status.ts"
+);
+const {
+  beginWorkflowActivity,
+  clearWorkflowActivity,
+  projectWorkflowActivityEvent,
+  setWorkflowActivityPhase,
+} = await import("../extensions/workflow/activity.ts");
+const { getSubagentsSnapshot, subagentsLabel } = await import(
+  "../extensions/ui/subagents.ts"
+);
 
 const theme = {
   fg: (_role, text) => text,
   bg: (_role, text) => text,
   bold: (text) => text,
 };
+
+function resetDirectSubagents(overrides = {}) {
+  globalThis.__pi_subagents_status_v1 = {
+    running: 0,
+    total: 0,
+    waiting: 0,
+    nested: 0,
+    updatedAt: 0,
+    listeners: new Set(),
+    ...overrides,
+  };
+}
+
+function resetWorkbenchActivityState() {
+  resetDirectSubagents();
+  clearWorkflowActivity();
+  publishMcpStatus([]);
+}
+
+function renderSidebar() {
+  let renderRequests = 0;
+  const sidebar = new WorkbenchSidebar(
+    theme,
+    () => {},
+    () => { renderRequests += 1; },
+    () => 48,
+    () => 140,
+  );
+  return {
+    sidebar,
+    output: () => sidebar.render(80).join("\n"),
+    renderRequests: () => renderRequests,
+  };
+}
 
 function assertWidthSafe(lines, width) {
   assert.ok(lines.length > 0);
@@ -242,6 +298,89 @@ test("secondary overlays give guidance and stay width-safe", () => {
   } finally {
     agents.dispose();
     child.dispose();
+  }
+});
+
+test("sidebar agent counts aggregate direct and workflow delegates", () => {
+  resetWorkbenchActivityState();
+  resetDirectSubagents({ running: 1, total: 2 });
+  beginWorkflowActivity("run-agents", "pipeline");
+  setWorkflowActivityPhase("run-agents", "verify");
+  projectWorkflowActivityEvent("run-agents", {
+    type: "extension_ui_request",
+    method: "setStatus",
+    statusKey: "subagents",
+    statusText: "agents 2/3 running · 1 waiting · 2 nested",
+  });
+
+  const snapshot = getSubagentsSnapshot();
+  assert.equal(snapshot.running, 3);
+  assert.equal(snapshot.total, 5);
+  assert.equal(snapshot.waiting, 1);
+  assert.equal(snapshot.nested, 2);
+  assert.match(subagentsLabel(), /3\/5/);
+
+  const { sidebar, output } = renderSidebar();
+  try {
+    const text = output();
+    assert.match(text, /◉ Agents\s+3\/5 · 1 waiting/);
+    assert.match(text, /workflow pipeline\/verify · 2\/3 · 1 waiting · 2 nested/);
+  } finally {
+    sidebar.dispose();
+    resetWorkbenchActivityState();
+  }
+});
+
+test("sidebar renders workflow MCP activity without replacing server connection state", () => {
+  resetWorkbenchActivityState();
+  publishMcpStatus([
+    { name: "github", state: "connected", transport: "stdio", toolCount: 3 },
+  ]);
+  beginWorkflowActivity("run-mcp", "pipeline");
+  setWorkflowActivityPhase("run-mcp", "plan");
+  projectWorkflowActivityEvent("run-mcp", {
+    type: "tool_execution_start",
+    toolName: "mcp",
+    toolCallId: "mcp-1",
+    args: {
+      action: "call",
+      server: "browser\x1b]52;c;YQ==\x07\nserver",
+      tool: "snapshot\x1b[31m-danger",
+    },
+  });
+
+  const { sidebar, output } = renderSidebar();
+  try {
+    const text = output();
+    assert.match(text, /◉ Workflow MCP\s+plan · browser server call\/snapshot-danger · running/);
+    assert.match(text, /● github\s+Connected/);
+    assert.doesNotMatch(text, /\x1b\[31m|52;c/);
+
+    projectWorkflowActivityEvent("run-mcp", {
+      type: "tool_execution_end",
+      toolName: "mcp",
+      toolCallId: "mcp-1",
+      isError: true,
+    });
+    assert.match(output(), /✕ Workflow MCP\s+plan · browser server call\/snapshot-danger · failed/);
+  } finally {
+    sidebar.dispose();
+    resetWorkbenchActivityState();
+  }
+});
+
+test("sidebar workflow subscriptions stop invalidating after disposal", () => {
+  resetWorkbenchActivityState();
+  const { sidebar, renderRequests } = renderSidebar();
+  try {
+    beginWorkflowActivity("run-subscription", "pipeline");
+    assert.equal(renderRequests(), 1);
+    sidebar.dispose();
+    setWorkflowActivityPhase("run-subscription", "verify");
+    assert.equal(renderRequests(), 1);
+  } finally {
+    sidebar.dispose();
+    resetWorkbenchActivityState();
   }
 });
 

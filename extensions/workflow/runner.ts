@@ -5,6 +5,12 @@ import * as path from "node:path";
 import type { AgentToolResult, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { CONFIG_DIR_NAME, getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { Message } from "@earendil-works/pi-ai";
+import {
+	beginWorkflowActivity,
+	clearWorkflowActivity,
+	projectWorkflowActivityEvent,
+	setWorkflowActivityPhase,
+} from "./activity.ts";
 import { RpcPhaseClient, type RpcPhaseTransport } from "./rpc-client.ts";
 import {
 	CONTEXT_MESSAGE_TYPE,
@@ -228,11 +234,27 @@ export function extractTerminalStructuredResult(messages: readonly any[]): Workf
 	return structured;
 }
 
-function firstFailedToolFromMessages(messages: readonly any[]): { name: string; id?: string; detail?: string } | undefined {
-	const message = messages.find((item) => item?.role === "toolResult" && item.isError);
-	if (!message) return undefined;
-	const detail = Array.isArray(message.content) ? message.content.filter((part: any) => part?.type === "text").map((part: any) => part.text).join("\n") : undefined;
-	return { name: String(message.toolName ?? "unknown"), id: typeof message.toolCallId === "string" ? message.toolCallId : undefined, detail: detail ? truncatePlain(detail, 500) : undefined };
+interface FailedTool {
+	name: string;
+	id?: string;
+	detail?: string;
+}
+
+function failedToolsFromMessages(messages: readonly any[]): FailedTool[] {
+	return messages.filter((message) => message?.role === "toolResult" && message.isError).map((message) => {
+		const detail = Array.isArray(message.content)
+			? message.content.filter((part: any) => part?.type === "text").map((part: any) => part.text).join("\n")
+			: undefined;
+		return {
+			name: String(message.toolName ?? "unknown"),
+			id: typeof message.toolCallId === "string" ? message.toolCallId : undefined,
+			detail: detail ? truncatePlain(detail, 500) : undefined,
+		};
+	});
+}
+
+function failedToolKey(tool: Pick<FailedTool, "name" | "id">): string {
+	return tool.id ?? `tool:${tool.name}`;
 }
 
 function collectStatusConditions(phase: WorkflowPhase): string[] {
@@ -303,7 +325,8 @@ Mandatory rules:
 - Treat the selected working directory above as the only project workspace for this phase.
 - Git commands are forbidden until you explicitly confirm that a .git filesystem entry exists for this selected workspace. Do not infer Git availability from the task, parent session, or workflow definition.
 - If no .git entry is confirmed, do not run any Git command; use direct file inspection and non-Git verification instead.
-- Never use a repository root, diff, branch, or commit as a required prerequisite when the selected workspace is not a Git worktree.`);
+- Never use a repository root, diff, branch, or commit as a required prerequisite when the selected workspace is not a Git worktree.
+- Prefer local files, project commands, and runtime evidence before external web, MCP, or delegate discovery. Optional discovery outages must not block work that local evidence can support.`);
 	}
 	if (phase.system?.trim()) chunks.push(`# Workflow phase-specific instructions\n\n${phase.system.trim()}`);
 	if (phase.output?.type === "text" && phase.output.description?.trim()) chunks.push(`# Workflow output contract\n\nAt the end of this phase, produce non-empty text output matching this YAML-configured contract:\n${phase.output.description.trim()}`);
@@ -318,7 +341,7 @@ Phase: ${phase.id}
 Rules:
 - Do not invoke workflows, /workflow, or workflow_run from inside this phase.
 - Focus only on this phase's prompt and task.
-- Failed tool executions fail the phase even if you later produce a report.
+- Tool failures are fatal even if you later produce a report${phase.nonFatalTools?.length ? `, except these explicitly recoverable tools: ${phase.nonFatalTools.join(", ")}. If one fails, warn clearly and continue using available local evidence` : ""}.
 - Your final assistant text or structured workflow_phase_result report is the phase output exposed to later phases.
 - Do not include raw tool logs unless they are essential to the result.`);
 	return chunks.join("\n\n");
@@ -389,6 +412,7 @@ export class WorkflowRunner {
 	}
 
 	restore(ctx: ExtensionContext): void {
+		clearWorkflowActivity();
 		this.runStates.clear();
 		this.activeRunId = undefined;
 		this.focusedRunId = undefined;
@@ -461,6 +485,7 @@ export class WorkflowRunner {
 		this.activeController = controller;
 		this.runStates.set(state.runId, state);
 		this.activeRunId = state.runId;
+		beginWorkflowActivity(state.runId, state.workflowId);
 		const abort = () => {
 			if (controller.signal.aborted) return;
 			controller.abort();
@@ -566,6 +591,7 @@ export class WorkflowRunner {
 			if (this.focusedRunId === state.runId) this.focusedRunId = undefined;
 			this.activeController = undefined;
 			this.activeClient = undefined;
+			clearWorkflowActivity(state.runId);
 			this.persist(state);
 			this.changed(ctx, undefined);
 			emitUpdate();
@@ -587,6 +613,7 @@ export class WorkflowRunner {
 		state.activePhaseId = phase.id;
 		state.selectedPhaseId = phase.id;
 		state.scrollOffset = 0;
+		setWorkflowActivityPhase(state.runId, phase.id);
 		addLog(phaseState, "info", `Starting phase ${phase.id}`);
 		const heartbeatStartedAt = Date.now();
 		state.heartbeat = { phaseId: phase.id, startedAt: heartbeatStartedAt, updatedAt: heartbeatStartedAt, tick: 0 };
@@ -604,7 +631,16 @@ export class WorkflowRunner {
 		let tmpDir: string | undefined;
 		let client: RpcPhaseTransport | undefined;
 		let currentAssistantLog: LogEntry | undefined;
-		let firstFailedTool: { name: string; id?: string } | undefined;
+		let firstFailedTool: FailedTool | undefined;
+		const warnedNonFatalFailures = new Set<string>();
+		const isNonFatalTool = (name: string) => phase.nonFatalTools?.includes(name) === true;
+		const warnNonFatalFailure = (failed: FailedTool) => {
+			const key = failedToolKey(failed);
+			if (warnedNonFatalFailures.has(key)) return;
+			warnedNonFatalFailures.add(key);
+			const detail = failed.detail ? `: ${failed.detail}` : "";
+			addLog(phaseState, "info", `Warning: optional tool ${failed.name}${failed.id ? ` (${failed.id})` : ""} failed${detail}; continuing because phase nonFatalTools permits recovery.`);
+		};
 		let lastRenderAt = 0;
 		let renderTimer: NodeJS.Timeout | undefined;
 		let steeringOpen = false;
@@ -661,6 +697,7 @@ export class WorkflowRunner {
 			this.activeClient = createdClient;
 			steeringOpen = true;
 			createdClient.onEvent = (event) => {
+				projectWorkflowActivityEvent(state.runId, event);
 				if (event.type === "agent_settled") {
 					steeringOpen = false;
 					state.steer = undefined;
@@ -682,8 +719,12 @@ export class WorkflowRunner {
 				}
 				if (event.type === "tool_execution_start") addLog(phaseState, "tool", formatToolCall(event.toolName, event.args ?? {}));
 				else if (event.type === "tool_execution_end") {
-					addLog(phaseState, event.isError ? "error" : "tool", `${event.isError ? "✗" : "✓"} ${event.toolName}`);
-					if (event.isError && !firstFailedTool) firstFailedTool = { name: String(event.toolName ?? "unknown"), id: event.toolCallId };
+					const failed = { name: String(event.toolName ?? "unknown"), id: typeof event.toolCallId === "string" ? event.toolCallId : undefined };
+					if (event.isError && isNonFatalTool(failed.name)) warnNonFatalFailure(failed);
+					else {
+						addLog(phaseState, event.isError ? "error" : "tool", `${event.isError ? "✗" : "✓"} ${event.toolName}`);
+						if (event.isError && !firstFailedTool) firstFailedTool = failed;
+					}
 					if (!event.isError && event.toolName === WORKFLOW_PHASE_RESULT_TOOL_NAME) {
 						steeringOpen = false;
 						state.steer = undefined;
@@ -731,9 +772,13 @@ export class WorkflowRunner {
 			const messagesResponse = assertResponse(await createdClient.request({ type: "get_messages" }), "get_messages");
 			assertNotAborted(signal);
 			const messages = (messagesResponse.data?.messages ?? []) as Message[];
-			const failedFromMessages = firstFailedToolFromMessages(messages);
-			const failed = firstFailedTool ?? failedFromMessages;
-			if (failed) throw new Error(`Tool ${failed.name}${failed.id ? ` (${failed.id})` : ""} failed${failedFromMessages?.detail ? `: ${failedFromMessages.detail}` : ""}`);
+			const messageFailures = failedToolsFromMessages(messages);
+			for (const failed of messageFailures) if (isNonFatalTool(failed.name)) warnNonFatalFailure(failed);
+			const failed = firstFailedTool ?? messageFailures.find((tool) => !isNonFatalTool(tool.name));
+			if (failed) {
+				const matchingMessage = messageFailures.find((tool) => failedToolKey(tool) === failedToolKey(failed));
+				throw new Error(`Tool ${failed.name}${failed.id ? ` (${failed.id})` : ""} failed${matchingMessage?.detail ? `: ${matchingMessage.detail}` : ""}`);
+			}
 			const finalAssistant = getFinalAssistant(messages);
 			if (finalAssistant?.stopReason === "length") throw new Error(`Phase ${phase.id} exceeded the model output limit`);
 			if (finalAssistant?.stopReason === "error" || finalAssistant?.stopReason === "aborted") throw new Error(finalAssistant.errorMessage || `Phase model stopped with ${finalAssistant.stopReason}`);
@@ -814,6 +859,7 @@ export class WorkflowRunner {
 			// The active run records teardown failure and persists it.
 		}
 		if (this.activePromise) await this.activePromise;
+		clearWorkflowActivity();
 	}
 }
 

@@ -147,6 +147,25 @@ describe("secure YAML compiler and discovery", () => {
 });
 
 describe("schema compatibility, templates, routing, and reports", () => {
+	test("validates unique non-fatal tools against explicit phase tools", () => {
+		const file = "/tmp/test.yaml";
+		const workflow = validateWorkflow({ phases: [{ id: "run", prompt: "x", tools: ["read", "web_fetch"], nonFatalTools: ["web_fetch"] }] }, file, "global");
+		expect(workflow.phases[0].nonFatalTools).toEqual(["web_fetch"]);
+		expect(() => validateWorkflow({ phases: [{ id: "run", prompt: "x", tools: ["web_fetch"], nonFatalTools: ["web_fetch", "web_fetch"] }] }, file, "global")).toThrow(/unique tool names/);
+		expect(() => validateWorkflow({ phases: [{ id: "run", prompt: "x", nonFatalTools: ["web_fetch"] }] }, file, "global")).toThrow(/requires an explicit tools list/);
+		expect(() => validateWorkflow({ phases: [{ id: "run", prompt: "x", tools: ["read"], nonFatalTools: ["web_fetch"] }] }, file, "global")).toThrow(/subset.*web_fetch/);
+		expect(() => validateWorkflow({ phases: [{ id: "run", prompt: "x", nonFatalTools: "web_fetch" }] }, file, "global")).toThrow(/array of strings/);
+	});
+
+	test("configures pipeline discovery fallbacks while keeping verify strict", () => {
+		const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "pipeline.yaml");
+		const workflow = validateWorkflow(parseYamlText(fs.readFileSync(file, "utf8"), path.basename(file)), file, "built-in");
+		expect(workflow.phases.find((phase) => phase.id === "plan")?.nonFatalTools).toEqual(["web_search", "web_fetch", "mcp", "delegate"]);
+		expect(workflow.phases.find((phase) => phase.id === "execute")?.nonFatalTools).toEqual(["web_search", "web_fetch"]);
+		expect(workflow.phases.find((phase) => phase.id === "verify")?.nonFatalTools).toBeUndefined();
+		expect(workflow.phases.find((phase) => phase.id === "review")?.nonFatalTools).toEqual(["web_search", "web_fetch", "delegate"]);
+	});
+
 	test("accepts max thinking and rejects reserved IDs, no-op conditions, and malformed descriptions", () => {
 		const file = "/tmp/test.yaml";
 		expect(validateWorkflow({ phases: [{ id: "run", prompt: "x", thinking: "max" }] }, file, "global").phases[0].thinking).toBe("max");

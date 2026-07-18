@@ -28,5 +28,7 @@ Local workspaces may be Git or non-Git directories. Every phase receives an expl
 - YAML is parsed in-process with strict duplicate-key, document-count, alias, and size limits.
 - Project workflows load only for trusted projects.
 - Each phase runs in an isolated Pi RPC child with configured tools and thinking level, using the selected working directory or an empty live-mode directory.
+- Parent Workbench activity projection reports workflow delegates, phase-scoped MCP outcomes, and workflow-driven Codex usage refreshes without merging child and parent process state.
+- `nonFatalTools` may name unique tools from an explicit phase `tools` list whose failure permits a documented fallback; every unlisted tool failure remains fatal.
 - Structured phase output controls conditional routing.
 - `workflow_run` failures are tool errors; callers must not treat them as successful orchestration.

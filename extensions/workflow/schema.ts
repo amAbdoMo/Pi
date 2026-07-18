@@ -73,6 +73,7 @@ export interface WorkflowPhase {
 	prompt: string;
 	model?: string;
 	tools?: string[];
+	nonFatalTools?: string[];
 	thinking?: ThinkingLevel;
 	output?: WorkflowPhaseOutputConfig;
 	next?: WorkflowNextRule[];
@@ -198,6 +199,15 @@ function parseStringArray(raw: unknown, context: string): string[] {
 		throw new Error(`${context} must be a non-empty array of strings`);
 	}
 	return raw.map((item) => String(item).trim());
+}
+
+function parseUniqueToolNames(raw: unknown, context: string): string[] {
+	if (!Array.isArray(raw) || !raw.every((tool) => typeof tool === "string" && tool.trim())) {
+		throw new Error(`${context} must be an array of strings`);
+	}
+	const tools = raw.map((tool) => String(tool).trim());
+	if (new Set(tools).size !== tools.length) throw new Error(`${context} must contain unique tool names`);
+	return tools;
 }
 
 function parseOutputStatus(raw: unknown, context: string): Pick<WorkflowStructuredOutputConfig, "statuses" | "statusDescription"> {
@@ -486,7 +496,7 @@ export function validateWorkflow(raw: unknown, filePath: string, source: Workflo
 	const phases = obj.phases.map((phaseRaw, index): WorkflowPhase => {
 		if (!phaseRaw || typeof phaseRaw !== "object" || Array.isArray(phaseRaw)) throw new Error(`phase ${index + 1} must be a mapping/object`);
 		const phaseObj = phaseRaw as Record<string, unknown>;
-		for (const key of Object.keys(phaseObj)) if (!["id", "system", "prompt", "model", "tools", "thinking", "output", "next"].includes(key)) throw new Error(`phase ${index + 1}: unknown field: ${key}`);
+		for (const key of Object.keys(phaseObj)) if (!["id", "system", "prompt", "model", "tools", "nonFatalTools", "thinking", "output", "next"].includes(key)) throw new Error(`phase ${index + 1}: unknown field: ${key}`);
 		if (typeof phaseObj.id !== "string" || !PHASE_ID_RE.test(phaseObj.id)) throw new Error(`phase ${index + 1}: id must be lowercase letters/numbers/hyphens with no leading/trailing hyphen`);
 		if (phaseObj.id === "report") throw new Error(`phase ${index + 1}: id "report" is reserved for the workflow report`);
 		if (seen.has(phaseObj.id)) throw new Error(`duplicate phase id: ${phaseObj.id}`);
@@ -498,6 +508,12 @@ export function validateWorkflow(raw: unknown, filePath: string, source: Workflo
 		if (phaseObj.tools !== undefined) {
 			if (!Array.isArray(phaseObj.tools) || !phaseObj.tools.every((tool) => typeof tool === "string" && tool.trim())) throw new Error(`phase ${phaseObj.id}: tools must be an array of strings`);
 			tools = phaseObj.tools.map((tool) => String(tool).trim());
+		}
+		let nonFatalTools: string[] | undefined;
+		if (phaseObj.nonFatalTools !== undefined) {
+			nonFatalTools = parseUniqueToolNames(phaseObj.nonFatalTools, `phase ${phaseObj.id}: nonFatalTools`);
+			if (!tools) throw new Error(`phase ${phaseObj.id}: nonFatalTools requires an explicit tools list`);
+			for (const tool of nonFatalTools) if (!tools.includes(tool)) throw new Error(`phase ${phaseObj.id}: nonFatalTools must be a subset of tools; unknown tool: ${tool}`);
 		}
 		let thinking: ThinkingLevel | undefined;
 		if (phaseObj.thinking !== undefined) {
@@ -511,6 +527,7 @@ export function validateWorkflow(raw: unknown, filePath: string, source: Workflo
 			system: phaseObj.system as string | undefined,
 			model: phaseObj.model as string | undefined,
 			tools,
+			nonFatalTools,
 			thinking,
 			output: parseOutputConfig(phaseObj.output, `phase ${phaseObj.id}`),
 			next: parseNextRules(phaseObj.next, `phase ${phaseObj.id}`),
