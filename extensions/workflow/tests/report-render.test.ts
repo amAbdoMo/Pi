@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, test } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { Value } from "typebox/value";
-import workflowExtension, { isDirectWorkflowChild, sanitizeTerminalText } from "../index.ts";
+import workflowExtension, { isDirectWorkflowChild, parseWorkflowArgs, renderWorkflowPanel, sanitizeTerminalText } from "../index.ts";
 import { capParentText } from "../schema.ts";
-import { serializeStructuredOutputConfigForChild, snapshotRunState } from "../runner.ts";
+import { formatHeartbeat, normalizeWorkflowDirectory, serializeStructuredOutputConfigForChild, snapshotRunState } from "../runner.ts";
 
 const originalChild = process.env.PI_WORKFLOW_CHILD;
 const originalParent = process.env.PI_WORKFLOW_PARENT_PID;
@@ -14,6 +17,38 @@ afterEach(() => {
 });
 
 describe("parent context and render bounds", () => {
+	test("parses quoted workspace paths and explicit live mode", () => {
+		expect(parseWorkflowArgs('pipeline --cwd="C:\\Local Sites\\shop" fix checkout')).toEqual({
+			id: "pipeline", task: "fix checkout", workingDirectory: "C:\\Local Sites\\shop", live: false, hasExplicitWorkspace: true,
+		});
+		expect(parseWorkflowArgs("pipeline --live verify production")).toEqual({
+			id: "pipeline", task: "verify production", workingDirectory: undefined, live: true, hasExplicitWorkspace: true,
+		});
+		expect(() => parseWorkflowArgs("pipeline --live --cwd . task")).toThrow(/either --live or --cwd/);
+		expect(() => parseWorkflowArgs("pipeline --unknown task")).toThrow(/Unknown workflow option/);
+	});
+
+	test("normalizes existing relative and home workspace paths", () => {
+		expect(normalizeWorkflowDirectory(".", process.cwd())).toBe(process.cwd());
+		expect(normalizeWorkflowDirectory("~", process.cwd(), process.cwd())).toBe(process.cwd());
+		expect(() => normalizeWorkflowDirectory("missing-workflow-directory", process.cwd())).toThrow(/does not exist/);
+	});
+
+	test("renders a live heartbeat and workspace while a phase is silent", () => {
+		const state: any = {
+			runId: "r", workflowId: "pipeline", description: "", input: "x", status: "running", startedAt: 1,
+			composer: "", scrollOffset: 0, focused: false, activePhaseId: "plan", selectedPhaseId: "plan",
+			workspace: { mode: "live", label: "Live / remote (no local workspace)", projectTrusted: false },
+			heartbeat: { phaseId: "plan", startedAt: 1_000, updatedAt: 6_000, tick: 2 },
+			phases: [{ id: "plan", status: "running", logs: [] }],
+		};
+		expect(formatHeartbeat(state)).toMatch(/running 5s/);
+		const theme = { fg: (_role: string, text: string) => text, bg: (_role: string, text: string) => text, bold: (text: string) => text };
+		const rendered = renderWorkflowPanel(state, 80, theme).join("\n");
+		expect(rendered).toContain("running 5s");
+		expect(rendered).toContain("Workspace: Live / remote");
+	});
+
 	test("caps parent-facing content with an explicit marker", () => {
 		const capped = capParentText(`${"line\n".repeat(3000)}${"x".repeat(80_000)}`);
 		expect(Buffer.byteLength(capped, "utf8")).toBeLessThanOrEqual(50 * 1024);
@@ -80,6 +115,59 @@ describe("headless and child-mode contracts", () => {
 		process.env.PI_WORKFLOW_PARENT_PID = String(process.ppid);
 		process.env.PI_WORKFLOW_PHASE_OUTPUT_CONFIG = JSON.stringify({ type: "structured", dataFields: { count: { type: "integer" } } });
 		expect(() => workflowExtension({ registerTool() {} } as any)).toThrow(/unknown field/);
+	});
+
+	test("interactive workflow command offers current, alternate, and live workspaces", async () => {
+		let command: any;
+		let workspaceChoices: string[] = [];
+		const pi: any = {
+			registerEntryRenderer() {}, registerMessageRenderer() {},
+			registerCommand(_name: string, definition: any) { command = definition; },
+			on() {}, appendEntry() {}, sendMessage() {}, getThinkingLevel() { return "off"; }, getActiveTools() { return []; },
+		};
+		workflowExtension(pi);
+		await command.handler("pipeline", {
+			cwd: process.cwd(), mode: "tui", hasUI: true, isProjectTrusted: () => false,
+			ui: {
+				select(_title: string, choices: string[]) {
+					workspaceChoices = choices;
+					return choices.find((choice) => choice.startsWith("Live / remote"));
+				},
+				editor() { return undefined; },
+				input() { throw new Error("live selection must not request a folder"); },
+			},
+			sessionManager: { getSessionFile: () => undefined, getBranch: () => [] },
+		});
+		expect(workspaceChoices.some((choice) => choice.startsWith("Current folder"))).toBe(true);
+		expect(workspaceChoices.some((choice) => choice.startsWith("Another existing folder"))).toBe(true);
+		expect(workspaceChoices.some((choice) => choice.startsWith("Live / remote"))).toBe(true);
+	});
+
+	test("live mode keeps definitions from the currently trusted project", async () => {
+		const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-live-definition-"));
+		fs.mkdirSync(path.join(projectDir, ".pi", "workflows"), { recursive: true });
+		fs.writeFileSync(path.join(projectDir, ".pi", "workflows", "custom.yaml"), "phases:\n  - id: run\n    prompt: Do {{input}}\n");
+		try {
+			let command: any;
+			let editorOpened = false;
+			const pi: any = {
+				registerEntryRenderer() {}, registerMessageRenderer() {},
+				registerCommand(_name: string, definition: any) { command = definition; },
+				on() {}, appendEntry() {}, sendMessage() {}, getThinkingLevel() { return "off"; }, getActiveTools() { return []; },
+			};
+			workflowExtension(pi);
+			await command.handler("custom", {
+				cwd: projectDir, mode: "tui", hasUI: true, isProjectTrusted: () => true,
+				ui: {
+					select(_title: string, choices: string[]) { return choices.find((choice) => choice.startsWith("Live / remote")); },
+					editor() { editorOpened = true; return undefined; },
+				},
+				sessionManager: { getSessionFile: () => undefined, getBranch: () => [] },
+			});
+			expect(editorOpened).toBe(true);
+		} finally {
+			fs.rmSync(projectDir, { recursive: true, force: true });
+		}
 	});
 
 	test("headless missing-task command never opens an editor", async () => {

@@ -309,6 +309,7 @@ function chatRows(tui) {
 function createWorkbenchTui() {
   let listener;
   const writes = [];
+  const chatLines = Array.from({ length: 20 }, (_, index) => `chat-${index + 1}`);
   const tui = {
     terminal: {
       columns: 80,
@@ -316,7 +317,7 @@ function createWorkbenchTui() {
       write: (sequence) => writes.push(sequence),
     },
     children: [
-      component(Array.from({ length: 20 }, (_, index) => `chat-${index + 1}`)),
+      component(chatLines),
       component(["dock-1"]),
       component(["dock-2"]),
       component(["dock-3"]),
@@ -333,17 +334,31 @@ function createWorkbenchTui() {
     },
     renderRequests: 0,
   };
-  return { tui, writes, input: (data) => listener?.(data) };
+  return {
+    tui,
+    writes,
+    input: (data) => listener?.(data),
+    appendChat: (...lines) => chatLines.push(...lines),
+  };
 }
 
-test("workbench shell leaves mouse input to terminal-native selection", () => {
-  const { tui, writes, input } = createWorkbenchTui();
+test("workbench shell routes mouse wheel to chat and preserves position while streaming", () => {
+  const { tui, writes, input, appendChat } = createWorkbenchTui();
   const handle = installWorkbenchShell(tui, component([]));
 
   try {
-    assert.doesNotMatch(writes.join(""), /\x1b\[\?100[0236]h/);
-    assert.equal(input("\x1b[<64;10;4M"), undefined);
+    assert.match(writes.join(""), /\x1b\[\?1006h/);
+    assert.match(writes.join(""), /\x1b\[\?1000h/);
     assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+
+    assert.deepEqual(input("\x1b[<64;10;4M"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-14", "chat-15", "chat-16", "chat-17"]);
+
+    appendChat("chat-21", "chat-22");
+    assert.deepEqual(chatRows(tui), ["chat-14", "chat-15", "chat-16", "chat-17"]);
+
+    assert.deepEqual(input("\x1b[<65;10;4M\x1b[<65;10;4M"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-19", "chat-20", "chat-21", "chat-22"]);
   } finally {
     handle.dispose();
   }

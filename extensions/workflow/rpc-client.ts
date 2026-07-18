@@ -46,13 +46,19 @@ export function terminateWindowsProcessTree(pid: number, timeoutMs: number): Pro
 		execFile(
 			"taskkill.exe",
 			["/PID", String(pid), "/T", "/F"],
-			{ windowsHide: true, timeout: Math.max(1, timeoutMs) },
+			{ windowsHide: true, timeout: Math.max(2_000, timeoutMs) },
 			(error, _stdout, stderr) => {
 				if (!error) {
 					resolve();
 					return;
 				}
-				reject(new Error(`taskkill failed for RPC process tree ${pid}: ${String(stderr || error.message).trim()}`));
+				const detail = String(stderr || error.message).trim();
+				const exitCode = Number((error as { code?: unknown }).code);
+				if (exitCode === 128 && /not found|no running instance/i.test(detail)) {
+					resolve();
+					return;
+				}
+				reject(new Error(`taskkill failed for RPC process tree ${pid}: ${detail}`));
 			},
 		);
 	});
@@ -352,7 +358,6 @@ export class RpcPhaseClient implements RpcPhaseTransport {
 				try {
 					await this.killWindowsProcessTree(this.proc.pid!, this.bounds.termGraceMs + this.bounds.killGraceMs);
 				} catch (error) {
-					if (!this.isLeaderAlive()) return;
 					const failure = error instanceof Error ? error : new Error(String(error));
 					this.fail(failure);
 					throw failure;

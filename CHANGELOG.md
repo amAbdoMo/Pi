@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.1
+
+- Added interactive and command-line workflow workspace selection with explicit local-folder and live/remote modes; non-Git workspaces no longer fail from unconditional Git commands.
+- Added a one-second workflow heartbeat with animated running state and elapsed time so silent phases remain visibly active.
+- Restored mouse-wheel chat scrolling in Windows Terminal and Warp, preserved the viewed rows while streaming appends output, and retained terminal text selection through `Shift+drag`.
+- Hardened Windows RPC shutdown against short `taskkill` timeouts while tolerating only the verified already-exited PID case and still reporting other tree-termination failures.
+
 ## 0.12.0
 
 - Ported the upstream workflow v2 runtime with strict in-process YAML validation, isolated RPC phase sessions, bounded routing and output, recovery-safe state, and dedicated regression coverage.

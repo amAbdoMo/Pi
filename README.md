@@ -121,8 +121,8 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | --- | --- |
 | `Tab` | Complete active or slash-command autocomplete; otherwise switch between plan and build modes |
 | `Shift+Tab` | Change thinking level |
-| `PageUp` / `PageDown` | Scroll the chat viewport |
-| Drag | Select terminal text normally for copy |
+| Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport during and after agent activity; scrolling up holds position while output continues |
+| `Shift+drag` | Bypass application mouse reporting and select terminal text for copy |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
 | `/verification` | Inspect, enable, disable, or reset automatic feature verification |
@@ -141,17 +141,20 @@ Select `hypr-waves` from Pi settings if it is not already active.
 
 Pi Workbench ships a portable `pipeline` workflow with four phases: Plan, Execute, Verify end-to-end, and Review. Verification failures and actionable review findings route back to Execute, with a bounded transition limit.
 
-Run it interactively and enter the task when prompted:
+Run it interactively. Pi asks whether to use the current folder, another existing folder, or no local folder for a live/remote task, then prompts for the task:
 
 ```text
 /workflow pipeline
 ```
 
-Or provide the task inline:
+You can also provide the workspace and task inline:
 
 ```text
-/workflow pipeline Implement and verify the requested change
+/workflow pipeline --cwd "C:\path\to\project" Implement and verify the requested change
+/workflow pipeline --live Inspect and fix the live-site behavior
 ```
+
+Local folders do not have to be Git repositories. The pipeline confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools instead of assuming a local project. While a phase is active, the panel and status line show an animated `running` heartbeat with elapsed time, including periods when the model has not emitted text.
 
 The built-in definition is always available. Lowercase YAML files in `~/.pi/workflows` override or extend built-ins globally; files in a trusted project's `.pi/workflows` directory take final precedence. Invalid overrides are reported rather than silently falling back to a different definition.
 

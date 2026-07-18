@@ -28,11 +28,13 @@ import {
 	type WorkflowPhaseResult,
 	type WorkflowRunState,
 	type WorkflowStructuredOutputConfig,
+	type WorkflowWorkspace,
 } from "./schema.ts";
 
 const MAX_LOG_ENTRIES = 400;
 const MAX_LOG_TEXT = 6000;
 const UI_UPDATE_INTERVAL_MS = 50;
+export const HEARTBEAT_INTERVAL_MS = 1000;
 
 export interface PersistedRunSnapshot {
 	version: typeof SNAPSHOT_VERSION;
@@ -53,6 +55,9 @@ export interface RunWorkflowOptions {
 	workflow: WorkflowDefinition;
 	input: string;
 	ctx: ExtensionContext;
+	workingDirectory?: string;
+	live?: boolean;
+	projectTrusted?: boolean;
 	signal?: AbortSignal;
 	onUpdate?: (result: AgentToolResult<any>) => void;
 	displayPanel?: boolean;
@@ -75,6 +80,49 @@ class WorkflowAbortError extends Error {
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
+}
+
+export function normalizeWorkflowDirectory(input: string, baseCwd: string, home = os.homedir()): string {
+	const value = input.trim();
+	if (!value) throw new WorkflowRunError("Working directory must not be empty");
+	const expanded = value === "~" ? home : value.startsWith("~/") || value.startsWith("~\\") ? path.join(home, value.slice(2)) : value;
+	const resolved = path.normalize(path.resolve(baseCwd, expanded));
+	let stat: fs.Stats;
+	try {
+		stat = fs.statSync(resolved);
+	} catch (error) {
+		throw new WorkflowRunError(`Working directory does not exist or cannot be accessed: ${resolved} (${errorMessage(error)})`);
+	}
+	if (!stat.isDirectory()) throw new WorkflowRunError(`Working directory is not a directory: ${resolved}`);
+	return resolved;
+}
+
+export function sameWorkflowDirectory(left: string, right: string): boolean {
+	const normalize = (value: string) => {
+		const resolved = path.normalize(path.resolve(value));
+		return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+	};
+	return normalize(left) === normalize(right);
+}
+
+export function resolveWorkflowWorkspace(options: {
+	baseCwd: string;
+	workingDirectory?: string;
+	live?: boolean;
+	projectTrusted?: boolean;
+}): WorkflowWorkspace {
+	if (options.live && options.workingDirectory !== undefined) throw new WorkflowRunError("Choose either live mode or a working directory, not both");
+	if (options.live) return { mode: "live", label: "Live / remote (no local workspace)", projectTrusted: false };
+	const cwd = normalizeWorkflowDirectory(options.workingDirectory ?? options.baseCwd, options.baseCwd);
+	const trusted = options.projectTrusted ?? false;
+	return { mode: "local", cwd, label: `Local: ${cwd}`, projectTrusted: trusted };
+}
+
+export function formatHeartbeat(state: WorkflowRunState): string | undefined {
+	if (state.status !== "running" || !state.heartbeat) return undefined;
+	const frames = ["◐", "◓", "◑", "◒"];
+	const elapsedSeconds = Math.max(0, Math.floor((state.heartbeat.updatedAt - state.heartbeat.startedAt) / 1000));
+	return `${frames[state.heartbeat.tick % frames.length]} running ${elapsedSeconds}s`;
 }
 
 export function addLog(phase: PhaseRunState, kind: LogEntry["kind"], text: string): void {
@@ -109,6 +157,7 @@ export function snapshotRunState(state: WorkflowRunState, includeLogs = true): O
 		input: includeLogs ? capParentText(state.input) : truncateUtf8(state.input, 4000),
 		status: state.status,
 		phases,
+		workspace: state.workspace ? { ...state.workspace, label: includeLogs ? state.workspace.label : truncateUtf8(state.workspace.label, 2000), cwd: state.workspace.cwd ? truncateUtf8(state.workspace.cwd, 2000) : undefined } : undefined,
 		activePhaseId: state.activePhaseId ? (includeLogs ? state.activePhaseId : truncateUtf8(state.activePhaseId, 256)) : undefined,
 		selectedPhaseId: state.selectedPhaseId ? (includeLogs ? state.selectedPhaseId : truncateUtf8(state.selectedPhaseId, 256)) : undefined,
 		report: state.report ? (includeLogs ? capParentText(state.report) : truncateUtf8(capParentText(state.report), 40_000)) : undefined,
@@ -233,8 +282,29 @@ export function formatStructuredOutputContract(output: WorkflowStructuredOutputC
 	return lines.join("\n");
 }
 
-export function buildPhaseSystemPrompt(workflow: WorkflowDefinition, phase: WorkflowPhase): string {
+export function buildPhaseSystemPrompt(workflow: WorkflowDefinition, phase: WorkflowPhase, workspace: WorkflowWorkspace): string {
 	const chunks: string[] = [];
+	if (workspace.mode === "live") {
+		chunks.push(`# Workflow execution context: LIVE / REMOTE
+
+There is no local project workspace for this run.
+
+Mandatory rules:
+- Git commands are forbidden entirely in live/remote mode. Do not run git status, git diff, git log, git rev-parse, or any other Git command.
+- Do not assume a repository, worktree, local source tree, or local diff exists.
+- Use live/remote-safe tools such as web_fetch, web_search, and configured MCP tools to inspect and act on the target.
+- Do not perform destructive production operations unless the user explicitly authorized that exact operation.`);
+	} else {
+		chunks.push(`# Workflow execution context: LOCAL WORKSPACE
+
+Selected working directory: ${JSON.stringify(workspace.cwd)}
+
+Mandatory rules:
+- Treat the selected working directory above as the only project workspace for this phase.
+- Git commands are forbidden until you explicitly confirm that a .git filesystem entry exists for this selected workspace. Do not infer Git availability from the task, parent session, or workflow definition.
+- If no .git entry is confirmed, do not run any Git command; use direct file inspection and non-Git verification instead.
+- Never use a repository root, diff, branch, or commit as a required prerequisite when the selected workspace is not a Git worktree.`);
+	}
 	if (phase.system?.trim()) chunks.push(`# Workflow phase-specific instructions\n\n${phase.system.trim()}`);
 	if (phase.output?.type === "text" && phase.output.description?.trim()) chunks.push(`# Workflow output contract\n\nAt the end of this phase, produce non-empty text output matching this YAML-configured contract:\n${phase.output.description.trim()}`);
 	if (isStructuredOutputConfig(phase.output)) chunks.push(`# Structured workflow output contract\n\n${formatStructuredOutputContract(phase.output, phase)}\n\nNext-rule summary after this phase completes:\n${formatNextRules(phase)}`);
@@ -378,9 +448,13 @@ export class WorkflowRunner {
 	private async executeWorkflow(options: RunWorkflowOptions): Promise<WorkflowRunState> {
 		const { workflow, input, ctx, signal, onUpdate } = options;
 		validateWorkflowTemplates(workflow);
+		if (options.live && options.workingDirectory !== undefined) throw new WorkflowRunError("Choose either live mode or a working directory, not both");
+		const requestedCwd = options.live ? undefined : normalizeWorkflowDirectory(options.workingDirectory ?? ctx.cwd, ctx.cwd);
+		const projectTrusted = options.projectTrusted ?? (!!requestedCwd && sameWorkflowDirectory(requestedCwd, ctx.cwd) && ctx.isProjectTrusted());
+		const workspace = resolveWorkflowWorkspace({ baseCwd: ctx.cwd, workingDirectory: requestedCwd, live: options.live, projectTrusted });
 		const state: WorkflowRunState = {
 			runId: randomUUID(), workflowId: workflow.id, description: workflow.description, input,
-			status: "pending", phases: workflow.phases.map((phase) => ({ id: phase.id, status: "pending", logs: [] })),
+			status: "pending", phases: workflow.phases.map((phase) => ({ id: phase.id, status: "pending", logs: [] })), workspace,
 			selectedPhaseId: workflow.phases[0]?.id, startedAt: Date.now(), composer: "", scrollOffset: 0, focused: false,
 		};
 		const controller = new AbortController();
@@ -457,7 +531,7 @@ export class WorkflowRunner {
 					this.persist(state);
 					throw error;
 				}
-				const result = await this.runPhase({ workflow, phase, phaseState, state, prompt, ctx, parentTools, parentModel, parentThinking, signal: controller.signal });
+				const result = await this.runPhase({ workflow, phase, phaseState, state, prompt, ctx, parentTools, parentModel, parentThinking, signal: controller.signal, emitUpdate });
 				await new Promise<void>((resolve) => setImmediate(resolve));
 				assertNotAborted(controller.signal);
 				outputs.set(phase.id, result);
@@ -478,6 +552,7 @@ export class WorkflowRunner {
 			signal?.removeEventListener("abort", externalAbort);
 			state.steer = undefined;
 			state.abort = undefined;
+			state.heartbeat = undefined;
 			state.endedAt = Date.now();
 			state.activePhaseId = undefined;
 			state.report = buildReport(state);
@@ -503,7 +578,7 @@ export class WorkflowRunner {
 
 	private async runPhase(options: {
 		workflow: WorkflowDefinition; phase: WorkflowPhase; phaseState: PhaseRunState; state: WorkflowRunState; prompt: string;
-		ctx: ExtensionContext; parentTools: string[]; parentModel?: string; parentThinking: ThinkingLevel; signal: AbortSignal;
+		ctx: ExtensionContext; parentTools: string[]; parentModel?: string; parentThinking: ThinkingLevel; signal: AbortSignal; emitUpdate: () => void;
 	}): Promise<PhaseOutputRecord> {
 		const { workflow, phase, phaseState, state, prompt, ctx, signal } = options;
 		assertNotAborted(signal);
@@ -513,6 +588,18 @@ export class WorkflowRunner {
 		state.selectedPhaseId = phase.id;
 		state.scrollOffset = 0;
 		addLog(phaseState, "info", `Starting phase ${phase.id}`);
+		const heartbeatStartedAt = Date.now();
+		state.heartbeat = { phaseId: phase.id, startedAt: heartbeatStartedAt, updatedAt: heartbeatStartedAt, tick: 0 };
+		const heartbeatTimer = setInterval(() => {
+			if (phaseState.status !== "running" || state.activePhaseId !== phase.id) return;
+			const heartbeat = state.heartbeat;
+			if (!heartbeat || heartbeat.phaseId !== phase.id) return;
+			heartbeat.updatedAt = Date.now();
+			heartbeat.tick++;
+			this.changed(ctx, state);
+			options.emitUpdate();
+		}, HEARTBEAT_INTERVAL_MS);
+		heartbeatTimer.unref?.();
 
 		let tmpDir: string | undefined;
 		let client: RpcPhaseTransport | undefined;
@@ -542,7 +629,9 @@ export class WorkflowRunner {
 			this.persist(state);
 			tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-workflow-"));
 			const systemPath = path.join(tmpDir, `system-${workflow.id}-${phase.id}.md`);
-			this.writeSystemPrompt(systemPath, buildPhaseSystemPrompt(workflow, phase));
+			this.writeSystemPrompt(systemPath, buildPhaseSystemPrompt(workflow, phase, state.workspace!));
+			const liveCwd = path.join(tmpDir, "live");
+			if (state.workspace?.mode === "live") fs.mkdirSync(liveCwd);
 			assertNotAborted(signal);
 			let tools = (phase.tools ?? options.parentTools).filter((tool) => tool !== WORKFLOW_TOOL_NAME);
 			if (isStructuredOutputConfig(phase.output)) tools = Array.from(new Set([...tools, WORKFLOW_PHASE_RESULT_TOOL_NAME]));
@@ -554,13 +643,15 @@ export class WorkflowRunner {
 			const thinking = phase.thinking ?? options.parentThinking;
 			if (thinking) args.push("--thinking", thinking);
 			if (tools.length) args.push("--tools", tools.join(",")); else args.push("--no-tools");
-			args.push(ctx.isProjectTrusted() ? "--approve" : "--no-approve");
-			const normalAppend = resolveEffectiveAppendSystemPrompt(ctx.cwd, ctx.isProjectTrusted());
+			args.push(state.workspace?.projectTrusted ? "--approve" : "--no-approve");
+			const appendCwd = state.workspace?.mode === "local" ? state.workspace.cwd! : ctx.cwd;
+			const normalAppend = resolveEffectiveAppendSystemPrompt(appendCwd, state.workspace?.projectTrusted ?? false);
 			if (normalAppend) args.push("--append-system-prompt", normalAppend);
 			args.push("--append-system-prompt", systemPath);
 			const invocation = this.invocation(args);
 			assertNotAborted(signal);
-			const createdClient = this.createClient(invocation.command, invocation.args, ctx.cwd, {
+			const childCwd = state.workspace?.mode === "local" ? state.workspace.cwd! : liveCwd;
+			const createdClient = this.createClient(invocation.command, invocation.args, childCwd, {
 				...process.env,
 				PI_WORKFLOW_CHILD: "1",
 				PI_WORKFLOW_PARENT_PID: String(process.pid),
@@ -687,6 +778,8 @@ export class WorkflowRunner {
 			throw error;
 		} finally {
 			steeringOpen = false;
+			clearInterval(heartbeatTimer);
+			if (state.heartbeat?.phaseId === phase.id) state.heartbeat = undefined;
 			if (renderTimer) clearTimeout(renderTimer);
 			state.steer = undefined;
 			const phaseWasSuccessful = phaseState.status === "succeeded";

@@ -113,6 +113,20 @@ export interface PhaseRunState {
 	sessionFile?: string;
 }
 
+export interface WorkflowWorkspace {
+	mode: "local" | "live";
+	cwd?: string;
+	label: string;
+	projectTrusted: boolean;
+}
+
+export interface WorkflowHeartbeat {
+	phaseId: string;
+	startedAt: number;
+	updatedAt: number;
+	tick: number;
+}
+
 export interface WorkflowRunState {
 	runId: string;
 	workflowId: string;
@@ -120,6 +134,8 @@ export interface WorkflowRunState {
 	input: string;
 	status: WorkflowStatus;
 	phases: PhaseRunState[];
+	workspace?: WorkflowWorkspace;
+	heartbeat?: WorkflowHeartbeat;
 	activePhaseId?: string;
 	selectedPhaseId?: string;
 	report?: string;
@@ -745,7 +761,9 @@ export function capParentText(text: string): string {
 }
 
 export function buildReport(state: WorkflowRunState): string {
-	const lines = [`Workflow: ${state.workflowId}`, `Status: ${state.status}`, ""];
+	const lines = [`Workflow: ${state.workflowId}`, `Status: ${state.status}`];
+	if (state.workspace) lines.push(`Workspace: ${state.workspace.label}`);
+	lines.push("");
 	if (state.error) lines.push(`Error: ${state.error}`, "");
 	for (const phase of state.phases.filter((item) => item.id !== "report" && item.status !== "pending")) {
 		lines.push(`## ${phase.id}`, "");

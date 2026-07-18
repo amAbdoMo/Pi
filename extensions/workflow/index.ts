@@ -31,7 +31,11 @@ import {
 	WorkflowRunError,
 	WorkflowRunner,
 	addLog,
+	formatHeartbeat,
 	formatStructuredOutputContract,
+	normalizeWorkflowDirectory,
+	resolveWorkflowWorkspace,
+	sameWorkflowDirectory,
 	snapshotRunState,
 	workflowFailureMessage,
 } from "./runner.ts";
@@ -154,7 +158,9 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 	}
 	const active = state.activePhaseId ? `:${state.activePhaseId}` : "";
 	const focus = runner.focusedRunId === state.runId ? " focused" : "";
-	ctx.ui.setStatus("workflow", `workflow ${state.workflowId}${active} ${state.status}${focus}`);
+	const workspace = state.workspace?.mode === "live" ? " · live" : state.workspace?.cwd ? ` · ${sanitizeTerminalText(state.workspace.cwd)}` : "";
+	const heartbeat = formatHeartbeat(state);
+	ctx.ui.setStatus("workflow", `workflow ${state.workflowId}${active} ${heartbeat ?? state.status}${workspace}${focus}`);
 }
 
 function getSelectedPhase(state: WorkflowRunState): PhaseRunState | undefined {
@@ -299,10 +305,12 @@ function getWorkflowStateFromToolDetails(details: unknown, runner: WorkflowRunne
 
 export function renderWorkflowPanel(state: WorkflowRunState, width: number, theme: any, focusedRunId?: string): string[] {
 	const minWidth = 52;
+	const heartbeat = formatHeartbeat(state);
 	if (width < minWidth) {
 		const lines = [
-			`${statusIcon(state.status, theme)} ${state.status}`,
+			`${statusIcon(state.status, theme)} ${heartbeat ?? state.status}`,
 			theme.fg("accent", `Workflow ${state.workflowId}`),
+			...(state.workspace ? [theme.fg("dim", sanitizeTerminalText(state.workspace.label))] : []),
 		];
 		if (focusedRunId === state.runId && state.status === "running") lines.push(`> ${state.composer}${theme.fg("accent", "▌")}`);
 		return lines.map((line) => paintPanelLine(line, width, theme));
@@ -320,7 +328,8 @@ export function renderWorkflowPanel(state: WorkflowRunState, width: number, them
 	})];
 	const right = [
 		theme.bold(selected?.id === "report" ? "Report" : selected ? `Phase: ${selected.id}` : "Workflow"),
-		theme.fg("dim", `Workflow ${state.workflowId} · ${state.status}`),
+		theme.fg("dim", `Workflow ${state.workflowId} · ${heartbeat ?? state.status}`),
+		...(state.workspace ? [theme.fg("dim", `Workspace: ${sanitizeTerminalText(state.workspace.label)}`)] : []),
 		...(selected?.sessionFile ? [theme.fg("dim", `Session: ${sanitizeTerminalText(selected.sessionFile)}`)] : []),
 		"",
 	];
@@ -355,9 +364,134 @@ export function renderWorkflowPanel(state: WorkflowRunState, width: number, them
 	return lines.map((line) => paintPanelLine(line, width, theme));
 }
 
-function parseWorkflowArgs(args: string): { id?: string; task?: string } {
-	const match = /^(\S+)(?:\s+([\s\S]*))?$/.exec(args.trim());
-	return { id: match?.[1], task: match?.[2]?.trim() };
+export interface ParsedWorkflowArgs {
+	id?: string;
+	task?: string;
+	workingDirectory?: string;
+	live: boolean;
+	hasExplicitWorkspace: boolean;
+}
+
+interface CommandToken {
+	value: string;
+	start: number;
+	end: number;
+}
+
+function readCommandToken(text: string, from: number): CommandToken | undefined {
+	let cursor = from;
+	while (cursor < text.length && /\s/.test(text[cursor])) cursor++;
+	if (cursor >= text.length) return undefined;
+	const start = cursor;
+	let value = "";
+	let quote: "\"" | "'" | undefined;
+	while (cursor < text.length) {
+		const char = text[cursor];
+		if (quote) {
+			if (char === quote) {
+				quote = undefined;
+				cursor++;
+				continue;
+			}
+			if (char === "\\" && text[cursor + 1] && (text[cursor + 1] === quote || text[cursor + 1] === "\\")) {
+				value += text[cursor + 1];
+				cursor += 2;
+				continue;
+			}
+			value += char;
+			cursor++;
+			continue;
+		}
+		if (char === "\"" || char === "'") {
+			quote = char;
+			cursor++;
+			continue;
+		}
+		if (/\s/.test(char)) break;
+		value += char;
+		cursor++;
+	}
+	if (quote) throw new WorkflowRunError("Unclosed quote in workflow command");
+	return { value, start, end: cursor };
+}
+
+export function parseWorkflowArgs(args: string): ParsedWorkflowArgs {
+	const idToken = readCommandToken(args, 0);
+	if (!idToken) return { live: false, hasExplicitWorkspace: false };
+	let cursor = idToken.end;
+	let workingDirectory: string | undefined;
+	let live = false;
+	let hasExplicitWorkspace = false;
+	let task: string | undefined;
+	while (true) {
+		const token = readCommandToken(args, cursor);
+		if (!token) break;
+		if (token.value === "--live") {
+			live = true;
+			hasExplicitWorkspace = true;
+			cursor = token.end;
+			continue;
+		}
+		if (token.value === "--cwd") {
+			const value = readCommandToken(args, token.end);
+			if (!value || !value.value) throw new WorkflowRunError("--cwd requires an existing directory path");
+			workingDirectory = value.value;
+			hasExplicitWorkspace = true;
+			cursor = value.end;
+			continue;
+		}
+		if (token.value.startsWith("--cwd=")) {
+			workingDirectory = token.value.slice("--cwd=".length);
+			if (!workingDirectory) throw new WorkflowRunError("--cwd requires an existing directory path");
+			hasExplicitWorkspace = true;
+			cursor = token.end;
+			continue;
+		}
+		if (token.value.startsWith("--")) throw new WorkflowRunError(`Unknown workflow option: ${token.value}`);
+		task = args.slice(token.start).trim();
+		break;
+	}
+	if (live && workingDirectory !== undefined) throw new WorkflowRunError("Choose either --live or --cwd, not both");
+	return { id: idToken.value, task, workingDirectory, live, hasExplicitWorkspace };
+}
+
+interface SelectedWorkflowWorkspace {
+	cwd?: string;
+	live: boolean;
+	projectTrusted: boolean;
+}
+
+function trustSelectedWorkspace(ctx: any, cwd: string | undefined, live: boolean): boolean {
+	return !live && !!cwd && sameWorkflowDirectory(cwd, ctx.cwd) && ctx.isProjectTrusted();
+}
+
+function trustWorkspaceDefinition(ctx: any, workspace: SelectedWorkflowWorkspace): boolean {
+	return workspace.live ? ctx.isProjectTrusted() : workspace.projectTrusted;
+}
+
+async function chooseCommandWorkspace(parsed: ParsedWorkflowArgs, ctx: any): Promise<SelectedWorkflowWorkspace | undefined> {
+	if (parsed.hasExplicitWorkspace) {
+		const workspace = resolveWorkflowWorkspace({ baseCwd: ctx.cwd, workingDirectory: parsed.workingDirectory, live: parsed.live });
+		return { cwd: workspace.cwd, live: workspace.mode === "live", projectTrusted: trustSelectedWorkspace(ctx, workspace.cwd, workspace.mode === "live") };
+	}
+	if (ctx.mode !== "tui") {
+		const cwd = normalizeWorkflowDirectory(ctx.cwd, ctx.cwd);
+		return { cwd, live: false, projectTrusted: trustSelectedWorkspace(ctx, cwd, false) };
+	}
+	const currentLabel = `Current folder — ${ctx.cwd}`;
+	const anotherLabel = "Another existing folder…";
+	const liveLabel = "Live / remote — no local project";
+	const choice = await ctx.ui.select("Workspace for this workflow", [currentLabel, anotherLabel, liveLabel]);
+	if (!choice) return undefined;
+	if (choice === liveLabel) return { live: true, projectTrusted: false };
+	let cwd = ctx.cwd;
+	if (choice === anotherLabel) {
+		const entered = await ctx.ui.input("Existing working folder", ctx.cwd);
+		if (!entered?.trim()) return undefined;
+		cwd = entered;
+	}
+	const normalized = normalizeWorkflowDirectory(cwd, ctx.cwd);
+	return { cwd: normalized, live: false, projectTrusted: trustSelectedWorkspace(ctx, normalized, false) };
 }
 
 function findWorkflow(id: string, discovery: WorkflowDiscovery): WorkflowDefinition {
@@ -402,12 +536,26 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			return cachedDiscovery.workflows.filter((workflow) => workflow.id.startsWith(first)).map((workflow) => ({ value: workflow.id, label: workflow.id, description: workflow.description }));
 		},
 		handler: async (args, ctx) => {
-			cachedDiscovery = discoverWorkflows(ctx.cwd, ctx.isProjectTrusted());
-			const parsed = parseWorkflowArgs(args);
+			let parsed: ParsedWorkflowArgs;
+			try { parsed = parseWorkflowArgs(args); }
+			catch (error) {
+				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: error instanceof Error ? error.message : String(error), display: true }, { triggerTurn: false });
+				return;
+			}
 			if (!parsed.id) {
+				cachedDiscovery = discoverWorkflows(ctx.cwd, ctx.isProjectTrusted());
 				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: workflowListMarkdown(cachedDiscovery), display: true }, { triggerTurn: false });
 				return;
 			}
+			let workspace: { cwd?: string; live: boolean; projectTrusted: boolean } | undefined;
+			try { workspace = await chooseCommandWorkspace(parsed, ctx); }
+			catch (error) {
+				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: error instanceof Error ? error.message : String(error), display: true }, { triggerTurn: false });
+				return;
+			}
+			if (!workspace) return;
+			const discoveryCwd = workspace.cwd ?? ctx.cwd;
+			cachedDiscovery = discoverWorkflows(discoveryCwd, trustWorkspaceDefinition(ctx, workspace));
 			let workflow: WorkflowDefinition;
 			try { workflow = findWorkflow(parsed.id, cachedDiscovery); }
 			catch (error) {
@@ -425,7 +573,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			}
 			try {
 				const cleanTask = task.trim();
-				const state = await runner.run({ workflow, input: cleanTask, ctx, displayPanel: true, recordCommandContext: ctx.mode === "tui" });
+				const state = await runner.run({ workflow, input: cleanTask, ctx, workingDirectory: workspace.cwd, live: workspace.live, projectTrusted: workspace.projectTrusted, displayPanel: true, recordCommandContext: ctx.mode === "tui" });
 				if (ctx.mode !== "tui") pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: capParentText(`Workflow task:\n${cleanTask}\n\n${state.report ?? buildReport(state)}`), display: true }, { triggerTurn: false });
 			} catch (error) {
 				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: error instanceof Error ? error.message : String(error), display: true }, { triggerTurn: false });
@@ -451,16 +599,22 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			parameters: Type.Object({
 				workflow: Type.String({ description: "Workflow id (filename without .yaml/.yml)" }),
 				input: Type.String({ description: "Task/input passed to the workflow as {{input}}" }),
+				workingDirectory: Type.Optional(Type.String({ description: "Existing local directory for all workflow phases; supports ~ and paths relative to the current session directory." })),
+				live: Type.Optional(Type.Boolean({ description: "Run against a live/remote target with no local project workspace. Mutually exclusive with workingDirectory." })),
 			}),
 			async execute(_toolCallId, params, signal, onUpdate, toolCtx) {
-				const discovery = discoverWorkflows(toolCtx.cwd, toolCtx.isProjectTrusted());
+				const workspace = resolveWorkflowWorkspace({ baseCwd: toolCtx.cwd, workingDirectory: params.workingDirectory, live: params.live });
+				const projectTrusted = trustSelectedWorkspace(toolCtx, workspace.cwd, workspace.mode === "live");
+				const selectedWorkspace: SelectedWorkflowWorkspace = { cwd: workspace.cwd, live: workspace.mode === "live", projectTrusted };
+				const discovery = discoverWorkflows(workspace.cwd ?? toolCtx.cwd, trustWorkspaceDefinition(toolCtx, selectedWorkspace));
 				const workflow = findWorkflow(params.workflow, discovery);
-				const state = await runner.run({ workflow, input: params.input, ctx: toolCtx, signal, onUpdate, displayPanel: false });
+				const state = await runner.run({ workflow, input: params.input, ctx: toolCtx, workingDirectory: workspace.cwd, live: workspace.mode === "live", projectTrusted, signal, onUpdate, displayPanel: false });
 				if (state.status !== "succeeded") throw new WorkflowRunError(workflowFailureMessage(state), state);
 				return { content: [{ type: "text", text: state.report ?? buildReport(state) }], details: snapshotRunState(state, false) };
 			},
 			renderCall(args, theme) {
-				return new Text(theme.fg("toolTitle", theme.bold("workflow_run ")) + theme.fg("accent", String(args.workflow ?? "")), 0, 0);
+				const workspace = args.live ? " live" : args.workingDirectory ? ` @ ${String(args.workingDirectory)}` : "";
+				return new Text(theme.fg("toolTitle", theme.bold("workflow_run ")) + theme.fg("accent", `${String(args.workflow ?? "")}${workspace}`), 0, 0);
 			},
 			renderResult(result, options, theme) {
 				const state = getWorkflowStateFromToolDetails(result.details, runner);

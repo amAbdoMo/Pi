@@ -10,14 +10,20 @@ import { isWorkbenchModalActive } from "./modalState.ts";
 import {
   clampScrollOffset,
   fixedViewport,
+  preserveScrollAnchor,
   splitWorkbenchChildren,
   viewportMetrics,
   workbenchDimensions,
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
 } from "./workbenchShellLayout.ts";
+import {
+  parseTerminalMouseInput,
+  type ParsedTerminalMouseInput,
+} from "./terminalCompatibility.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
+const MOUSE_WHEEL_SCROLL_ROWS = 3;
 
 export interface WorkbenchShellHandle {
   setSidebar(component: Component): void;
@@ -27,14 +33,6 @@ export interface WorkbenchShellHandle {
 
 type ShellTui = TUI & Record<symbol, WorkbenchShellHandle | undefined>;
 type RenderFunction = (width: number) => string[];
-
-interface MainViewportRequest {
-  tui: TUI;
-  fallbackRender: RenderFunction;
-  width: number;
-  height: number;
-  scrollOffset: number;
-}
 
 interface MainViewportParts {
   scrollLines: string[];
@@ -72,6 +70,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private sidebar: Component;
   private sidebarVisible = true;
   private scrollOffset = 0;
+  private previousScrollLineCount: number | undefined;
   private alternateScreenActive = false;
 
   constructor(
@@ -128,13 +127,30 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.tui.terminal.rows,
       this.sidebarVisible,
     );
-    const mainLines = renderMainViewport({
-      tui: this.tui,
-      fallbackRender: this.originalRender,
-      width: dimensions.mainWidth,
-      height: dimensions.height,
-      scrollOffset: this.scrollOffset,
-    });
+    const { scrollLines, dockLines } = mainViewportParts(
+      this.tui,
+      this.originalRender,
+      dimensions.mainWidth,
+    );
+    const metrics = viewportMetrics(
+      scrollLines,
+      dockLines,
+      dimensions.height,
+      this.scrollOffset,
+    );
+    this.scrollOffset = preserveScrollAnchor(
+      this.scrollOffset,
+      this.previousScrollLineCount,
+      scrollLines.length,
+      metrics.maxOffset,
+    );
+    this.previousScrollLineCount = scrollLines.length;
+    const mainLines = fixedViewport(
+      scrollLines,
+      dockLines,
+      dimensions.height,
+      this.scrollOffset,
+    ).map((line) => fitLine(line, dimensions.mainWidth));
     if (!dimensions.showSidebar) return mainLines;
     return combineColumns({
       mainLines,
@@ -145,14 +161,28 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     });
   }
 
-  private handleScrollInput(input: string): { consume: true } | undefined {
-    if (isWorkbenchModalActive()) return undefined;
+  private handleScrollInput(input: string): { consume?: true; data?: string } | undefined {
+    const mouseInput = parseTerminalMouseInput(input);
+    if (isWorkbenchModalActive()) return mouseListenerResult(mouseInput);
+
+    const mouseResult = this.applyMouseScroll(mouseInput);
+    if (mouseResult) return mouseResult;
 
     const pageResult = this.applyPageScroll(input);
     if (pageResult) return pageResult;
 
     if (this.scrollOffset > 0) this.scrollOffset = 0;
     return undefined;
+  }
+
+  private applyMouseScroll(mouseInput: ParsedTerminalMouseInput): { consume?: true; data?: string } | undefined {
+    if (mouseInput.wheelNotches !== 0) {
+      this.scrollOffset = this.clampScrollOffset(
+        this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
+      );
+      this.tui.requestRender();
+    }
+    return mouseListenerResult(mouseInput);
   }
 
   private applyPageScroll(input: string): { consume: true } | undefined {
@@ -196,11 +226,11 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 }
 
-function renderMainViewport(request: MainViewportRequest): string[] {
-  const { tui, fallbackRender, width, height, scrollOffset } = request;
-  const { scrollLines, dockLines } = mainViewportParts(tui, fallbackRender, width);
-  return fixedViewport(scrollLines, dockLines, height, scrollOffset)
-    .map((line) => fitLine(line, width));
+function mouseListenerResult(
+  mouseInput: ParsedTerminalMouseInput,
+): { consume?: true; data?: string } | undefined {
+  if (mouseInput.mouseSequences === 0) return undefined;
+  return mouseInput.data.length === 0 ? { consume: true } : { data: mouseInput.data };
 }
 
 function mainViewportParts(tui: TUI, fallbackRender: RenderFunction, width: number): MainViewportParts {

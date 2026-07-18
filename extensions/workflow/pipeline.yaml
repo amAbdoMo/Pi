@@ -12,6 +12,8 @@ phases:
       - ls
       - bash
       - web_search
+      - web_fetch
+      - mcp
       - delegate
     system: |
       You are the planning phase of a multi-phase engineering workflow.
@@ -24,9 +26,9 @@ phases:
       Create a concrete implementation plan for this task.
 
       Process:
-      1. Identify the repository shape and relevant files. Use read-only shell commands only (for example: git status, git diff, rg, find, ls, test/list commands with dry-run/help when useful).
-      2. Delegate independent exploration streams where useful. Each delegate must be told explicitly: read-only, no edits, return exact file paths, relevant code patterns, risks, and acceptance criteria.
-      3. Use web_search only for current external/library documentation when the codebase does not answer a question and to check up on up-to-date documentation.
+      1. Follow the workflow execution context exactly. For a local workspace, identify relevant files with read-only inspection; confirm a .git entry before any Git command and do not require Git when absent. For live/remote mode, do not inspect a local project or run Git; identify the target through web_fetch, web_search, or configured MCP tools.
+      2. Delegate independent exploration streams where useful. Each delegate must inherit the same local-vs-live and Git restrictions and be told explicitly: read-only, no edits, return exact evidence, risks, and acceptance criteria.
+      3. Use current external/library documentation only when the implementation or live target does not answer a question.
       4. Reply with the final report. Nothing else. No questions, no "Here's the final report:". Only the report content.
 
   - id: execute
@@ -42,10 +44,22 @@ phases:
         ## Commands Run
         ## Deviations From Plan
         ## Known Risks / Follow-ups for Verify/Review
+    tools:
+      - read
+      - edit
+      - write
+      - find
+      - ls
+      - bash
+      - web_search
+      - web_fetch
+      - mcp
+      - delegate
     system: |
       You are the execution/orchestration phase.
       Decompose the plan and delegate independent implementation streams as much as possible.
       Prefer not to edit or explore directly unless a tiny coordination fix is safer than another delegate call.
+      In a local workspace, work directly in the selected directory and obey the Git gate from the execution context. In live/remote mode, use only appropriate remote/web/MCP operations and never Git or a local project worktree.
     prompt: |
       Original task:
       {{input}}
@@ -111,6 +125,8 @@ phases:
       - find
       - ls
       - bash
+      - web_fetch
+      - mcp
       - delegate
     system: |
       You are the end-to-end verification phase.
@@ -132,9 +148,9 @@ phases:
 
       Process:
       1. Determine what user-visible behavior or system outcome the plan promised. Derive concrete acceptance scenarios from the plan and execution report.
-      2. Inspect the current diff and relevant implementation only enough to:
-         - identify how to run the product end-to-end,
-         - understand changed frontend/backend surfaces,
+      2. Follow the workspace context. In a local Git workspace, inspect a diff only after confirming .git; in a local non-Git workspace, inspect relevant files and runtime behavior directly; in live/remote mode, inspect the live target through web/MCP evidence without Git or local-project assumptions. Inspect only enough to:
+         - identify how to run or reach the product end-to-end,
+         - understand changed frontend/backend or live surfaces,
          - verify no hard-coded/test-specific shortcuts or fake success paths were used.
       3. For frontend or browser-visible changes, use the playwright-cli skill patterns through bash. Prefer commands such as:
          - `playwright-cli open <url>` or `npx --no-install playwright-cli open <url>`
@@ -194,6 +210,8 @@ phases:
       - find
       - ls
       - bash
+      - web_fetch
+      - mcp
       - delegate
     system: |
       You are the final code review phase.
@@ -213,17 +231,17 @@ phases:
       End-to-end verification report:
       {{phase.verify.output}}
 
-      Review the completed work using the multi-agent flow defined below, adapted to this local workflow. Do not post to GitHub, PostHog, or any external service; return a report only.
+      Review the completed work using the multi-agent flow below when it fits the available workspace evidence. Do not post to GitHub, PostHog, or any external service; return a report only.
 
       Process:
-      1. Determine changed files against the default branch (`main` first, then `master`). Inspect PR/task context, current diff, and changed file list. If no default branch exists, use the strongest available git diff/status baseline and explain it.
-      2. Spawn 6 ready-only agents in parallel:
+      1. Establish the strongest review evidence available for the workspace mode. Use changed files against a default branch only when a local .git entry has first been confirmed. For local non-Git workspaces, review the task-relevant files and execution report without requiring a repository baseline. For live/remote tasks, review observable live behavior, configuration, and remote artifacts through web/MCP tools without any Git command.
+      2. Spawn 6 read-only agents in parallel when the available workspace and tools make that useful:
          - 4 Bug-Hunters and give them different file ordering.
          - Architecture Reviewer.
          - Security Reviewer.
       3. For every initial delegate:
-         - Provide original task, plan, execution report, verification report, repo root, and the changed file list/order.
-         - Tell it explicitly: read-only/no edits;
+         - Provide the original task, plan, execution report, verification report, and workspace mode. Include a repo root and changed-file order only for a confirmed local Git workspace; otherwise provide the strongest relevant local-file or live-target evidence.
+         - Tell it explicitly: read-only/no edits and preserve the same local-vs-live and Git restrictions;
       7. Consensus aggregation for bug hunters:
          - Collect all findings from the 4 bug-hunter passes.
          - Group findings that describe the same issue: same file, line within 5 lines, and semantically similar problem.

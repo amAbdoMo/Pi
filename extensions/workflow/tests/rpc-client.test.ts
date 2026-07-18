@@ -150,6 +150,29 @@ describe("bounded RPC lifecycle", () => {
 		expect(killedPid).toBe(4242);
 	});
 
+	test("does not hide taskkill failure when the RPC leader subsequently exits", async () => {
+		const fake: any = new EventEmitter();
+		fake.stdin = new PassThrough();
+		fake.stdout = new PassThrough();
+		fake.stderr = new PassThrough();
+		fake.exitCode = null;
+		fake.signalCode = null;
+		fake.pid = 4343;
+		fake.kill = () => false;
+		const rpc = new RpcPhaseClient("fake", [], process.cwd(), process.env, bounds, () => fake, {
+			platform: "win32",
+			async killWindowsProcessTree() {
+				setTimeout(() => {
+					fake.exitCode = 0;
+					fake.emit("close", 0, null);
+				}, 10);
+				throw new Error("taskkill reported process not found");
+			},
+		});
+
+		await expect(rpc.stop()).rejects.toThrow(/taskkill reported process not found/);
+	});
+
 	test("terminates an active RPC child tree on the current platform", async () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-rpc-tree-"));
 		const pidFile = path.join(root, "descendant.pid");

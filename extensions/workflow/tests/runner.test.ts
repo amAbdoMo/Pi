@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -19,12 +19,14 @@ type ClientOptions = {
 
 class FakeClient implements RpcPhaseTransport {
 	onEvent?: (event: any) => void;
+	readonly requests: Record<string, unknown>[] = [];
 	private rejectWait?: (error: Error) => void;
 	private resolveWait?: () => void;
 	stopped = false;
 	aborted = false;
 	constructor(private readonly options: ClientOptions = {}) {}
 	async request(command: Record<string, unknown>): Promise<any> {
+		this.requests.push(command);
 		if (command.type === "prompt" || command.type === "steer") return { success: true };
 		if (command.type === "get_messages") return { success: true, data: { messages: this.options.messages ?? textMessages("ok") } };
 		if (command.type === "get_state") {
@@ -96,12 +98,17 @@ function harness(
 		getThinkingLevel() { return "off"; },
 		getActiveTools() { return ["read", "workflow_run"]; },
 	};
-	const invocations: Array<{ args: string[]; env: NodeJS.ProcessEnv }> = [];
+	const invocations: Array<{ args: string[]; cwd: string; env: NodeJS.ProcessEnv }> = [];
 	const clients: FakeClient[] = [];
-	const runner = new WorkflowRunner(pi, {}, {
+	const stateChanges: Array<{ status: string; heartbeat?: { phaseId: string; startedAt: number; updatedAt: number; tick: number } }> = [];
+	const runner = new WorkflowRunner(pi, {
+		onStateChanged(_ctx, state) {
+			if (state) stateChanges.push({ status: state.status, heartbeat: state.heartbeat ? { ...state.heartbeat } : undefined });
+		},
+	}, {
 		getInvocation: (args) => ({ command: "fake-pi", args }),
-		createClient: (_command, args, _cwd, env) => {
-			invocations.push({ args, env });
+		createClient: (_command, args, cwd, env) => {
+			invocations.push({ args, cwd, env });
 			const client = clientFactory();
 			clients.push(client);
 			return client;
@@ -118,10 +125,60 @@ function harness(
 		},
 		ui: { setStatus() {} },
 	};
-	return { runner, ctx, appended, sent, invocations, clients };
+	return { runner, ctx, appended, sent, invocations, clients, stateChanges };
 }
 
 describe("workflow state machine", () => {
+	test("non-Git local workspace runs in the selected directory with a Git safety contract", async () => {
+		const localDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-local-"));
+		try {
+			let systemPrompt = "";
+			const h = harness(() => new FakeClient(), true, [], { writeSystemPrompt(_filePath, content) { systemPrompt = content; } });
+			const state = await h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, workingDirectory: localDir, displayPanel: false });
+			expect(state.workspace).toMatchObject({ mode: "local", cwd: localDir, projectTrusted: false });
+			expect(h.invocations[0].cwd).toBe(localDir);
+			expect(systemPrompt).toMatch(/execution context: LOCAL WORKSPACE/);
+			expect(systemPrompt).toMatch(/Git commands are forbidden until.*\.git/s);
+		} finally {
+			fs.rmSync(localDir, { recursive: true, force: true });
+		}
+	});
+
+	test("live workspace runs from an isolated empty directory with no Git contract", async () => {
+		let systemPrompt = "";
+		const h = harness(() => new FakeClient(), true, [], { writeSystemPrompt(_filePath, content) { systemPrompt = content; } });
+		const state = await h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, live: true, displayPanel: false });
+		expect(state.workspace).toMatchObject({ mode: "live", projectTrusted: false });
+		expect(path.basename(h.invocations[0].cwd)).toBe("live");
+		expect(h.invocations[0].cwd).not.toBe(h.ctx.cwd);
+		expect(systemPrompt).toMatch(/execution context: LIVE \/ REMOTE/);
+		expect(systemPrompt).toMatch(/Git commands are forbidden entirely/);
+	});
+
+	test("runner rejects simultaneous local and live workspace selection", async () => {
+		const h = harness(() => new FakeClient());
+		await expect(h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, live: true, workingDirectory: h.ctx.cwd, displayPanel: false })).rejects.toThrow(/either live mode or a working directory/);
+	});
+
+	test("publishes heartbeat updates during model silence and clears the timer after abort", async () => {
+		vi.useFakeTimers();
+		try {
+			const h = harness(() => new FakeClient({ blocked: true }));
+			const run = h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, displayPanel: false });
+			await vi.advanceTimersByTimeAsync(2100);
+			expect(h.stateChanges.some((change) => (change.heartbeat?.tick ?? 0) >= 2)).toBe(true);
+			h.runner.getActiveState()?.abort?.();
+			const state = await run;
+			expect(state.status).toBe("aborted");
+			expect(state.heartbeat).toBeUndefined();
+			const changeCount = h.stateChanges.length;
+			await vi.advanceTimersByTimeAsync(3000);
+			expect(h.stateChanges).toHaveLength(changeCount);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	test("a failed child tool is a sticky phase/workflow failure", async () => {
 		const h = harness(() => new FakeClient({ messages: textMessages("plausible report"), events: [{ type: "tool_execution_end", toolName: "bash", toolCallId: "b1", isError: true }] }));
 		const state = await h.runner.run({ workflow: workflow(), input: "x", ctx: h.ctx, displayPanel: false });
