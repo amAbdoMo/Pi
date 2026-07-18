@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0
+
+- Ported the upstream workflow v2 runtime with strict in-process YAML validation, isolated RPC phase sessions, bounded routing and output, recovery-safe state, and dedicated regression coverage.
+- Added a portable built-in `pipeline` workflow with Plan, Execute, Verify, and Review phases; global and trusted-project YAML definitions can override it by ID.
+- Added bounded Windows RPC process-tree termination with `taskkill` so abort and shutdown paths terminate active phase descendants instead of only the RPC leader.
+- Added Fast mode support for `gpt-5.6-luna`, `gpt-5.6-sol`, and `gpt-5.6-terra` while retaining GPT-5.4 and GPT-5.5 support.
+
 ## 0.11.1
 
 - Made `Tab` complete active and slash-command autocomplete before falling back to PLAN/BUILD mode switching.

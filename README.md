@@ -44,8 +44,8 @@ Pi can support all of this through its extension system; the difference is that 
 - **Automatic feature verification** with post-change checks, real browser user journeys for UI work, and bounded repair/retest loops
 - **Subagents** with optional task-specific model and thinking profiles
 - **Side chat** for temporary questions that do not enter the main conversation context
-- **Workflows** for reusable multi-step operations
-- **Fast mode**, code-state undo/redo, and custom tool rendering
+- **Workflows** with a built-in four-phase `pipeline` (Plan → Execute → Verify → Review), strict YAML validation, conditional retries, isolated phase sessions, and safe global/project overrides
+- **Fast mode** for supported GPT-5.4, GPT-5.5, and GPT-5.6 tiers, plus code-state undo/redo and custom tool rendering
 
 ### Automatic feature verification
 
@@ -128,7 +128,7 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `/verification` | Inspect, enable, disable, or reset automatic feature verification |
 | `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
-| `/workflow` | Open reusable workflows |
+| `/workflow` | List workflows or run the built-in four-phase `pipeline` |
 | `/mcp` | Configure, connect, disconnect, and inspect MCP servers |
 | `/skills` | Browse loaded skills |
 | `/memory` | Manage persistent memory |
@@ -136,6 +136,24 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `/undo`, `/redo` | Navigate code-state checkpoints |
 | `/tool-display` | Configure custom tool rendering |
 | `Ctrl+V` / `Alt+V` | Paste text or use the Windows image-paste path |
+
+## Pipeline workflow
+
+Pi Workbench ships a portable `pipeline` workflow with four phases: Plan, Execute, Verify end-to-end, and Review. Verification failures and actionable review findings route back to Execute, with a bounded transition limit.
+
+Run it interactively and enter the task when prompted:
+
+```text
+/workflow pipeline
+```
+
+Or provide the task inline:
+
+```text
+/workflow pipeline Implement and verify the requested change
+```
+
+The built-in definition is always available. Lowercase YAML files in `~/.pi/workflows` override or extend built-ins globally; files in a trusted project's `.pi/workflows` directory take final precedence. Invalid overrides are reported rather than silently falling back to a different definition.
 
 ## MCP configuration
 

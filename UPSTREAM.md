@@ -1,36 +1,55 @@
 # h4ni0 upstream audit
 
-This setup originated from [h4ni0/pi](https://github.com/h4ni0/pi).
+This setup originated from [h4ni0/pi](https://github.com/h4ni0/pi). Upstream changes are reviewed and ported selectively; the repository is never merged or copied wholesale over Pi Workbench.
 
 ## Last verified upstream
 
 - Branch: `master`
-- Commit: `66477e4`
-- Verified: 2026-07-13
+- Commit: `610ae5690ff7578f49f6d460a20287955d1beabb`
+- Verified: 2026-07-18
+- Previous baseline: `66477e49dcc8`
 
-At that commit, h4ni0/pi has 88 tracked files. This repository contains every functional upstream extension and the upstream theme resource:
+## Changes ported from the current upstream
 
-- 86 files are common to both repositories
-- 81 common files are byte-identical
-- 5 common files intentionally differ
-- 2 upstream-only files are replaced by this repository's packaging approach
+### Workflow v2
 
-## Intentional common-file differences
+Pi Workbench ports the workflow v2 schema, runner, RPC transport, render contracts, and regression suite introduced by upstream commit `610ae569`.
 
-- `.gitignore` — adds package/build/runtime exclusions used by this portable repository.
-- `extensions/ui/header.ts` — retains the upstream Nerd Font status icons while using the current header spacing, labels, colors, plan/build indicator, and Codex usage windows.
-- `extensions/ui/index.ts` — integrates compact image and multiline-text paste transformation plus shared plan/build state.
-- `extensions/ui/terminalEditor.ts` — integrates the custom Windows and Warp clipboard behavior, highlighted paste markers, `Tab` mode switching, and current terminal editor layout.
-- `themes/hypr-waves.json` — uses the current black-background variant instead of the upstream blue surfaces.
+Intentional packaging and portability differences:
 
-## Upstream-only files
+- Upstream tracks `pipeline.example.yaml` but keeps the runnable `~/.pi/workflows/pipeline.yaml` operator-owned. Pi Workbench ships `extensions/workflow/pipeline.yaml` as a built-in so `/workflow pipeline` works on every installation immediately.
+- Built-ins load before global and trusted-project workflow directories; a same-ID user definition overrides the built-in without modifying package files.
+- Runtime dependencies (`yaml` and `typebox`) are pinned in the root package instead of a nested machine-local workflow package.
+- Tests run through the root npm validation gate with Vitest rather than upstream's Bun- and `/home/h4ni0`-specific scripts.
+- Windows workflow shutdown uses bounded `taskkill /T /F` process-tree termination; POSIX retains process-group TERM→KILL cleanup.
+- Upstream's machine-specific audit/deployment files, external `workflow-ui`, operator `SPECS.md`, and copied `node_modules` are not packaged.
 
-- `settings.json` — replaced by `settings.example.json` plus `scripts/apply-config.mjs`, preventing runtime-only fields such as `lastChangelogVersion` from being committed.
-- `npm/.gitignore` — not needed because this repository does not keep an upstream runtime `npm/` directory; package dependencies are handled through `package.json`, `package-lock.json`, and Pi's managed package directory.
+### GPT-5.6 Fast mode
 
-## Current additions beyond upstream
+Pi Workbench ports the GPT-5.6 model support from upstream commit `0517092`, covering `gpt-5.6-luna`, `gpt-5.6-sol`, and `gpt-5.6-terra` while retaining GPT-5.4 and GPT-5.5.
 
-This repository also includes plan/build mode, model-aware subagent profiles, a `/skills` browser with compact slash autocomplete, compact clipboard handling, Codex five-hour and weekly usage, Warp terminal configuration, an expanded `pi-tool-display`, portable installers, configuration capture/merge scripts, tests, CI validation, changelog, and maintenance documentation.
+## Recent upstream work not yet ported
+
+Upstream Agent v2 (`d6f5eeb` and follow-up fixes through `730130b`) adds persistent root-tree collaboration, broker/mailbox routing, lifecycle recovery, non-delegated login-session support, wait fixes, and duplicate-completion suppression. It overlaps Pi Workbench's customized nested delegate runtime, optional child model/thinking profiles, overlays, and verification loop, so it requires a separate migration and must not be copied wholesale.
+
+Upstream also changed the header to show weekly Codex usage instead of the five-hour window. Pi Workbench intentionally retains both five-hour and weekly indicators with subagent-aware refresh polling.
+
+The expanded upstream `APPEND_SYSTEM.md` and MIT license remain separate review items.
+
+## Intentional shared-file differences
+
+- `.gitignore` — package/build/runtime exclusions for the portable repository.
+- `APPEND_SYSTEM.md` — Pi Workbench relies on its packaged extension and agent-policy layers rather than copying upstream operator instructions blindly.
+- `extensions/ui/header.ts`, `state.ts`, and `types.ts` — current workbench layout plus both Codex usage windows.
+- `extensions/ui/index.ts` and `terminalEditor.ts` — workbench shell, clipboard behavior, context-aware `Tab`, RTL handling, and plan/build integration.
+- `extensions/subagents/` — current customized delegate runtime pending a dedicated Agent v2 migration.
+- `extensions/workflow/` — upstream v2 foundation with built-in pipeline and cross-platform packaging changes described above.
+- `themes/hypr-waves.json` — Pi Workbench's black-background workbench variant.
+
+## Upstream-only configuration files
+
+- `settings.json` — replaced by `settings.example.json` plus `scripts/apply-config.mjs`, preventing runtime fields and credentials from entering Git.
+- `npm/.gitignore` — unnecessary because dependencies are managed by the root package metadata.
 
 ## Header icons retained from upstream
 
@@ -40,8 +59,8 @@ This repository also includes plan/build mode, model-aware subagent profiles, a 
 - Context: `󰍛`
 - Session: ``
 
-These glyphs require a Nerd Font in the terminal. The Windows installer provisions the pinned `CaskaydiaMono NFM` font and configures detected Windows Terminal and Warp settings; other platforms must configure a compatible Nerd Font separately.
+These glyphs require a Nerd Font. The Windows installer provisions DejaVu Sans Mono Nerd Font 3.4.0 and configures detected Windows Terminal and Warp settings; other platforms must configure a compatible Nerd Font separately.
 
 ## Future audit procedure
 
-Fetch h4ni0/pi into a separate checkout; never merge or copy the repository wholesale over this setup. Compare tracked files, review each upstream change, and port useful changes selectively so current additions are not reverted.
+Fetch h4ni0/pi into a separate temporary checkout, compare tracked files and commits, review each upstream change, and port useful behavior selectively with local regression tests. Never merge or copy the upstream repository wholesale over this package.

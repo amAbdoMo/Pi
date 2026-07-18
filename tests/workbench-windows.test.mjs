@@ -48,7 +48,25 @@ const tuiStub = String.raw`
 `;
 
 const codingAgentStub = String.raw`
+  export const CONFIG_DIR_NAME = ".pi";
+  export const DEFAULT_MAX_BYTES = 50 * 1024;
+  export const DEFAULT_MAX_LINES = 2000;
+  export function getAgentDir() { return process.cwd(); }
   export function getMarkdownTheme() { return {}; }
+  export function truncateHead(text, options) {
+    const lines = String(text).split("\n");
+    let selected = lines.slice(0, options.maxLines);
+    while (selected.length > 0 && Buffer.byteLength(selected.join("\n"), "utf8") > options.maxBytes) selected.pop();
+    const content = selected.join("\n");
+    return {
+      content,
+      truncated: content !== text,
+      outputLines: selected.length,
+      totalLines: lines.length,
+      outputBytes: Buffer.byteLength(content, "utf8"),
+      totalBytes: Buffer.byteLength(text, "utf8"),
+    };
+  }
   export class CustomEditor {
     constructor(tui) {
       this.tui = tui;

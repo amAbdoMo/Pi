@@ -51,6 +51,11 @@ const requiredFiles = [
   "extensions/skills-browser/index.ts",
   "extensions/subagents/child-profile.ts",
   "extensions/verification-loop/index.ts",
+  "extensions/workflow/index.ts",
+  "extensions/workflow/schema.ts",
+  "extensions/workflow/runner.ts",
+  "extensions/workflow/rpc-client.ts",
+  "extensions/workflow/pipeline.yaml",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
   "scripts/setup-terminal-font.ps1",
@@ -111,7 +116,7 @@ for (const packageSpec of requiredPackages) {
 if (settings.packages?.includes("npm:pi-mcp-adapter")) {
   throw new Error("The retired pi-mcp-adapter package must not be reinstalled");
 }
-for (const dependency of ["@modelcontextprotocol/sdk", "arabic-reshaper", "bidi-js", "jsonc-parser"]) {
+for (const dependency of ["@modelcontextprotocol/sdk", "arabic-reshaper", "bidi-js", "jsonc-parser", "typebox", "yaml"]) {
   if (!packageManifest.dependencies?.[dependency]) throw new Error(`Missing runtime dependency: ${dependency}`);
 }
 

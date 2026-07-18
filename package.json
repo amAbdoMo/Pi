@@ -1,6 +1,6 @@
 {
   "name": "pi-workbench",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "private": true,
   "description": "A polished terminal workbench, theme, and extension suite for Pi.",
   "type": "module",
@@ -33,12 +33,18 @@
   },
   "scripts": {
     "capture": "node scripts/capture-config.mjs",
-    "test": "node scripts/validate.mjs && node --test tests/*.test.mjs"
+    "test": "node scripts/validate.mjs && node --test tests/*.test.mjs && npm run test:workflow",
+    "test:workflow": "vitest run --config extensions/workflow/vitest.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.29.0",
     "arabic-reshaper": "1.1.0",
     "bidi-js": "1.0.3",
-    "jsonc-parser": "3.3.1"
+    "jsonc-parser": "3.3.1",
+    "typebox": "1.1.38",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "vitest": "3.2.7"
   }
 }
