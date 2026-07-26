@@ -2,6 +2,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
+import { redirectScreenshotToTemporaryFile, removeVerificationArtifacts } from "./artifacts.ts";
 import {
 	browserIssueFromResult,
 	browserToolFromCall,
@@ -27,7 +28,7 @@ For every feature or runtime behavior you create or change, verification is part
 Required workflow:
 1. Make the change.
 2. Run the relevant automated tests, lint, type checks, build, or a focused command-level check after the last mutation.
-3. Exercise the actual feature as a normal user. For UI work, use the browser MCP tools to navigate, inspect the accessibility snapshot, interact with controls or resize the viewport, check console messages and network requests, and take a final screenshot. Use snapshots—not screenshots—as action targets.
+3. Exercise the actual feature as a normal user. For UI work, use the browser MCP tools to navigate, inspect the accessibility snapshot, interact with controls or resize the viewport, check console messages and network requests, and take a final screenshot. Use snapshots—not screenshots—as action targets. Screenshots and Playwright output are disposable verification artifacts: keep them only in the OS temporary directory, never in the project/workspace or drive root, and do not retain them unless the user explicitly asks.
 4. If any functional or visual issue appears, fix it and repeat every required check after the fix.
 5. Before claiming completion, call verification_report. Do not provide a completion response unless that tool accepts status passed.
 
@@ -40,6 +41,12 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 	let mutationObservedSinceSnapshot = false;
 	let mutationGeneration = 0;
 	const toolCallGenerations = new Map<string, number>();
+	const verificationArtifacts = new Set<string>();
+
+	function cleanupVerificationArtifacts(): void {
+		removeVerificationArtifacts(verificationArtifacts);
+		verificationArtifacts.clear();
+	}
 
 	function persistState(): void {
 		pi.appendEntry<VerificationSnapshot>(STATE_ENTRY_TYPE, tracker.snapshot());
@@ -100,6 +107,7 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 		promptGuidelines: [
 			"Call verification_report before claiming a changed feature is complete.",
 			"If a check finds an issue, fix it and repeat all checks after the last edit before reporting passed.",
+			"Keep browser screenshots and Playwright output only in OS temporary storage and do not retain them unless the user explicitly asks.",
 		],
 		parameters: Type.Object({
 			kind: StringEnum(VERIFICATION_KINDS, {
@@ -119,6 +127,7 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const result = tracker.submitReport(params as VerificationReport);
 			if (!result.accepted) throw new Error(result.message);
+			cleanupVerificationArtifacts();
 			persistState();
 			updateStatus(ctx);
 			return {
@@ -165,6 +174,7 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension" || event.streamingBehavior !== undefined) return;
+		cleanupVerificationArtifacts();
 		tracker.beginUserTask();
 		toolCallGenerations.clear();
 		await resetWorkspaceBaseline(ctx);
@@ -188,6 +198,12 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("tool_call", async (event) => {
+		const artifactPath = redirectScreenshotToTemporaryFile(
+			event.toolName,
+			asRecord(event.input),
+			event.toolCallId,
+		);
+		if (artifactPath) verificationArtifacts.add(artifactPath);
 		if (!tracker.isEnabled()) return;
 		toolCallGenerations.set(event.toolCallId, mutationGeneration);
 	});
@@ -274,6 +290,7 @@ export default function verificationLoopExtension(pi: ExtensionAPI): void {
 
 	pi.on("session_shutdown", async () => {
 		if (activeContext) activeContext.ui.setStatus(STATUS_ID, undefined);
+		cleanupVerificationArtifacts();
 		activeContext = undefined;
 		lastWorkspace = undefined;
 		mutationObservedSinceSnapshot = false;

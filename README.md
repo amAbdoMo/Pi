@@ -53,6 +53,7 @@ The verification loop is enabled by default. It watches successful edit/write op
 
 - Functional changes require a successful test, lint, build, type-check, or focused command-level check after the latest mutation.
 - UI changes additionally require browser navigation, an accessibility snapshot, user interaction or viewport resizing, then clean console and network inspection followed by a final screenshot.
+- Browser screenshots and Playwright logs are disposable: Pi routes them to OS temporary storage and removes them after reporting or session shutdown instead of leaving artifacts in projects, workspaces, or drive roots.
 - Failed or incomplete verification automatically starts another repair turn, up to three attempts. The agent must fix discovered issues and repeat all checks after the fix.
 - A genuine environment blocker must be reported explicitly instead of being presented as a successful result.
 

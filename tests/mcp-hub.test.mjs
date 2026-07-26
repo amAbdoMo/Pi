@@ -12,6 +12,7 @@ import {
 import { searchMcpTools } from "../extensions/mcp/discovery.ts";
 import { McpHub } from "../extensions/mcp/hub.ts";
 import { guardMcpOutput } from "../extensions/mcp/output-guard.ts";
+import { playwrightMcpArgsWithTemporaryOutput } from "../extensions/mcp/playwright-policy.ts";
 import { redactServerSecrets } from "../extensions/mcp/security.ts";
 
 async function writeJson(filePath, document) {
@@ -145,6 +146,54 @@ test("MCP config accepts JSONC and OpenCode-style server entries", async (t) => 
     oauthConfigured: false,
   });
   assert.deepEqual(configuration.loadedSources, [sourcePath]);
+});
+
+test("Playwright MCP output defaults to temporary stdout artifacts", () => {
+  const outputDirectory = join(tmpdir(), "pi-playwright-policy-test");
+  assert.deepEqual(
+    playwrightMcpArgsWithTemporaryOutput(
+      "npx",
+      ["-y", "@playwright/mcp@latest", "--browser", "msedge"],
+      outputDirectory,
+    ),
+    [
+      "-y",
+      "@playwright/mcp@latest",
+      "--browser",
+      "msedge",
+      "--output-dir",
+      outputDirectory,
+      "--output-mode",
+      "stdout",
+    ],
+  );
+  assert.deepEqual(
+    playwrightMcpArgsWithTemporaryOutput(
+      "C:/tools/playwright-mcp.cmd",
+      ["--browser", "msedge"],
+      outputDirectory,
+    ),
+    [
+      "--browser",
+      "msedge",
+      "--output-dir",
+      outputDirectory,
+      "--output-mode",
+      "stdout",
+    ],
+  );
+  assert.deepEqual(
+    playwrightMcpArgsWithTemporaryOutput(
+      "npx",
+      ["@playwright/mcp", "--output-dir", "D:/explicit", "--output-mode=file"],
+      outputDirectory,
+    ),
+    ["@playwright/mcp", "--output-dir", "D:/explicit", "--output-mode=file"],
+  );
+  assert.deepEqual(
+    playwrightMcpArgsWithTemporaryOutput("npx", ["example-mcp"], outputDirectory),
+    ["example-mcp"],
+  );
 });
 
 test("global MCP search does not connect idle servers", async (t) => {

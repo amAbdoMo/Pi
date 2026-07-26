@@ -13,6 +13,7 @@ import {
 	type McpMetadataCache,
 } from "./metadata-cache.ts";
 import { mcpToolResultText } from "./output-guard.ts";
+import { playwrightMcpArgsWithTemporaryOutput } from "./playwright-policy.ts";
 import { redactServerSecrets, redactedToolMetadata, safeRuntimeError } from "./security.ts";
 import type {
 	McpConfigDiagnostic,
@@ -297,7 +298,7 @@ export class McpHub {
 		}
 		const transport = new StdioClientTransport({
 			command: config.command,
-			args: config.args,
+			args: playwrightMcpArgsWithTemporaryOutput(config.command, config.args),
 			env: { ...getDefaultEnvironment(), ...config.env },
 			cwd: config.cwd ? resolve(definition.sourceDirectory, config.cwd) : this.cwd,
 			stderr: "pipe",

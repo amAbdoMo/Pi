@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.3
+
+- Redirected browser verification screenshots to disposable OS temporary storage and automatically removed them after reporting or session shutdown.
+- Forced default Playwright MCP snapshots, console logs, and network logs into temporary output instead of project or workspace folders while preserving explicit user-configured output options.
+
 ## 0.12.2
 
 - Projected workflow-child delegate activity into the parent Agents sidebar while preserving RPC process isolation and direct-agent counts.

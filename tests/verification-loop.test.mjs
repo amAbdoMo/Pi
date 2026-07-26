@@ -7,6 +7,10 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  redirectScreenshotToTemporaryFile,
+  removeVerificationArtifacts,
+} from "../extensions/verification-loop/artifacts.ts";
+import {
   browserIssueFromResult,
   browserToolFromCall,
   isMutatingShellCommand,
@@ -248,6 +252,38 @@ test("shell and MCP observations distinguish verification from mutation", () => 
   assert.equal(browserIssueFromResult("browser_console_messages", "No console messages"), undefined);
 });
 
+test("verification screenshots are redirected to temporary storage and cleaned", async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-verification-artifacts-test-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const directInput = { filename: "C:/workspace/final.png", fullPage: true };
+  const directPath = redirectScreenshotToTemporaryFile(
+    "browser_take_screenshot",
+    directInput,
+    "direct-call",
+    root,
+  );
+  assert.ok(directPath?.startsWith(root));
+  assert.equal(directInput.filename, directPath);
+
+  const mcpInput = {
+    action: "call",
+    tool: "browser_take_screenshot",
+    args: JSON.stringify({ filename: "C:/workspace/final.png", fullPage: true }),
+  };
+  const mcpPath = redirectScreenshotToTemporaryFile("mcp", mcpInput, "mcp-call", root);
+  const mcpArgs = JSON.parse(mcpInput.args);
+  assert.ok(mcpPath?.startsWith(root));
+  assert.equal(mcpArgs.filename, mcpPath);
+  assert.equal(mcpArgs.fullPage, true);
+
+  fs.writeFileSync(directPath, "direct");
+  fs.writeFileSync(mcpPath, "mcp");
+  removeVerificationArtifacts([directPath, mcpPath]);
+  assert.equal(fs.existsSync(directPath), false);
+  assert.equal(fs.existsSync(mcpPath), false);
+});
+
 test("Git workspace status parsing includes tracked, untracked, and renamed paths", () => {
   assert.deepEqual(
     parsePorcelainStatus(" M src/a.ts\0?? src/new.ts\0R  src/new-name.ts\0src/old-name.ts\0"),
@@ -426,6 +462,32 @@ test("tree navigation restores verification state from the active branch", async
   await harness.handlers.get("session_tree")[0]({}, harness.ctx);
   const branchPrompt = await harness.handlers.get("before_agent_start")[0]();
   assert.match(branchPrompt.message.content, /AUTOMATIC FEATURE VERIFICATION/);
+});
+
+test("the extension redirects screenshots even when verification is disabled", async () => {
+  const harness = createExtensionHarness();
+  harness.entries.push({
+    type: "custom",
+    customType: "verification-loop-state",
+    data: { enabled: false, phase: "clean" },
+  });
+  await harness.handlers.get("session_start")[0]({}, harness.ctx);
+
+  const input = {
+    action: "call",
+    tool: "browser_take_screenshot",
+    args: JSON.stringify({ filename: "C:/workspace/final.png", fullPage: true }),
+  };
+  await harness.handlers.get("tool_call")[0]({
+    toolCallId: "disabled-screenshot",
+    toolName: "mcp",
+    input,
+  });
+
+  const screenshotPath = JSON.parse(input.args).filename;
+  assert.ok(screenshotPath.startsWith(path.join(os.tmpdir(), "pi-verification-artifacts")));
+  assert.equal(screenshotPath.includes("C:/workspace"), false);
+  await harness.handlers.get("session_shutdown")[0]();
 });
 
 test("parallel checks that started before a successful edit cannot satisfy the gate", async () => {
