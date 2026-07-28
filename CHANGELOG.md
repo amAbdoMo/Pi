@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Removed the custom automatic feature-verification extension, its retry gate, command surface, and dedicated regression tests.
+
 ## 0.12.3
 
 - Redirected browser verification screenshots to disposable OS temporary storage and automatically removed them after reporting or session shutdown.
