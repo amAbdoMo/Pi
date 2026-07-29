@@ -14,8 +14,8 @@
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { StringEnum, type AssistantMessage, type TextContent } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key } from "@earendil-works/pi-tui";
+import { getMarkdownTheme, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Key, Markdown } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
 	publishPlanBuildMode,
@@ -46,7 +46,12 @@ interface PlanModeState {
 	enabled?: boolean;
 	todos?: unknown;
 	executing?: boolean;
+	completionAnnounced?: boolean;
 	toolsBeforePlanMode?: string[];
+}
+
+interface PlanCompleteEntry {
+	content: string;
 }
 
 // Type guard for assistant messages
@@ -81,6 +86,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
+	let completionAnnounced = false;
 	let toolsBeforePlanMode: string[] | undefined;
 
 	pi.registerFlag("plan", {
@@ -88,6 +94,10 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		type: "boolean",
 		default: false,
 	});
+
+	pi.registerEntryRenderer<PlanCompleteEntry>("plan-complete", (entry) =>
+		new Markdown(entry.data.content, 0, 0, getMarkdownTheme()),
+	);
 
 	function updateStatus(ctx: ExtensionContext): void {
 		publishPlanBuildMode(pi.events, planModeEnabled ? "plan" : "build");
@@ -105,7 +115,8 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			ctx.ui.setStatus("plan-mode", undefined);
 		}
 
-		if (counts.total === 0) {
+		const completedPlan = counts.total > 0 && counts.completed === counts.total && !executionMode;
+		if (counts.total === 0 || completedPlan) {
 			ctx.ui.setWidget("plan-todos", undefined);
 		} else if (ctx.mode === "tui") {
 			ctx.ui.setWidget(
@@ -154,8 +165,24 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			enabled: planModeEnabled,
 			todos: todoItems,
 			executing: executionMode,
+			completionAnnounced,
 			toolsBeforePlanMode,
 		});
+	}
+
+	function announceCompletedPlan(ctx: ExtensionContext): void {
+		executionMode = false;
+		completionAnnounced = false;
+		updateStatus(ctx);
+		persistState();
+		const completedList = todoItems
+			.map((todoItem) => `✓ ${todoItem.text}${todoItem.evidence ? ` — ${todoItem.evidence}` : ""}`)
+			.join("\n");
+		pi.appendEntry("plan-complete", {
+			content: `**Plan Complete!** ✓\n\n${completedList}`,
+		} satisfies PlanCompleteEntry);
+		completionAnnounced = true;
+		persistState();
 	}
 
 	pi.registerTool({
@@ -183,8 +210,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			if (!executionMode || todoItems.length === 0) throw new Error("No tracked plan is currently executing.");
 			todoItems = transitionTodoItems(todoItems, params.step, params.status, params.evidence);
 			const updatedItem = todoItems.find((todoItem) => todoItem.step === params.step)!;
-			updateStatus(ctx);
-			persistState();
+			if (todoItems.every((todoItem) => todoItem.status === "completed")) {
+				announceCompletedPlan(ctx);
+			} else {
+				updateStatus(ctx);
+				persistState();
+			}
 			return {
 				content: [{ type: "text", text: `Step ${params.step} is now ${params.status}: ${updatedItem.text}` }],
 				details: updatedItem,
@@ -210,6 +241,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		planModeEnabled = true;
 		executionMode = false;
 		todoItems = [];
+		completionAnnounced = false;
 		enablePlanModeTools();
 		ctx.ui.notify("Plan mode enabled. Built-in write tools disabled.");
 		updateStatus(ctx);
@@ -344,16 +376,7 @@ Execute each step in order. Use plan_progress to mark a step running before work
 		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
 			if (todoItems.every((todoItem) => todoItem.status === "completed")) {
-				const completedList = todoItems
-					.map((todoItem) => `✓ ${todoItem.text}${todoItem.evidence ? ` — ${todoItem.evidence}` : ""}`)
-					.join("\n");
-				executionMode = false;
-				updateStatus(ctx);
-				persistState();
-				pi.sendMessage(
-					{ customType: "plan-complete", content: `**Plan Complete!** ✓\n\n${completedList}`, display: true },
-					{ triggerTurn: false },
-				);
+				announceCompletedPlan(ctx);
 			}
 			return;
 		}
@@ -366,6 +389,7 @@ Execute each step in order. Use plan_progress to mark a step running before work
 			const extracted = extractTodoItems(getTextContent(lastAssistant));
 			if (extracted.length > 0) {
 				todoItems = extracted;
+				completionAnnounced = false;
 			}
 		}
 
@@ -433,25 +457,41 @@ Use plan_progress to mark the step running before work starts, then completed wi
 		const entries = ctx.sessionManager.getEntries();
 
 		// Restore persisted state
-		const planModeEntry = entries
-			.filter((e: { type: string; customType?: string }) => e.type === "custom" && e.customType === "plan-mode")
-			.pop() as { data?: PlanModeState } | undefined;
+		let planModeEntryIndex = -1;
+		for (let index = entries.length - 1; index >= 0; index--) {
+			const entry = entries[index] as { type: string; customType?: string };
+			if (entry.type === "custom" && entry.customType === "plan-mode") {
+				planModeEntryIndex = index;
+				break;
+			}
+		}
+		const planModeEntry = planModeEntryIndex >= 0
+			? entries[planModeEntryIndex] as { data?: PlanModeState }
+			: undefined;
 
 		if (planModeEntry?.data) {
 			planModeEnabled = planModeEntry.data.enabled ?? planModeEnabled;
 			todoItems = normalizeTodoItems(planModeEntry.data.todos);
 			executionMode = planModeEntry.data.executing ?? executionMode;
+			completionAnnounced = planModeEntry.data.completionAnnounced ?? completionAnnounced;
 			toolsBeforePlanMode = planModeEntry.data.toolsBeforePlanMode ?? toolsBeforePlanMode;
 		}
 
-		if (executionMode && todoItems.every((todoItem) => todoItem.status === "completed")) {
-			executionMode = false;
-		}
+		const completedPlan = todoItems.length > 0 && todoItems.every((todoItem) => todoItem.status === "completed");
+		const legacyCompletionRendered = planModeEntryIndex >= 0 && entries
+			.slice(planModeEntryIndex + 1)
+			.some((entry: { type: string; customType?: string }) =>
+				(entry.type === "custom" || entry.type === "custom_message") && entry.customType === "plan-complete",
+			);
+		completionAnnounced ||= legacyCompletionRendered;
 
-		if (planModeEnabled) {
-			enablePlanModeTools();
+		if (planModeEnabled) enablePlanModeTools();
+		if (completedPlan && !completionAnnounced) {
+			announceCompletedPlan(ctx);
+		} else {
+			if (completedPlan) executionMode = false;
+			updateStatus(ctx);
 		}
-		updateStatus(ctx);
 	});
 
 	pi.on("session_shutdown", async () => {

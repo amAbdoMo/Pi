@@ -41,10 +41,26 @@ Pi can support all of this through its extension system; the difference is that 
 
 - **Plan/build mode** with context-aware `Tab` switching outside command autocomplete and read-only planning
 - **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
+- **Automatic feature verification** with post-change checks, real browser user journeys for UI work, one bounded repair, and blocker-aware user handoff
 - **Subagents** with optional task-specific model and thinking profiles
 - **Side chat** for temporary questions that do not enter the main conversation context
-- **Workflows** with a built-in four-phase `pipeline` (Plan → Execute → Verify → Review), strict YAML validation, conditional retries, isolated phase sessions, and safe global/project overrides
+- **Workflows** with focused `pipeline` and opt-in `deep-review` routes, strict YAML validation, blocker-aware routing, isolated phase sessions, and safe global/project overrides
 - **Fast mode** for supported GPT-5.4, GPT-5.5, and GPT-5.6 tiers, plus code-state undo/redo and custom tool rendering
+
+### Automatic feature verification
+
+The verification loop is enabled by default. It watches successful edit/write operations and Git workspace changes, invalidates stale evidence after later edits, and requires the agent to call `verification_report` before claiming a changed feature is complete.
+
+- Functional changes require a successful test, lint, build, type-check, or focused command-level check after the latest mutation.
+- UI changes additionally require browser navigation, an accessibility snapshot, user interaction or viewport resizing, then clean console and network inspection followed by a final screenshot.
+- A product defect gets one automatic repair/retest pass. A second failure stops instead of opening another automatic cycle.
+- Login, missing credentials, unreachable targets, unavailable browser sessions, and missing environments enter an `awaiting-user` blocker state. Further browser calls are blocked, except for one viewport screenshot when it adds useful evidence.
+- A useful blocker screenshot is rendered as an image in the Pi transcript, not as a file link. The temporary PNG is removed immediately; the transcript entry stays outside model context.
+- Pi then offers four choices: wait while the user logs into the existing browser, continue with non-browser checks and report the limitation, stop with a remaining-work summary, or accept a custom instruction.
+- Verification-only pages, fixtures, and proof harnesses require explicit confirmation. The default is to exercise the real feature.
+- Workflow RPC children keep temporary screenshot routing but do not start a second nested verification loop.
+
+UI journeys use a configured MCP browser that exposes `browser_*` tools. The workbench does not install or silently enable a browser server. Use `/verification status` to inspect missing evidence, `/verification resume` after resolving a blocker, `/verification reset` to clear evidence and retry, or `/verification off` to disable the gate for the current session.
 
 ### Tools and integrations
 
@@ -110,12 +126,14 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `Tab` | Complete active or slash-command autocomplete; otherwise switch between plan and build modes |
 | `Shift+Tab` | Change thinking level |
 | Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport during and after agent activity; scrolling up holds position while output continues |
-| `Shift+drag` | Bypass application mouse reporting and select terminal text for copy |
+| Mouse drag | Select only the exact Workbench text range and copy it on release; `Ctrl+C` copies and clears an active selection |
+| `Shift+drag` | Use the terminal's native selection instead of Workbench selection |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
+| `/verification` | Inspect, enable, disable, reset, or resume blocker-aware feature verification |
 | `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
-| `/workflow` | List workflows or run the built-in four-phase `pipeline` |
+| `/workflow` | List workflows or run focused `pipeline` or opt-in `deep-review` |
 | `/mcp` | Configure, connect, disconnect, and inspect MCP servers |
 | `/skills` | Browse loaded skills |
 | `/memory` | Manage persistent memory |
@@ -124,28 +142,35 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `/tool-display` | Configure custom tool rendering |
 | `Ctrl+V` / `Alt+V` | Paste text or use the Windows image-paste path |
 
-## Pipeline workflow
+Tracked plan tasks remain in the live widget while work is running. When the final task completes, the widget is removed and a normal scrollable `Plan Complete` transcript entry is inserted before the assistant's final response.
 
-Pi Workbench ships a portable `pipeline` workflow with four phases: Plan, Execute, Verify end-to-end, and Review. Verification failures and actionable review findings route back to Execute, with a bounded transition limit.
+## Workflows
 
-Run it interactively. Pi asks whether to use the current folder, another existing folder, or no local folder for a live/remote task, then prompts for the task:
+Pi Workbench ships two portable four-phase workflows:
+
+- `pipeline` is the focused default for everyday work. It plans with targeted evidence, instructs phases to use no more than two useful delegates, verifies the real feature once, permits one repair cycle, and performs one direct review. Verification can return `BLOCKED` for login, credentials, target, browser, or environment limitations; `BLOCKED` ends the workflow instead of routing back to Execute.
+- `deep-review` preserves the previous extended pipeline with multi-agent bug-hunter consensus, architecture/security review, fact-checking, judging, and a larger transition budget. Use it explicitly for release-critical, security-sensitive, or unusually risky work.
+
+Run either workflow interactively:
 
 ```text
 /workflow pipeline
+/workflow deep-review
 ```
 
-You can also provide the workspace and task inline:
+Pi asks whether to use the current folder, another existing folder, or no local folder for a live/remote task. Noninteractive forms are:
 
 ```text
 /workflow pipeline --cwd "C:\path\to\project" Implement and verify the requested change
-/workflow pipeline --live Inspect and fix the live-site behavior
+/workflow pipeline --live Inspect the live-site behavior
+/workflow deep-review --cwd "C:\path\to\project" Review a release-critical change
 ```
 
-Local folders do not have to be Git repositories. The pipeline confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools instead of assuming a local project. While a phase is active, the panel and status line show an animated `running` heartbeat with elapsed time, including periods when the model has not emitted text.
+Local folders do not have to be Git repositories. Every phase confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools. Workflow children set `PI_WORKFLOW_CHILD=1`, so the parent verification extension does not create a nested repair loop inside Plan, Execute, Verify, or Review.
 
-Workflow phases remain isolated RPC processes, but their observable activity is projected into the parent Workbench: workflow delegates contribute to the Agents sidebar, MCP calls show phase-scoped running/succeeded/failed entries without changing the parent hub's connection state, and Codex usage refreshes throughout the run and once after settlement. Optional planning/review discovery failures can fall back to local evidence; edit, execution, and required verification failures remain fatal.
+The panel and status line show phase activity and elapsed time. Delegates and MCP outcomes are projected into the parent Workbench without merging child process state, and Codex usage refreshes throughout the run and after settlement.
 
-The built-in definition is always available. Lowercase YAML files in `~/.pi/workflows` override or extend built-ins globally; files in a trusted project's `.pi/workflows` directory take final precedence. Invalid overrides are reported rather than silently falling back to a different definition.
+Built-ins are always available. Lowercase YAML files in `~/.pi/workflows` override or extend them globally; files in a trusted project's `.pi/workflows` directory take final precedence. Invalid overrides are reported instead of silently falling back.
 
 ## MCP configuration
 
@@ -223,7 +248,8 @@ Rerun the one-command installer when shared settings, companion packages, fonts,
 | `themes/hypr-waves.json` | Shared terminal theme |
 | `settings.example.json` | Safe, portable Pi defaults |
 | `keybindings.json` | Shared clipboard and interaction bindings |
-| `scripts/` | Idempotent configuration, font, Windows Terminal, Warp, capture, and validation helpers |
+| `scripts/` | Configuration, terminal setup, validation, privacy-safe session analysis, and report generation |
+| `reports/pi-workflow-audit.html` | Standalone public-safe 30-day session and workflow audit |
 | `tests/` | Behavior and regression coverage |
 | `install.ps1`, `install.sh` | One-command installers and updaters |
 | `UPSTREAM.md` | Audited relationship with the original extension source |
@@ -241,9 +267,19 @@ npm test
 
 Pi owns `~/.pi/agent/git/github.com/amAbdoMo/Pi` and may reset it during updates. Shared settings can be captured safely with `npm run capture`; authentication, sessions, trust decisions, generated images, and model credentials are intentionally excluded.
 
+Generate the local 30-day audit from the canonical checkout:
+
+```bash
+node scripts/analyze-sessions.mjs --help
+node scripts/generate-session-report.mjs --days 30
+```
+
+The analyzer streams JSONL records and emits aggregate facts plus explicitly labelled heuristics. The generated `reports/pi-workflow-audit.html` is standalone and rejects raw prompts, tool output, session IDs, source paths, UUIDs, credentials, embedded screenshots, and external resources before writing.
+
 ## Privacy and safety
 
-- No authentication files, session history, trust decisions, or API credentials are stored in this repository.
+- No authentication files, raw session history, trust decisions, or API credentials are stored in this repository.
+- The checked-in workflow audit contains only anonymous aggregate metrics and report-local aliases; its generator fails closed on private paths, identifiers, credentials, raw content fields, and embedded images.
 - MCP runtime errors and cached metadata are sanitized to reduce accidental secret exposure.
 - Project-level MCP configuration is loaded only for trusted projects.
 - Local MCP processes and Pi extensions run with the current user's permissions. Review configuration and third-party packages before enabling them.

@@ -37,11 +37,23 @@ function write(dir: string, name: string, content: string): string {
 const minimal = (prompt = "Do {{input}}") => `description: test\nphases:\n  - id: run\n    prompt: ${JSON.stringify(prompt)}\n`;
 
 describe("secure YAML compiler and discovery", () => {
-	test("compiles the shipped four-phase pipeline without Python", () => {
-		const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "pipeline.yaml");
-		const raw = parseYamlText(fs.readFileSync(file, "utf8"), path.basename(file));
-		const workflow = validateWorkflow(raw, file, "built-in");
-		expect(workflow.phases.map((phase) => phase.id)).toEqual(["plan", "execute", "verify", "review"]);
+	test("compiles the focused and opt-in deep four-phase workflows without Python", () => {
+		const workflowDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+		const compile = (name: string) => {
+			const file = path.join(workflowDir, name);
+			return validateWorkflow(parseYamlText(fs.readFileSync(file, "utf8"), name), file, "built-in");
+		};
+		const focused = compile("pipeline.yaml");
+		const deep = compile("deep-review.yaml");
+		expect(focused.phases.map((phase) => phase.id)).toEqual(["plan", "execute", "verify", "review"]);
+		expect(focused.maxTransitions).toBe(7);
+		const verify = focused.phases.find((phase) => phase.id === "verify")!;
+		expect(verify.output).toMatchObject({ statuses: ["PASS", "FAIL", "BLOCKED"] });
+		expect(resolveNextPhase(focused, verify, { output: "blocked", structured: { status: "BLOCKED", report: "blocked" } }).phase).toBeUndefined();
+		expect(focused.phases.find((phase) => phase.id === "review")?.tools).not.toContain("delegate");
+		expect(deep.maxTransitions).toBe(16);
+		expect(deep.phases.find((phase) => phase.id === "review")).toMatchObject({ thinking: "high" });
+		expect(deep.phases.find((phase) => phase.id === "review")?.tools).toContain("delegate");
 	});
 
 	test("retains YAML 1.1 scalars and rejects duplicate keys and documents", () => {
@@ -157,13 +169,13 @@ describe("schema compatibility, templates, routing, and reports", () => {
 		expect(() => validateWorkflow({ phases: [{ id: "run", prompt: "x", nonFatalTools: "web_fetch" }] }, file, "global")).toThrow(/array of strings/);
 	});
 
-	test("configures pipeline discovery fallbacks while keeping verify strict", () => {
+	test("configures focused pipeline fallbacks without weakening required local checks", () => {
 		const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "pipeline.yaml");
 		const workflow = validateWorkflow(parseYamlText(fs.readFileSync(file, "utf8"), path.basename(file)), file, "built-in");
 		expect(workflow.phases.find((phase) => phase.id === "plan")?.nonFatalTools).toEqual(["web_search", "web_fetch", "mcp", "delegate"]);
-		expect(workflow.phases.find((phase) => phase.id === "execute")?.nonFatalTools).toEqual(["web_search", "web_fetch"]);
-		expect(workflow.phases.find((phase) => phase.id === "verify")?.nonFatalTools).toBeUndefined();
-		expect(workflow.phases.find((phase) => phase.id === "review")?.nonFatalTools).toEqual(["web_search", "web_fetch", "delegate"]);
+		expect(workflow.phases.find((phase) => phase.id === "execute")?.nonFatalTools).toEqual(["web_search", "web_fetch", "delegate"]);
+		expect(workflow.phases.find((phase) => phase.id === "verify")?.nonFatalTools).toEqual(["web_fetch"]);
+		expect(workflow.phases.find((phase) => phase.id === "review")?.nonFatalTools).toBeUndefined();
 	});
 
 	test("accepts max thinking and rejects reserved IDs, no-op conditions, and malformed descriptions", () => {

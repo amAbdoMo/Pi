@@ -1,34 +1,60 @@
 # Workflow extension
 
-Pi Workbench includes a built-in `pipeline` workflow and discovers additional lowercase `.yaml` or `.yml` files from:
+Pi Workbench discovers lowercase `.yaml` or `.yml` workflows from three scopes, with later scopes overriding the same filename-derived workflow ID:
 
-1. `~/.pi/workflows`
-2. `<trusted-project>/.pi/workflows`
+1. Built-ins in this extension
+2. `~/.pi/workflows`
+3. `<trusted-project>/.pi/workflows`
 
-Later scopes override earlier scopes by filename-derived workflow ID. Invalid overrides remain visible as diagnostics and do not silently run the overridden definition.
+Invalid overrides remain visible as diagnostics and do not silently run a different definition.
 
-## Built-in pipeline
+## Built-in workflows
 
-`pipeline.yaml` runs four phases:
+### `pipeline` — focused default
 
-1. `plan`
-2. `execute`
-3. `verify`
-4. `review`
+`pipeline.yaml` runs four isolated phases:
 
-A failed verification routes back to `execute`. Actionable review findings also route back to `execute`; approval ends the workflow. `maxTransitions` bounds retries.
+1. `plan` gathers targeted evidence without edits.
+2. `execute` implements directly for small work and is instructed to use no more than two useful independent delegates.
+3. `verify` performs one proportional real-feature pass and returns `PASS`, `FAIL`, or `BLOCKED`.
+4. `review` performs one direct correctness/security/contract review without a delegate panel.
 
-Run `/workflow` to list definitions. `/workflow pipeline` asks for a task and workspace: the current folder, another existing folder, or live/remote mode with no local project. Noninteractive forms are `/workflow pipeline --cwd "<folder>" <task>` and `/workflow pipeline --live <task>`.
+One `FAIL` can route back to Execute. `BLOCKED` ends immediately for login, credentials, target access, browser availability, environment availability, or a failure that remains after the remediation pass. `maxTransitions: 7` allows one remediation to reach final review while preventing a second repair cycle.
 
-Local workspaces may be Git or non-Git directories. Every phase receives an explicit workspace contract: Git commands are allowed only after confirming a `.git` entry. Live/remote phases run from an isolated empty directory and use web/MCP evidence instead. The workflow panel and status line update a running spinner and elapsed time every second while a phase is silent or active.
+The Verify phase must use the real feature. It does not create substitute pages, sections, fixtures, or proof harnesses. When access is blocked, it may take one viewport screenshot only if useful, then returns `BLOCKED` instead of trying browser variants.
+
+### `deep-review` — explicit high-risk workflow
+
+`deep-review.yaml` preserves the extended multi-agent workflow: four bug hunters, architecture and security review, consensus filtering, fact-checking, judging, and a larger transition budget. Use it for release-critical, security-sensitive, or unusually risky changes rather than routine work.
+
+## Running a workflow
+
+Interactive commands:
+
+```text
+/workflow pipeline
+/workflow deep-review
+```
+
+Inline workspace forms:
+
+```text
+/workflow pipeline --cwd "C:\path\to\project" Implement and verify the requested change
+/workflow pipeline --live Inspect the live target
+/workflow deep-review --cwd "C:\path\to\project" Review a release-critical change
+```
+
+Local workspaces may be Git or non-Git directories. Every phase must confirm a `.git` entry before a Git command. Live mode runs from an isolated empty directory and uses web or MCP evidence without local-project assumptions.
+
+Each phase runs in an isolated Pi RPC child with `PI_WORKFLOW_CHILD=1`. The verification extension uses that marker to retain temporary screenshot routing without starting a nested verification prompt, repair turn, or `verification_report` gate inside the workflow child.
+
+The workflow panel and status line show a running heartbeat and elapsed time. Child delegates and MCP outcomes are projected into the parent Workbench without merging process state, and Codex usage refreshes during and after the run.
 
 ## Definition rules
 
 - Filenames and phase IDs use lowercase letters, numbers, and hyphens.
-- YAML is parsed in-process with strict duplicate-key, document-count, alias, and size limits.
+- YAML is parsed in-process with duplicate-key, document-count, alias, and size limits.
 - Project workflows load only for trusted projects.
-- Each phase runs in an isolated Pi RPC child with configured tools and thinking level, using the selected working directory or an empty live-mode directory.
-- Parent Workbench activity projection reports workflow delegates, phase-scoped MCP outcomes, and workflow-driven Codex usage refreshes without merging child and parent process state.
-- `nonFatalTools` may name unique tools from an explicit phase `tools` list whose failure permits a documented fallback; every unlisted tool failure remains fatal.
+- `nonFatalTools` must be unique members of an explicit phase `tools` list. Every unlisted tool failure remains fatal.
 - Structured phase output controls conditional routing.
-- `workflow_run` failures are tool errors; callers must not treat them as successful orchestration.
+- `workflow_run` failures are tool errors and must not be treated as successful orchestration.

@@ -10,10 +10,10 @@ export interface WorkbenchDimensions {
   showSidebar: boolean;
 }
 
-// SGR tracking is required for wheel events; the shell strips reported mouse sequences
-// before they can reach the composer. Shift+drag remains the native-selection escape hatch.
-export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[?1006h\x1b[?1000h\x1b[2J\x1b[H";
-export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1000l\x1b[?1006l\x1b[?1007h\x1b[?1049l";
+// Button-event tracking reports wheel and drag coordinates so the shell can provide
+// precise copy selection while streaming. Shift+drag remains the terminal-native fallback.
+export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[?1006h\x1b[?1002h\x1b[2J\x1b[H";
+export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1002l\x1b[?1006l\x1b[?1007h\x1b[?1049l";
 
 export interface ViewportMetrics {
   viewportHeight: number;

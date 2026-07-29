@@ -69,7 +69,7 @@ export class WorkbenchSidebarController {
   private desiredVisible = false;
   private unsubscribeModals?: () => void;
 
-  attachDocked(tui: TUI, theme: Theme): void {
+  attachDocked(tui: TUI, theme: Theme, onCopyError: (error: Error) => void): void {
     this.handle?.hide();
     this.handle = undefined;
     this.component?.dispose();
@@ -82,7 +82,7 @@ export class WorkbenchSidebarController {
       () => tui.terminal.rows,
       () => tui.terminal.columns,
     );
-    this.shell = installWorkbenchShell(tui, this.component);
+    this.shell = installWorkbenchShell(tui, this.component, { onCopyError });
     this.syncVisibility();
   }
 

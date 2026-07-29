@@ -15,15 +15,44 @@ const tuiStub = String.raw`
   };
   export function matchesKey(data, key) { return data === key; }
   export function isKeyRelease() { return false; }
-  export function visibleWidth(text) {
-    return [...String(text).replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "")].length;
+  function cellWidth(character) {
+    const code = character.codePointAt(0);
+    return code >= 0x1100 && (
+      code <= 0x115f || code === 0x2329 || code === 0x232a ||
+      (code >= 0x2e80 && code <= 0xa4cf) ||
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe10 && code <= 0xfe6f) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6) ||
+      (code >= 0x1f300 && code <= 0x1faff)
+    ) ? 2 : 1;
   }
-  export function truncateToWidth(text, width, ellipsis = "") {
+  export function visibleWidth(text) {
+    const plain = String(text).replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "");
+    return [...plain].reduce((width, character) => width + cellWidth(character), 0);
+  }
+  export function truncateToWidth(text, width, ellipsis = "", pad = false) {
     if (width <= 0) return "";
     const chars = [...String(text)];
-    if (visibleWidth(text) <= width) return String(text);
-    const suffix = [...ellipsis].slice(0, width).join("");
-    return chars.slice(0, Math.max(0, width - visibleWidth(suffix))).join("") + suffix;
+    let output = visibleWidth(text) <= width
+      ? String(text)
+      : chars.slice(0, Math.max(0, width - visibleWidth(ellipsis))).join("") + ellipsis;
+    if (pad) output += " ".repeat(Math.max(0, width - visibleWidth(output)));
+    return output;
+  }
+  export function sliceByColumn(text, start, length, strict = false) {
+    const plain = String(text).replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "");
+    const end = start + length;
+    let column = 0;
+    let output = "";
+    for (const character of plain) {
+      const width = cellWidth(character);
+      if (column >= start && column < end && (!strict || column + width <= end)) output += character;
+      column += width;
+      if (column >= end) break;
+    }
+    return output;
   }
   export function wrapTextWithAnsi(text, width) {
     const safeWidth = Math.max(1, width);
@@ -60,6 +89,7 @@ const codingAgentStub = String.raw`
   export const DEFAULT_MAX_LINES = 2000;
   export function getAgentDir() { return process.cwd(); }
   export function getMarkdownTheme() { return {}; }
+  export async function copyToClipboard() {}
   export function truncateHead(text, options) {
     const lines = String(text).split("\n");
     let selected = lines.slice(0, options.maxLines);
@@ -153,6 +183,11 @@ const { renderWorkflowPanel, statusIcon } = await import(
 const { installWorkbenchShell } = await import(
   "../extensions/ui/workbenchShell.ts"
 );
+const {
+  clampSelectionPoint,
+  highlightTerminalSelection,
+  selectedTerminalText,
+} = await import("../extensions/ui/textSelection.ts");
 const { TerminalEditor } = await import(
   "../extensions/ui/terminalEditor.ts"
 );
@@ -161,6 +196,9 @@ const { WorkbenchSidebar } = await import(
 );
 const { publishMcpStatus } = await import(
   "../extensions/mcp/status.ts"
+);
+const { default: planModeExtension } = await import(
+  "../extensions/plan-mode/index.ts"
 );
 const {
   beginWorkflowActivity,
@@ -177,6 +215,69 @@ const theme = {
   bg: (_role, text) => text,
   bold: (text) => text,
 };
+
+function createPlanModeHarness(sessionEntries = [{
+  type: "custom",
+  customType: "plan-mode",
+  data: {
+    enabled: false,
+    executing: true,
+    todos: [{ step: 1, text: "Finish the tracked change", status: "running" }],
+  },
+}]) {
+  const extensionHandlers = new Map();
+  const eventHandlers = new Map();
+  const timeline = [];
+  let planProgressTool;
+  const events = {
+    emit(channel, data) {
+      for (const handler of eventHandlers.get(channel) ?? []) handler(data);
+    },
+    on(channel, handler) {
+      const handlers = eventHandlers.get(channel) ?? [];
+      handlers.push(handler);
+      eventHandlers.set(channel, handlers);
+      return () => eventHandlers.set(channel, handlers.filter((item) => item !== handler));
+    },
+  };
+  const pi = {
+    events,
+    registerFlag() {},
+    registerEntryRenderer() {},
+    registerTool(tool) { planProgressTool = tool; },
+    registerCommand() {},
+    registerShortcut() {},
+    getFlag() { return false; },
+    getActiveTools() { return ["read", "bash", "edit", "write"]; },
+    setActiveTools() {},
+    appendEntry(customType, data) { timeline.push({ type: "entry", customType, data }); },
+    sendMessage(message, options) { timeline.push({ type: "message", message, options }); },
+    on(event, handler) { extensionHandlers.set(event, handler); },
+  };
+  planModeExtension(pi);
+  const ctx = {
+    mode: "tui",
+    hasUI: true,
+    ui: {
+      theme: {
+        fg: (_role, text) => text,
+        strikethrough: (text) => text,
+      },
+      setStatus: (_key, value) => timeline.push({ type: "status", value }),
+      setWidget: (_key, value) => timeline.push({ type: "widget", value }),
+      notify() {},
+    },
+    sessionManager: {
+      getEntries: () => sessionEntries,
+    },
+  };
+  return {
+    ctx,
+    timeline,
+    tool: () => planProgressTool,
+    handler: (event) => extensionHandlers.get(event),
+  };
+}
 
 function resetDirectSubagents(overrides = {}) {
   globalThis.__pi_subagents_status_v1 = {
@@ -221,6 +322,59 @@ function assertWidthSafe(lines, width) {
     );
   }
 }
+
+test("the final plan step enters the transcript before the next assistant response", async () => {
+  const harness = createPlanModeHarness();
+  await harness.handler("session_start")({ reason: "resume" }, harness.ctx);
+  harness.timeline.length = 0;
+
+  await harness.tool().execute(
+    "plan-1",
+    { step: 1, status: "completed", evidence: "Verified in the focused regression" },
+    undefined,
+    undefined,
+    harness.ctx,
+  );
+
+  const clearIndex = harness.timeline.findIndex((event) => event.type === "widget" && event.value === undefined);
+  const completionIndex = harness.timeline.findIndex((event) => event.type === "entry" && event.customType === "plan-complete");
+  assert.ok(clearIndex >= 0 && clearIndex < completionIndex);
+  assert.match(harness.timeline[completionIndex].data.content, /Plan Complete!/);
+  assert.equal(harness.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 1);
+
+  await harness.handler("agent_end")({ messages: [] }, harness.ctx);
+  assert.equal(harness.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 1);
+});
+
+test("completed plan transcript recovery is idempotent across resume", async () => {
+  const completedState = {
+    type: "custom",
+    customType: "plan-mode",
+    data: {
+      enabled: false,
+      executing: false,
+      todos: [{ step: 1, text: "Finish the tracked change", status: "completed", evidence: "Verified" }],
+    },
+  };
+  const missingMessage = createPlanModeHarness([completedState]);
+  await missingMessage.handler("session_start")({ reason: "resume" }, missingMessage.ctx);
+  assert.equal(missingMessage.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 1);
+
+  const renderedMessage = createPlanModeHarness([
+    completedState,
+    { type: "custom_message", customType: "plan-complete", content: "Plan Complete" },
+  ]);
+  await renderedMessage.handler("session_start")({ reason: "resume" }, renderedMessage.ctx);
+  assert.equal(renderedMessage.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 0);
+  assert.ok(renderedMessage.timeline.some((event) => event.type === "widget" && event.value === undefined));
+
+  const persistedAnnouncement = createPlanModeHarness([{
+    ...completedState,
+    data: { ...completedState.data, completionAnnounced: true },
+  }]);
+  await persistedAnnouncement.handler("session_start")({ reason: "resume" }, persistedAnnouncement.ctx);
+  assert.equal(persistedAnnouncement.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 0);
+});
 
 test("workbench frames remain width-safe without heavy borders", () => {
   for (const width of [8, 12, 24, 52]) {
@@ -445,6 +599,10 @@ function chatRows(tui) {
   return tui.render(80).slice(0, 4).map((line) => line.trimEnd());
 }
 
+const copyOptions = {
+  onCopyError: (error) => assert.fail(error),
+};
+
 function createWorkbenchTui() {
   let listener;
   const writes = [];
@@ -481,13 +639,34 @@ function createWorkbenchTui() {
   };
 }
 
+test("text selection excludes component and terminal padding", () => {
+  const lines = ["alpha          "];
+  const focus = clampSelectionPoint(lines, 0, 79);
+  const range = { anchor: { row: 0, column: 0, endColumn: 1 }, focus };
+
+  assert.deepEqual(focus, { row: 0, column: 4, endColumn: 5 });
+  assert.equal(selectedTerminalText(lines, range), "alpha");
+  assert.match(highlightTerminalSelection(lines, range)[0], /^\x1b\[7malpha\x1b\[27m {10}$/);
+});
+
+test("text selection snaps both cells of a wide glyph to one grapheme", () => {
+  const lines = ["A界B"];
+  const firstCell = clampSelectionPoint(lines, 0, 1);
+  const secondCell = clampSelectionPoint(lines, 0, 2);
+
+  assert.deepEqual(firstCell, { row: 0, column: 1, endColumn: 3 });
+  assert.deepEqual(secondCell, firstCell);
+  assert.equal(selectedTerminalText(lines, { anchor: firstCell, focus: secondCell }), "界");
+  assert.equal(highlightTerminalSelection(lines, { anchor: firstCell, focus: secondCell })[0], "A\x1b[7m界\x1b[27mB");
+});
+
 test("workbench shell routes mouse wheel to chat and preserves position while streaming", () => {
   const { tui, writes, input, appendChat } = createWorkbenchTui();
-  const handle = installWorkbenchShell(tui, component([]));
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
 
   try {
     assert.match(writes.join(""), /\x1b\[\?1006h/);
-    assert.match(writes.join(""), /\x1b\[\?1000h/);
+    assert.match(writes.join(""), /\x1b\[\?1002h/);
     assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
 
     assert.deepEqual(input("\x1b[<64;10;4M"), { consume: true });
@@ -501,11 +680,94 @@ test("workbench shell routes mouse wheel to chat and preserves position while st
   } finally {
     handle.dispose();
   }
+  assert.match(writes.join(""), /\x1b\[\?1002l/);
+  assert.match(writes.join(""), /\x1b\[\?1049l/);
+  assert.equal(input("\x1b[<64;10;4M"), undefined);
+});
+
+test("workbench shell drag-selects only text cells and copies the exact range", () => {
+  const { tui, input } = createWorkbenchTui();
+  const copied = [];
+  const handle = installWorkbenchShell(tui, component([]), {
+    copyText: async (text) => { copied.push(text); },
+    onCopyError: copyOptions.onCopyError,
+  });
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;1;1M");
+    input("\x1b[<0;1;1m");
+    assert.deepEqual(copied, []);
+
+    assert.deepEqual(input("\x1b[<0;6;1M"), { consume: true });
+    assert.deepEqual(input("\x1b[<32;3;2M"), { consume: true });
+    assert.deepEqual(input("\x1b[<0;3;2m"), { consume: true });
+
+    assert.deepEqual(copied, ["17\ncha"]);
+    const selectedRows = tui.render(80).slice(0, 2);
+    assert.match(selectedRows[0], /chat-\x1b\[7m17\x1b\[27m/);
+    assert.match(selectedRows[1], /\x1b\[7mcha\x1b\[27m/);
+    assert.ok(selectedRows.every((line) => visibleWidth(line) < 80));
+
+    assert.deepEqual(input("ctrl+c"), { consume: true });
+    assert.deepEqual(copied, ["17\ncha", "17\ncha"]);
+    assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("workbench shell reports clipboard failures", async () => {
+  const { tui, input } = createWorkbenchTui();
+  const copyErrors = [];
+  const handle = installWorkbenchShell(tui, component([]), {
+    copyText: async () => { throw new Error("clipboard unavailable"); },
+    onCopyError: (error) => copyErrors.push(error.message),
+  });
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;1;1M");
+    input("\x1b[<32;2;1M");
+    input("\x1b[<0;2;1m");
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(copyErrors, ["clipboard unavailable"]);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("workbench shell preserves a selection while streaming and releases it on fresh output", () => {
+  const { tui, input, appendChat } = createWorkbenchTui();
+  const copied = [];
+  const handle = installWorkbenchShell(tui, component([]), {
+    copyText: async (text) => { copied.push(text); },
+    onCopyError: copyOptions.onCopyError,
+  });
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;1;1M");
+    appendChat("chat-21", "chat-22");
+    assert.match(tui.render(80)[0], /\x1b\[7mc\x1b\[27mhat-17/);
+
+    input("\x1b[<32;2;1M");
+    input("\x1b[<0;2;1m");
+    assert.deepEqual(copied, ["ch"]);
+    assert.match(tui.render(80)[0], /\x1b\[7mch\x1b\[27mat-17/);
+
+    appendChat("chat-23");
+    const fresh = tui.render(80).slice(0, 4).map((line) => line.trimEnd());
+    assert.deepEqual(fresh, ["chat-20", "chat-21", "chat-22", "chat-23"]);
+    assert.doesNotMatch(fresh.join("\n"), /\x1b\[7m/);
+  } finally {
+    handle.dispose();
+  }
 });
 
 test("workbench shell keeps PageUp and PageDown chat scrolling", () => {
   const { tui, input } = createWorkbenchTui();
-  const handle = installWorkbenchShell(tui, component([]));
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
 
   try {
     assert.deepEqual(input("pageup"), { consume: true });

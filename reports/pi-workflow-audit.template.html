@@ -1,0 +1,1028 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <link rel="icon" href="data:,">
+  <title>Pi 30-Day Session Workflow Audit</title>
+  <style>
+    :root {
+      --mineral: #eef1ee;
+      --mineral-2: #f8f8f4;
+      --mineral-3: #dde4df;
+      --ink: #0b1f32;
+      --navy: #17324d;
+      --muted: #51616f;
+      --teal: #007c89;
+      --teal-soft: #d9f2f1;
+      --amber: #a56400;
+      --amber-soft: #fff0cf;
+      --coral: #c24135;
+      --coral-soft: #ffe1db;
+      --line: rgba(11, 31, 50, 0.16);
+      --shadow: 0 18px 50px rgba(11, 31, 50, 0.12);
+      --radius: 22px;
+      --mono: "Cascadia Mono", "Consolas", monospace;
+      --display: "Bahnschrift SemiCondensed", "Bahnschrift", "Arial Narrow", sans-serif;
+      --body: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(0, 124, 137, 0.13), transparent 32rem),
+        radial-gradient(circle at 90% 18%, rgba(194, 65, 53, 0.10), transparent 28rem),
+        linear-gradient(135deg, var(--mineral-2), var(--mineral));
+      font-family: var(--body);
+      line-height: 1.5;
+    }
+
+    a { color: inherit; }
+    :focus-visible { outline: 3px solid var(--teal); outline-offset: 4px; }
+    .skip-link {
+      position: absolute;
+      left: 1rem;
+      top: 1rem;
+      z-index: 20;
+      transform: translateY(-150%);
+      padding: .7rem 1rem;
+      background: var(--ink);
+      color: white;
+      border-radius: 999px;
+    }
+    .skip-link:focus { transform: none; }
+
+    .shell { width: min(1440px, calc(100% - 32px)); margin: 0 auto; }
+    header.hero {
+      padding: 36px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+      gap: 24px;
+      align-items: stretch;
+    }
+    .eyebrow, .label {
+      display: inline-flex;
+      align-items: center;
+      gap: .4rem;
+      width: fit-content;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      padding: .25rem .55rem .18rem;
+      font-family: var(--mono);
+      font-size: .72rem;
+      line-height: 1.2;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .label.exact { color: var(--teal); background: var(--teal-soft); }
+    .label.inferred { color: var(--amber); background: var(--amber-soft); }
+    .label.action { color: var(--coral); background: var(--coral-soft); }
+    h1, h2, h3 {
+      font-family: var(--display);
+      letter-spacing: -.02em;
+      line-height: .96;
+      margin: 0;
+    }
+    h1 { font-size: clamp(3rem, 9vw, 8rem); text-transform: uppercase; max-width: 12ch; }
+    h2 { font-size: clamp(2rem, 5vw, 4.6rem); text-transform: uppercase; }
+    h3 { font-size: clamp(1.25rem, 2.2vw, 2rem); }
+    p { color: var(--muted); margin: .8rem 0 0; max-width: 75ch; }
+    .deck { font-size: 1.08rem; }
+
+    .flight-panel, .panel, .metric-card, .trace {
+      background: rgba(248, 248, 244, .78);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      backdrop-filter: blur(12px);
+    }
+    .flight-panel { padding: 20px; display: grid; gap: 16px; }
+    .scope-list { display: grid; gap: 10px; margin: 0; }
+    .scope-row { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+    .scope-row:last-child { border-bottom: 0; padding-bottom: 0; }
+    .scope-row dt { color: var(--muted); }
+    .scope-row dd { margin: 0; font-family: var(--mono); font-weight: 700; text-align: right; }
+
+    main { padding: 28px 0 64px; }
+    section { margin-top: 28px; }
+    .section-head { display: flex; justify-content: space-between; gap: 18px; align-items: end; margin-bottom: 14px; }
+    .section-head p { margin-top: .35rem; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .control-label { font-family: var(--mono); font-size: .76rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    button.control {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--navy);
+      border-radius: 999px;
+      padding: .55rem .75rem;
+      font: 700 .82rem/1 var(--mono);
+      cursor: pointer;
+    }
+    button.control[aria-pressed="true"] { background: var(--navy); color: white; border-color: var(--navy); }
+
+    .trace { overflow: hidden; }
+    .trace-top { display: grid; grid-template-columns: 1fr auto; gap: 18px; padding: 20px; align-items: start; }
+    .trace-total { font: 800 clamp(2rem, 8vw, 6.6rem)/.9 var(--display); letter-spacing: -.04em; color: var(--ink); }
+    .trace-caption { font-family: var(--mono); color: var(--muted); font-size: .86rem; }
+    .ribbon {
+      display: flex;
+      min-height: 82px;
+      border-top: 1px solid var(--line);
+      background: #dfe7e3;
+    }
+    .segment {
+      min-width: 2px;
+      position: relative;
+      display: flex;
+      align-items: end;
+      padding: 8px;
+      color: white;
+      overflow: hidden;
+    }
+    .segment span { position: relative; z-index: 1; font: 700 .72rem/1.2 var(--mono); text-shadow: 0 1px 1px rgba(0,0,0,.35); }
+    .seg-input { background: var(--navy); }
+    .seg-output { background: var(--teal); }
+    .seg-reasoning { background: #385a77; }
+    .seg-cacheRead { background: repeating-linear-gradient(45deg, #6c7782 0 10px, #4f5d69 10px 20px); }
+    .seg-cacheWrite { background: #78846b; }
+    .trace-legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 14px 20px 18px; }
+    .legend-item { font: 700 .78rem/1 var(--mono); color: var(--muted); display: inline-flex; align-items: center; gap: 7px; }
+    .swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid rgba(0,0,0,.15); }
+
+    .grid { display: grid; gap: 14px; }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .panel { padding: 18px; }
+    .metric-card { padding: 16px; min-height: 130px; display: flex; flex-direction: column; justify-content: space-between; }
+    .metric-card .name { font-family: var(--mono); font-size: .78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+    .metric-card .value { font: 800 clamp(1.8rem, 4vw, 3.4rem)/1 var(--display); margin-top: 10px; color: var(--ink); overflow-wrap: anywhere; }
+    .metric-card .note { font-size: .86rem; color: var(--muted); margin-top: 8px; }
+    .metric-card.exact { border-color: rgba(0,124,137,.45); }
+    .metric-card.inferred { border-color: rgba(165,100,0,.48); }
+    .metric-card.action { border-color: rgba(194,65,53,.48); }
+
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .compare-card { padding: 20px; background: linear-gradient(145deg, rgba(255,255,255,.72), rgba(238,241,238,.82)); border: 1px solid var(--line); border-radius: var(--radius); }
+    .compare-card h3 { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .compare-list { display: grid; gap: 9px; padding: 0; margin: 16px 0 0; list-style: none; }
+    .compare-list li { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 9px; }
+    .compare-list b { font-family: var(--mono); }
+
+    .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.6); }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    caption { text-align: left; padding: 12px 14px; color: var(--muted); font-size: .9rem; }
+    th, td { padding: 11px 14px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { font: 800 .78rem/1.2 var(--mono); color: var(--navy); text-transform: uppercase; letter-spacing: .06em; background: rgba(221, 228, 223, .55); }
+    td { font-size: .94rem; }
+    td.data { font-family: var(--mono); font-weight: 700; }
+    th button { all: unset; cursor: pointer; border-radius: 6px; padding: 2px 4px; }
+    th button:focus-visible { outline: 3px solid var(--teal); outline-offset: 3px; }
+    .empty { padding: 18px; color: var(--muted); font-style: italic; }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(255,255,255,.62);
+      padding: 12px 14px;
+    }
+    details + details { margin-top: 10px; }
+    summary { cursor: pointer; font-weight: 800; color: var(--navy); }
+    summary::marker { color: var(--teal); }
+    .method-list { margin: 10px 0 0; color: var(--muted); }
+    .method-list li { margin: 6px 0; }
+
+    .status-line { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .pill { border-radius: 999px; border: 1px solid var(--line); padding: .35rem .55rem; font-family: var(--mono); font-size: .78rem; background: rgba(255,255,255,.62); }
+    .pill strong { color: var(--ink); }
+    .callout { border-left: 5px solid var(--amber); background: var(--amber-soft); padding: 12px 14px; border-radius: 0 14px 14px 0; color: #4b3300; }
+    .callout.coral { border-left-color: var(--coral); background: var(--coral-soft); color: #521d18; }
+    .callout.teal { border-left-color: var(--teal); background: var(--teal-soft); color: #073f46; }
+    .responsibility-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .responsibility-card { border-top: 6px solid var(--teal); background: rgba(255,255,255,.68); border-radius: 16px; padding: 16px; }
+    .responsibility-card.agent { border-top-color: var(--coral); }
+    .responsibility-card.environment { border-top-color: var(--amber); }
+    .responsibility-card.complexity { border-top-color: var(--navy); }
+    .responsibility-card ul { padding-left: 1.15rem; color: var(--muted); }
+    .responsibility-card strong { color: var(--ink); font-family: var(--mono); }
+    .state-flow { display: grid; grid-template-columns: repeat(7, minmax(120px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; overflow-x: auto; }
+    .flow-node { min-height: 126px; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: rgba(255,255,255,.72); position: relative; }
+    .flow-node:not(:last-child)::after { content: "→"; position: absolute; right: -12px; top: 45%; z-index: 2; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: white; font-weight: 900; }
+    .flow-node.blocked { border-color: var(--coral); background: var(--coral-soft); }
+    .flow-node.user { border-color: var(--amber); background: var(--amber-soft); }
+    .flow-node.passed { border-color: var(--teal); background: var(--teal-soft); }
+    .flow-node b { display: block; font: 800 1.05rem/1.05 var(--display); text-transform: uppercase; }
+    .flow-node span { display: block; margin-top: 8px; color: var(--muted); font-size: .82rem; }
+    .action-list { display: grid; gap: 10px; }
+    .action-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,.66); }
+    .action-row .signal { font: 800 1rem/1 var(--mono); color: var(--coral); }
+    .action-row p { margin: 0; }
+    .bar-track { height: 10px; border-radius: 999px; background: var(--mineral-3); overflow: hidden; }
+    .bar-fill { height: 100%; min-width: 2px; border-radius: inherit; background: var(--teal); }
+
+    footer { border-top: 1px solid var(--line); padding: 24px 0 36px; color: var(--muted); }
+    .mono { font-family: var(--mono); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 980px) {
+      .hero-grid, .grid.cols-4, .grid.cols-3, .compare, .responsibility-grid { grid-template-columns: 1fr; }
+      .action-row { grid-template-columns: 1fr; }
+      .grid.cols-2 { grid-template-columns: 1fr; }
+      .section-head, .trace-top { grid-template-columns: 1fr; display: grid; }
+      .trace-total { font-size: clamp(2.5rem, 14vw, 5rem); }
+    }
+    @media (max-width: 620px) {
+      .shell { width: min(100% - 20px, 1440px); }
+      header.hero { padding-top: 24px; }
+      .ribbon { min-height: 128px; flex-direction: column; }
+      .segment { min-height: 24px; width: 100% !important; }
+      table { min-width: 620px; }
+    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { transition: none !important; animation: none !important; } }
+    @media print {
+      body { background: white; color: black; }
+      .flight-panel, .panel, .metric-card, .trace, .compare-card { box-shadow: none; background: white; }
+      .controls, .skip-link { display: none !important; }
+      section { break-inside: avoid; }
+      .ribbon { border: 1px solid #999; }
+      details { break-inside: avoid; }
+      details:not([open]) > *:not(summary) { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to report content</a>
+  <script>const REPORT = /*__PI_REPORT_DATA__*/{};</script>
+
+  <header class="hero shell" aria-labelledby="report-title">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow label exact">EXACT · private aggregate</span>
+        <h1 id="report-title">Session Flight Recorder</h1>
+        <p class="deck">A standalone Pi workflow audit for token pressure, browser verification friction, repeated work, delegation balance, and automation behavior. It renders only privacy-safe aggregates emitted by the analyzer.</p>
+        <div class="status-line" id="hero-status" aria-label="Report scope"></div>
+      </div>
+      <aside class="flight-panel" aria-labelledby="scope-heading">
+        <div>
+          <span class="label exact">EXACT</span>
+          <h2 id="scope-heading" style="font-size:2.2rem;margin-top:.45rem">Scope Snapshot</h2>
+        </div>
+        <dl class="scope-list" id="scope-list"></dl>
+      </aside>
+    </div>
+  </header>
+
+  <main id="main" class="shell">
+    <section aria-labelledby="token-trace-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT</span>
+          <h2 id="token-trace-title">Token Trace</h2>
+          <p>Full-width usage ribbon. Cache-read tokens are repeated cached context supplied back to the model; they are not newly generated output.</p>
+        </div>
+        <div class="controls" role="group" aria-label="Metric switch">
+          <span class="control-label">Metric</span>
+          <button class="control metric-control" type="button" data-metric="tokens" aria-pressed="true">tokens</button>
+          <button class="control metric-control" type="button" data-metric="cost" aria-pressed="false">session-reported estimate</button>
+          <button class="control metric-control" type="button" data-metric="active" aria-pressed="false">active-time proxy</button>
+        </div>
+      </div>
+      <div class="trace" aria-live="polite">
+        <div class="trace-top">
+          <div>
+            <div class="trace-total" id="trace-total">—</div>
+            <div class="trace-caption" id="trace-caption">Awaiting report data.</div>
+          </div>
+          <div class="callout teal">ACTION: Use this ribbon to identify whether context replay, new output, or heuristic activity time is dominating the workflow.</div>
+        </div>
+        <div class="ribbon" id="token-ribbon" role="img" aria-label="Token usage composition"></div>
+        <div class="trace-legend" id="token-legend"></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="compare-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT + INFERRED</span>
+          <h2 id="compare-title">Parent / Subagent Split</h2>
+          <p>Exact usage and tool counts are separated from inferred active-time and browser friction indicators.</p>
+        </div>
+      </div>
+      <div class="compare" id="compare-grid"></div>
+    </section>
+
+    <section aria-labelledby="exact-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT</span>
+          <h2 id="exact-title">Exact Metrics</h2>
+          <p>Direct aggregate facts from structured session records and usage fields.</p>
+        </div>
+      </div>
+      <div class="grid cols-4" id="exact-metrics"></div>
+    </section>
+
+    <section aria-labelledby="heuristic-title">
+      <div class="section-head">
+        <div>
+          <span class="label inferred">INFERRED</span>
+          <h2 id="heuristic-title">Heuristic Metrics</h2>
+          <p>Directional diagnostics only. Active time, categories, repeats, blockers, and causal attribution are inferred/heuristic.</p>
+        </div>
+      </div>
+      <div class="grid cols-4" id="heuristic-metrics"></div>
+    </section>
+
+    <section aria-labelledby="tools-title">
+      <div class="section-head">
+        <div>
+          <span class="label inferred">INFERRED</span>
+          <h2 id="tools-title">Tool Categories</h2>
+          <p>Category membership is inferred from sanitized tool names and transient argument inspection.</p>
+        </div>
+      </div>
+      <div class="table-wrap" id="tool-categories"></div>
+      <div class="grid cols-2" style="margin-top:14px">
+        <div class="panel" id="tool-summary"></div>
+        <div class="panel" id="model-summary"></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="browser-title">
+      <div class="section-head">
+        <div>
+          <span class="label action">ACTION</span>
+          <h2 id="browser-title">Browser Blockers / Retries</h2>
+          <p>Browser blockers and retry loops are inferred from conservative error and access-blocker patterns.</p>
+        </div>
+      </div>
+      <div class="grid cols-3" id="browser-metrics"></div>
+      <div class="table-wrap" id="browser-blockers" style="margin-top:14px"></div>
+    </section>
+
+    <section aria-labelledby="automation-title">
+      <div class="section-head">
+        <div>
+          <span class="label inferred">INFERRED</span>
+          <h2 id="automation-title">Automation Attribution</h2>
+          <p>Causal attribution is heuristic: automatic verification prefixes are recognized, all other parent turns remain human or unknown.</p>
+        </div>
+      </div>
+      <div class="table-wrap" id="automation-table"></div>
+    </section>
+
+    <section aria-labelledby="context-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT + INFERRED</span>
+          <h2 id="context-title">Context / Cost Pressure</h2>
+          <p>Exact token and compaction records alongside clearly labelled context-pressure indicators.</p>
+        </div>
+      </div>
+      <div class="grid cols-4" id="context-metrics"></div>
+      <div class="panel" id="token-anatomy" style="margin-top:14px"></div>
+    </section>
+
+    <section aria-labelledby="responsibility-title">
+      <div class="section-head">
+        <div>
+          <span class="label action">ACTION</span>
+          <h2 id="responsibility-title">Responsibility Matrix</h2>
+          <p>What the user can influence, what the workflow should enforce, what the environment blocks, and what belongs to real task complexity.</p>
+        </div>
+      </div>
+      <div class="responsibility-grid" id="responsibility-grid"></div>
+    </section>
+
+    <section aria-labelledby="flow-title">
+      <div class="section-head">
+        <div>
+          <span class="label action">ACTION</span>
+          <h2 id="flow-title">Recommended Verification Route</h2>
+          <p>One proportional pass, one bounded repair, then a visible stop for user choice instead of an automatic loop.</p>
+        </div>
+      </div>
+      <ol class="state-flow" aria-label="Recommended verification state machine">
+        <li class="flow-node"><b>Pending</b><span>A real feature change requires fresh evidence.</span></li>
+        <li class="flow-node"><b>Verify</b><span>Use the smallest relevant command and real user journey.</span></li>
+        <li class="flow-node"><b>Repair once</b><span>Fix one observed product issue and rerun stale checks.</span></li>
+        <li class="flow-node blocked"><b>Blocker</b><span>Detect login, access, credentials, browser, or environment failure.</span></li>
+        <li class="flow-node user"><b>User choice</b><span>Login, continue without browser, stop, or type another instruction.</span></li>
+        <li class="flow-node"><b>Resume</b><span>Continue only after explicit approval; preserve the browser session.</span></li>
+        <li class="flow-node passed"><b>Passed</b><span>Report only fresh, observed evidence.</span></li>
+      </ol>
+    </section>
+
+    <section aria-labelledby="actions-title">
+      <div class="section-head">
+        <div>
+          <span class="label action">ACTION</span>
+          <h2 id="actions-title">Priority Actions</h2>
+          <p>Recommendations tied to observed signals. These are opportunity indicators, not guaranteed token savings.</p>
+        </div>
+      </div>
+      <div class="action-list" id="action-list"></div>
+    </section>
+
+    <section aria-labelledby="sessions-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT + INFERRED</span>
+          <h2 id="sessions-title">Anonymous Top Sessions</h2>
+          <p>Aliases are report-local and anonymous. No raw prompts, paths, session IDs, screenshots, tool output, or error details are displayed.</p>
+        </div>
+        <div class="controls" role="group" aria-label="Session kind filter">
+          <span class="control-label">Filter</span>
+          <button class="control filter-control" type="button" data-filter="all" aria-pressed="true">all</button>
+          <button class="control filter-control" type="button" data-filter="parent" aria-pressed="false">parent</button>
+          <button class="control filter-control" type="button" data-filter="subagent" aria-pressed="false">subagent</button>
+        </div>
+      </div>
+      <div class="table-wrap" id="session-table"></div>
+    </section>
+
+    <section aria-labelledby="method-title">
+      <div class="section-head">
+        <div>
+          <span class="label exact">EXACT</span>
+          <h2 id="method-title">Methodology / Privacy</h2>
+          <p>Native disclosures keep the audit printable, keyboard accessible, and explicit about what was and was not emitted.</p>
+        </div>
+      </div>
+      <div id="methodology"></div>
+    </section>
+  </main>
+
+  <footer class="shell">
+    <p class="mono">Standalone HTML · inline CSS/JS · no external resources · privacy-safe aggregate rendering.</p>
+  </footer>
+
+  <script>
+  (() => {
+    "use strict";
+
+    const state = { metric: "tokens", filter: "all", sortKey: "metric", sortDir: "desc" };
+    const tokenKeys = ["input", "output", "reasoning", "cacheRead", "cacheWrite"];
+    const tokenLabels = {
+      input: "Input",
+      output: "Output",
+      reasoning: "Reasoning",
+      cacheRead: "Cache read",
+      cacheWrite: "Cache write"
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const isObj = (value) => value && typeof value === "object" && !Array.isArray(value);
+    const asArray = (value) => Array.isArray(value) ? value : [];
+    const entries = (value) => isObj(value) ? Object.entries(value) : [];
+    const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+    const get = (root, path) => path.reduce((acc, key) => isObj(acc) || Array.isArray(acc) ? acc[key] : undefined, root);
+    const usage = (scope) => get(scope, ["usage", "total"]) || {};
+    const heur = (kind = "all") => get(REPORT, ["heuristics", kind]) || {};
+    const totalUsage = () => usage(REPORT.totals || {});
+
+    function number(value) {
+      const n = finite(value);
+      return n === 0 ? "0" : new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(n);
+    }
+    function compact(value) {
+      const n = finite(value);
+      return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(n);
+    }
+    function money(value) {
+      return new Intl.NumberFormat("en", { style: "currency", currency: "USD", maximumFractionDigits: 4 }).format(finite(value));
+    }
+    function percent(part, whole) {
+      const p = whole > 0 ? (finite(part) / whole) * 100 : 0;
+      return `${p.toFixed(p >= 10 ? 0 : 1)}%`;
+    }
+    function date(value) {
+      const d = new Date(value);
+      return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    }
+    function duration(ms) {
+      let seconds = Math.round(finite(ms) / 1000);
+      const days = Math.floor(seconds / 86400); seconds -= days * 86400;
+      const hours = Math.floor(seconds / 3600); seconds -= hours * 3600;
+      const minutes = Math.floor(seconds / 60);
+      const parts = [];
+      if (days) parts.push(`${days}d`);
+      if (hours) parts.push(`${hours}h`);
+      if (minutes || !parts.length) parts.push(`${minutes}m`);
+      return parts.join(" ");
+    }
+    function safeText(value) {
+      if (value === null || value === undefined || value === "") return "—";
+      return String(value);
+    }
+
+    function el(tag, options = {}, children = []) {
+      const node = document.createElement(tag);
+      if (options.className) node.className = options.className;
+      if (options.text !== undefined) node.textContent = options.text;
+      if (options.attrs) for (const [key, value] of Object.entries(options.attrs)) node.setAttribute(key, value);
+      for (const child of children) node.append(child);
+      return node;
+    }
+    function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+    function addScopeRow(list, label, value) {
+      const row = el("div", { className: "scope-row" });
+      row.append(el("dt", { text: label }), el("dd", { text: value }));
+      list.append(row);
+    }
+
+    function renderHero() {
+      const status = $("hero-status");
+      clear(status);
+      const totals = REPORT.totals || {};
+      const h = heur("all");
+      [
+        ["Schema", safeText(REPORT.schemaVersion)],
+        ["Window", `${number(get(REPORT, ["window", "days"]))} days`],
+        ["Sessions", number(totals.sessions)],
+        ["Generated", date(REPORT.generatedAt)]
+      ].forEach(([label, value]) => {
+        const pill = el("span", { className: "pill" });
+        pill.append(el("span", { text: `${label}: ` }), el("strong", { text: value }));
+        status.append(pill);
+      });
+
+      const list = $("scope-list");
+      clear(list);
+      addScopeRow(list, "Snapshot", date(get(REPORT, ["window", "snapshot"])));
+      addScopeRow(list, "Cutoff", date(get(REPORT, ["window", "cutoff"])));
+      addScopeRow(list, "Inclusion", safeText(get(REPORT, ["window", "inclusion"])));
+      addScopeRow(list, "Files read", number(get(REPORT, ["diagnostics", "filesRead"])));
+      addScopeRow(list, "Parent sessions", number(get(REPORT, ["parentTotals", "sessions"])));
+      addScopeRow(list, "Subagent sessions", number(get(REPORT, ["subagentTotals", "sessions"])));
+      addScopeRow(list, "Active-time proxy", `${duration(get(h, ["activity", "activeTimeProxyMs"]))} · inferred`);
+    }
+
+    function renderTrace() {
+      const u = totalUsage();
+      const h = heur("all");
+      const totalTokens = finite(u.totalTokens) || tokenKeys.reduce((sum, key) => sum + finite(u[key]), 0);
+      const total = $("trace-total");
+      const caption = $("trace-caption");
+      if (state.metric === "cost") {
+        total.textContent = money(u.sessionReportedEstimatedCost);
+        caption.textContent = "Cost is a session-reported estimate copied from usage records, not proof of billed amount.";
+      } else if (state.metric === "active") {
+        total.textContent = duration(get(h, ["activity", "activeTimeProxyMs"]));
+        caption.textContent = "Active-time proxy is inferred from timestamp gaps capped by the analyzer.";
+      } else {
+        total.textContent = compact(totalTokens);
+        caption.textContent = `${number(totalTokens)} exact total tokens; cache-read is repeated cached context, not newly generated output.`;
+      }
+
+      const ribbon = $("token-ribbon");
+      const legend = $("token-legend");
+      clear(ribbon); clear(legend);
+      const denom = tokenKeys.reduce((sum, key) => sum + finite(u[key]), 0) || totalTokens;
+      if (!denom) {
+        ribbon.append(el("div", { className: "empty", text: "No token usage fields were present in the report data." }));
+      } else {
+        tokenKeys.forEach((key) => {
+          const value = finite(u[key]);
+          if (!value) return;
+          const seg = el("div", { className: `segment seg-${key}` });
+          seg.style.width = `${Math.max(0.4, (value / denom) * 100)}%`;
+          seg.append(el("span", { text: `${tokenLabels[key]} · ${percent(value, denom)}` }));
+          ribbon.append(seg);
+        });
+      }
+      tokenKeys.forEach((key) => {
+        const item = el("span", { className: "legend-item" });
+        item.append(el("span", { className: `swatch seg-${key}`, attrs: { "aria-hidden": "true" } }), el("span", { text: `${tokenLabels[key]} ${number(u[key])}` }));
+        legend.append(item);
+      });
+    }
+
+    function metricCard(label, value, note, kind = "exact") {
+      const card = el("article", { className: `metric-card ${kind}` });
+      card.append(el("div", { className: "name", text: label }), el("div", { className: "value", text: value }), el("div", { className: "note", text: note }));
+      return card;
+    }
+
+    function renderCompare() {
+      const grid = $("compare-grid");
+      clear(grid);
+      [["parent", REPORT.parentTotals || {}], ["subagent", REPORT.subagentTotals || {}]].forEach(([kind, totals]) => {
+        const h = heur(kind);
+        const card = el("article", { className: "compare-card" });
+        const heading = el("h3");
+        heading.append(el("span", { text: kind === "parent" ? "Parent sessions" : "Subagents" }), el("span", { className: kind === "parent" ? "label exact" : "label inferred", text: kind === "parent" ? "EXACT" : "INFERRED" }));
+        const list = el("ul", { className: "compare-list" });
+        [
+          ["Sessions", number(totals.sessions)],
+          ["Total tokens", number(get(totals, ["usage", "total", "totalTokens"]))],
+          ["Session-reported estimate", money(get(totals, ["usage", "total", "sessionReportedEstimatedCost"]))],
+          ["Tool calls", number(totals.toolCalls)],
+          ["Tool result errors", number(totals.toolResultErrors)],
+          ["Active-time proxy · inferred", duration(get(h, ["activity", "activeTimeProxyMs"]))],
+          ["Browser calls · inferred", number(get(h, ["browser", "calls"]))]
+        ].forEach(([label, value]) => {
+          const item = el("li");
+          item.append(el("span", { text: label }), el("b", { text: value }));
+          list.append(item);
+        });
+        card.append(heading, list);
+        grid.append(card);
+      });
+    }
+
+    function renderExactMetrics() {
+      const t = REPORT.totals || {};
+      const u = usage(t);
+      const grid = $("exact-metrics");
+      clear(grid);
+      [
+        ["Sessions", number(t.sessions), "Files with in-window entries."],
+        ["Records", number(t.records), "Structured records parsed from JSONL."],
+        ["Messages", number(t.messages), "All exact message records."],
+        ["Assistant messages", number(t.assistantMessages), "Assistant message count."],
+        ["Tool calls", number(t.toolCalls), "Sanitized tool call records."],
+        ["Tool results", number(t.toolResults), "Tool result records."],
+        ["Tool result errors", number(t.toolResultErrors), "Error flags on tool results."],
+        ["Compactions", number(t.compactions), "Explicit compaction records."],
+        ["Cache-read tokens", number(u.cacheRead), "Repeated cached context, not newly generated output."],
+        ["Output tokens", number(u.output), "New generated output tokens reported by sessions."],
+        ["Content characters", number(t.contentCharacters), "Aggregate content characters, no raw content."],
+        ["Session-reported estimate", money(u.sessionReportedEstimatedCost), "Exact copied estimate, not proof of billing."]
+      ].forEach(([label, value, note]) => grid.append(metricCard(label, value, note, "exact")));
+    }
+
+    function renderHeuristicMetrics() {
+      const h = heur("all");
+      const grid = $("heuristic-metrics");
+      clear(grid);
+      [
+        ["Active-time proxy", duration(get(h, ["activity", "activeTimeProxyMs"])), "INFERRED from timestamp gaps."],
+        ["Observed tool time", duration(get(h, ["activity", "parallelAdjustedObservedToolTimeMs"])), "INFERRED interval union."],
+        ["Repeat groups", number(get(h, ["repeatedEquivalentCalls", "groups"])), "INFERRED repeated-equivalent calls."],
+        ["Extra repeat calls", number(get(h, ["repeatedEquivalentCalls", "extraCalls"])), "INFERRED potential retry overhead."],
+        ["Repeated errors", number(get(h, ["repeatedEquivalentCalls", "repeatedErrors"])), "INFERRED repeat groups involving errors."],
+        ["Browser calls", number(get(h, ["browser", "calls"])), "INFERRED browser/visual verification calls."],
+        ["Snapshots/screenshots", number(get(h, ["browser", "snapshotOrScreenshotCalls"])), "INFERRED visual capture calls."],
+        ["Access-blocker loops", number(get(h, ["browser", "afterHighConfidenceAccessBlocker", "incidents"])), "HEURISTIC high-confidence blocker incidents."]
+      ].forEach(([label, value, note]) => grid.append(metricCard(label, value, note, "inferred")));
+    }
+
+    function renderSimpleTable(target, caption, columns, rows) {
+      const host = $(target);
+      clear(host);
+      if (!rows.length) {
+        host.append(el("div", { className: "empty", text: "No data available for this section." }));
+        return;
+      }
+      const table = el("table");
+      table.append(el("caption", { text: caption }));
+      const thead = el("thead");
+      const trh = el("tr");
+      columns.forEach((col) => trh.append(el("th", { text: col.label, attrs: { scope: "col" } })));
+      thead.append(trh);
+      const tbody = el("tbody");
+      rows.forEach((row) => {
+        const tr = el("tr");
+        columns.forEach((col) => tr.append(el("td", { className: col.data ? "data" : "", text: safeText(row[col.key]) })));
+        tbody.append(tr);
+      });
+      table.append(thead, tbody);
+      host.append(table);
+    }
+
+    function renderToolSections() {
+      const cats = entries(get(heur("all"), ["toolCategories"])).map(([category, metrics]) => ({
+        category,
+        calls: number(metrics.calls),
+        errors: number(metrics.errors),
+        resultCharacters: number(metrics.resultCharacters),
+        observed: duration(metrics.parallelAdjustedObservedDurationMs),
+        label: "inferred/heuristic"
+      })).sort((a, b) => finite(b.calls.replaceAll ? b.calls.replaceAll(",", "") : b.calls) - finite(a.calls));
+      renderSimpleTable("tool-categories", "Inferred tool categories; raw tool arguments and outputs are not shown.", [
+        { key: "category", label: "Category" },
+        { key: "calls", label: "Calls", data: true },
+        { key: "errors", label: "Errors", data: true },
+        { key: "resultCharacters", label: "Result chars", data: true },
+        { key: "observed", label: "Observed time", data: true },
+        { key: "label", label: "Confidence" }
+      ], cats);
+
+      renderTopList("tool-summary", "Exact tool-call summary", REPORT.toolCallSummary, "Sanitized tool identifiers only.");
+      renderTopList("model-summary", "Provider / model summary", [].concat(asArray(REPORT.providerSummary).slice(0, 8), asArray(REPORT.modelSummary).slice(0, 8)), "Conservative safe identifiers only; unsafe values become other.");
+    }
+
+    function renderTopList(target, title, rows, note) {
+      const host = $(target);
+      clear(host);
+      host.append(el("span", { className: "label exact", text: "EXACT" }), el("h3", { text: title }), el("p", { text: note }));
+      const list = el("ol", { className: "method-list" });
+      asArray(rows).slice(0, 10).forEach((row) => {
+        list.append(el("li", { text: `${safeText(row.id)} · ${number(row.count)}` }));
+      });
+      if (!list.children.length) list.append(el("li", { text: "No summary values present." }));
+      host.append(list);
+    }
+
+    function renderBrowser() {
+      const h = heur("all");
+      const grid = $("browser-metrics");
+      clear(grid);
+      const any = get(h, ["browser", "afterAnyErrorOrBlocker"]) || {};
+      const high = get(h, ["browser", "afterHighConfidenceAccessBlocker"]) || {};
+      [
+        ["Browser calls", number(get(h, ["browser", "calls"])), "INFERRED browser verification activity."],
+        ["Snapshots/screenshots", number(get(h, ["browser", "snapshotOrScreenshotCalls"])), "INFERRED visual capture count."],
+        ["After any blocker", `${number(any.subsequentCalls)} calls`, `${number(any.incidents)} heuristic incidents.`],
+        ["After access blocker", `${number(high.subsequentCalls)} calls`, `${number(high.incidents)} high-confidence incidents.`],
+        ["Max subsequent calls", number(any.maximumSubsequentCalls), "Largest inferred retry tail."],
+        ["Subsequent observed time", duration(any.subsequentObservedDurationMs), "INFERRED retry-loop time."]
+      ].forEach(([label, value, note]) => grid.append(metricCard(label, value, note, "action")));
+
+      const blockers = entries(get(h, ["browser", "blockers"])).map(([kind, count]) => ({ kind, count: number(count), label: "inferred/heuristic" }));
+      renderSimpleTable("browser-blockers", "Conservative blocker classes; raw errors are not emitted.", [
+        { key: "kind", label: "Blocker kind" },
+        { key: "count", label: "Count", data: true },
+        { key: "label", label: "Confidence" }
+      ], blockers);
+    }
+
+    function renderAutomation() {
+      const attr = entries(get(heur("all"), ["turnAttribution"])).map(([source, metrics]) => ({
+        source,
+        turns: number(metrics.turns),
+        promptCharacters: number(metrics.promptCharacters),
+        assistantMessages: number(metrics.assistantMessages),
+        toolCalls: number(metrics.toolCalls),
+        tokens: number(get(metrics, ["usage", "totalTokens"])),
+        label: "inferred/heuristic"
+      })).sort((a, b) => finite(b.turns.replaceAll ? b.turns.replaceAll(",", "") : b.turns) - finite(a.turns));
+      renderSimpleTable("automation-table", "Turn source attribution; human and unknown parent turns are intentionally merged.", [
+        { key: "source", label: "Source" },
+        { key: "turns", label: "Turns", data: true },
+        { key: "promptCharacters", label: "Prompt chars", data: true },
+        { key: "assistantMessages", label: "Assistant msgs", data: true },
+        { key: "toolCalls", label: "Tool calls", data: true },
+        { key: "tokens", label: "Tokens", data: true },
+        { key: "label", label: "Confidence" }
+      ], attr);
+    }
+
+    function renderContextPressure() {
+      const totals = REPORT.totals || {};
+      const u = usage(totals);
+      const compaction = totals.compactionTokensBefore || {};
+      const parentUserCharacters = finite(get(REPORT, ["parentTotals", "roleContentCharacters", "user"]));
+      const parentToolCharacters = finite(get(REPORT, ["parentTotals", "toolResultCharacters"]));
+      const grid = $("context-metrics");
+      clear(grid);
+      [
+        ["Cache-read share", percent(u.cacheRead, u.totalTokens), "Exact share of repeated cached context."],
+        ["Uncached input", number(u.input), "Exact newly processed input tokens."],
+        ["Output", number(u.output), "Exact generated output tokens."],
+        ["Compactions", number(totals.compactions), "Exact explicit compaction records."],
+        ["Median pre-compaction", number(compaction.median), "Exact when tokensBefore was recorded."],
+        ["Maximum pre-compaction", number(compaction.maximum), "Exact largest recorded context before compaction."],
+        ["Tool/user text ratio", parentUserCharacters ? `${(parentToolCharacters / parentUserCharacters).toFixed(1)}×` : "—", "Exact parent tool-result chars divided by parent user-role chars."],
+        ["Inline image payload", `${(finite(totals.imagePayloadBytes) / 1048576).toFixed(1)} MiB`, "Exact decoded image payload bytes in session content."]
+      ].forEach(([label, value, note]) => grid.append(metricCard(label, value, note, "exact")));
+
+      const host = $("token-anatomy");
+      clear(host);
+      host.append(el("span", { className: "label exact", text: "EXACT" }), el("h3", { text: "Token and estimated-cost anatomy" }), el("p", { text: "Bars share one denominator within tokens or within the session-reported estimate. Cost remains an estimate, not a billing record." }));
+      const tokenRows = [
+        ["Cache read tokens", u.cacheRead, u.totalTokens],
+        ["Uncached input tokens", u.input, u.totalTokens],
+        ["Output tokens", u.output, u.totalTokens],
+        ["Cache-read estimated cost", u.sessionReportedEstimatedCostCacheRead, u.sessionReportedEstimatedCost],
+        ["Input estimated cost", u.sessionReportedEstimatedCostInput, u.sessionReportedEstimatedCost],
+        ["Output estimated cost", u.sessionReportedEstimatedCostOutput, u.sessionReportedEstimatedCost]
+      ];
+      tokenRows.forEach(([label, value, denominator]) => {
+        const row = el("div", { style: "margin-top:12px" });
+        const heading = el("div", { className: "scope-row" });
+        heading.append(el("span", { text: label }), el("b", { className: "mono", text: label.includes("cost") ? `${money(value)} · ${percent(value, denominator)}` : `${number(value)} · ${percent(value, denominator)}` }));
+        const track = el("div", { className: "bar-track", attrs: { role: "img", "aria-label": `${label}: ${percent(value, denominator)}` } });
+        const fill = el("div", { className: "bar-fill" });
+        fill.style.width = `${Math.max(0, denominator ? (finite(value) / finite(denominator)) * 100 : 0)}%`;
+        track.append(fill);
+        row.append(heading, track);
+        host.append(row);
+      });
+    }
+
+    function responsibilityCard(kind, title, items) {
+      const card = el("article", { className: `responsibility-card ${kind}` });
+      card.append(el("h3", { text: title }));
+      const list = el("ul");
+      items.forEach(([signal, action]) => {
+        const item = el("li");
+        item.append(el("strong", { text: signal }), document.createTextNode(` ${action}`));
+        list.append(item);
+      });
+      card.append(list);
+      return card;
+    }
+
+    function renderResponsibility() {
+      const host = $("responsibility-grid");
+      clear(host);
+      const h = heur("all");
+      const u = totalUsage();
+      const parent = REPORT.parentTotals || {};
+      const subagentTokens = finite(get(REPORT, ["subagentTotals", "usage", "total", "totalTokens"]));
+      const accessBlockers = finite(get(h, ["browser", "blockers", "loginAuth"])) + finite(get(h, ["browser", "blockers", "inaccessibleTimeout"]));
+      host.append(
+        responsibilityCard("user", "User-controllable", [
+          [`${number(parent.sessions)} parent sessions.`, "Use one named session per substantial task and start fresh after completion."],
+          [`${percent(subagentTokens, u.totalTokens)} subagent share.`, "Choose the focused workflow normally and deep review only for high-risk work."],
+          ["Login state is knowable.", "If access is expected, log in first or choose the pause-and-login option when asked."]
+        ]),
+        responsibilityCard("agent", "Agent / workflow", [
+          [`${number(get(h, ["repeatedEquivalentCalls", "extraCalls"]))} repeated calls.`, "Block a third equivalent failure and avoid rereading unchanged evidence."],
+          [`${number(get(h, ["browser", "afterHighConfidenceAccessBlocker", "subsequentCalls"]))} post-access-blocker calls.`, "Stop after one useful capture and ask what to do next."],
+          [`${number(get(h, ["turnAttribution", "automaticVerificationFollowUp", "turns"]))} automatic follow-ups.`, "Use one bounded repair instead of three automatic cycles."]
+        ]),
+        responsibilityCard("environment", "Environment / access", [
+          [`${number(accessBlockers)} access signals.`, "Treat login and unreachable targets as blockers, not product defects."],
+          [`${number(get(h, ["browser", "blockers", "toolError"]))} browser tool errors.`, "Separate recoverable reference errors from persistent access failures."],
+          ["Browser continuity matters.", "Keep the existing MCP browser open while the user logs in."]
+        ]),
+        responsibilityCard("complexity", "Task complexity", [
+          [`${number(get(REPORT, ["totals", "toolCalls"]))} tool calls.`, "Some verification, compilation, and repository inspection is unavoidable."],
+          [`${number(get(h, ["toolCategories", "testsBuildChecks", "calls"]))} test/build checks.`, "Retain checks that prove changed behavior; remove duplicated evidence."],
+          [`${number(get(REPORT, ["totals", "compactions"]))} compactions.`, "Long-running work needs context maintenance even after workflow improvements."]
+        ])
+      );
+    }
+
+    function actionRow(signal, recommendation, confidence) {
+      const row = el("article", { className: "action-row" });
+      row.append(el("div", { className: "signal", text: signal }), el("p", { text: recommendation }), el("span", { className: "label action", text: confidence }));
+      return row;
+    }
+
+    function renderActions() {
+      const host = $("action-list");
+      clear(host);
+      const h = heur("all");
+      const u = totalUsage();
+      const subagentTokens = finite(get(REPORT, ["subagentTotals", "usage", "total", "totalTokens"]));
+      const autoTokens = finite(get(h, ["turnAttribution", "automaticVerificationFollowUp", "usage", "totalTokens"]));
+      host.append(
+        actionRow(`${number(get(h, ["browser", "afterHighConfidenceAccessBlocker", "subsequentCalls"]))} later calls`, "Highest priority: stop browser activity after a high-confidence login/access blocker, optionally capture one useful image, then ask the user.", "HIGH SIGNAL"),
+        actionRow(`${percent(subagentTokens, u.totalTokens)} subagent tokens`, "Make focused review the default. Keep the current multi-agent consensus review as an explicit deep-review workflow.", "EXACT SHARE"),
+        actionRow(`${number(autoTokens)} direct tokens`, "Known automatic-verification follow-up turns have measurable cost; replace three follow-ups with one bounded repair.", "EXACT + ATTRIBUTED"),
+        actionRow(`${percent(u.cacheRead, u.totalTokens)} cache read`, "Shorten task sessions, avoid repeated large tool output, and compact or start fresh at clean task boundaries.", "CONTEXT SIGNAL"),
+        actionRow(`${number(get(REPORT, ["parentTotals", "toolResultCharacters"]))} chars`, "Prefer compressed inspection, bounded snapshots, and no custom verification pages unless the real surface cannot be exercised.", "EXACT VOLUME")
+      );
+    }
+
+    function sessionMetric(session) {
+      if (state.metric === "cost") return finite(get(session, ["usage", "total", "sessionReportedEstimatedCost"]));
+      if (state.metric === "active") return finite(get(session, ["heuristics", "activeTimeProxyMs"]));
+      return finite(get(session, ["usage", "total", "totalTokens"]));
+    }
+    function metricDisplay(value) {
+      if (state.metric === "cost") return money(value);
+      if (state.metric === "active") return `${duration(value)} · inferred`;
+      return number(value);
+    }
+    function sortableValue(session, key) {
+      if (key === "metric") return sessionMetric(session);
+      if (key === "alias") return safeText(session.alias).toLowerCase();
+      if (key === "kind") return safeText(session.kind).toLowerCase();
+      if (key === "tools") return finite(session.toolCalls);
+      if (key === "errors") return finite(session.toolResultErrors);
+      if (key === "browser") return finite(get(session, ["heuristics", "browser", "calls"]));
+      if (key === "start") return new Date(session.startTimestamp || 0).getTime() || 0;
+      return 0;
+    }
+    function renderSessions() {
+      const host = $("session-table");
+      clear(host);
+      let rows = asArray(REPORT.sessions);
+      if (state.filter !== "all") rows = rows.filter((s) => s.kind === state.filter);
+      rows = rows.slice().sort((a, b) => {
+        const av = sortableValue(a, state.sortKey);
+        const bv = sortableValue(b, state.sortKey);
+        const cmp = typeof av === "string" || typeof bv === "string" ? String(av).localeCompare(String(bv)) : av - bv;
+        return state.sortDir === "asc" ? cmp : -cmp;
+      }).slice(0, 40);
+
+      if (!rows.length) {
+        host.append(el("div", { className: "empty", text: "No anonymous sessions match the current filter." }));
+        return;
+      }
+      const table = el("table");
+      table.append(el("caption", { text: "Top anonymous sessions by selected metric; limited to 40 rows for readability." }));
+      const cols = [
+        ["alias", "Alias"], ["kind", "Kind"], ["start", "Start"], ["metric", state.metric === "cost" ? "Session-reported estimate" : state.metric === "active" ? "Active-time proxy" : "Tokens"], ["tools", "Tool calls"], ["errors", "Tool errors"], ["browser", "Browser"], ["workspace", "Workspace label"]
+      ];
+      const thead = el("thead");
+      const trh = el("tr");
+      cols.forEach(([key, label]) => {
+        const th = el("th", { attrs: { scope: "col", "aria-sort": state.sortKey === key ? (state.sortDir === "asc" ? "ascending" : "descending") : "none" } });
+        const btn = el("button", { text: label, attrs: { type: "button", "data-sort": key } });
+        th.append(btn);
+        trh.append(th);
+      });
+      thead.append(trh);
+      const tbody = el("tbody");
+      rows.forEach((session) => {
+        const tr = el("tr");
+        [
+          safeText(session.alias),
+          safeText(session.kind),
+          date(session.startTimestamp),
+          metricDisplay(sessionMetric(session)),
+          number(session.toolCalls),
+          number(session.toolResultErrors),
+          `${number(get(session, ["heuristics", "browser", "calls"]))} · inferred`,
+          safeText(session.workspaceLabel)
+        ].forEach((value, index) => tr.append(el("td", { className: index === 3 || index === 4 || index === 5 ? "data" : "", text: value })));
+        tbody.append(tr);
+      });
+      table.append(thead, tbody);
+      host.append(table);
+      host.querySelectorAll("button[data-sort]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const key = button.getAttribute("data-sort");
+          if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+          else { state.sortKey = key; state.sortDir = key === "alias" || key === "kind" ? "asc" : "desc"; }
+          renderSessions();
+        });
+      });
+    }
+
+    function renderMethodology() {
+      const host = $("methodology");
+      clear(host);
+      const groups = [
+        ["Exact fields", get(REPORT, ["methodology", "exact"]), "exact"],
+        ["Heuristic fields", get(REPORT, ["methodology", "heuristic"]), "inferred"],
+        ["Interpretation cautions", get(REPORT, ["methodology", "interpretation"]), "action"],
+        ["Privacy guarantees", get(REPORT, ["privacy", "guarantees"]), "exact"],
+        ["Diagnostics", entries(REPORT.diagnostics).map(([k, v]) => `${k}: ${number(v)}`), "exact"]
+      ];
+      groups.forEach(([title, items, kind], index) => {
+        const details = el("details", { attrs: index < 2 ? { open: "" } : {} });
+        details.append(el("summary", { text: title }));
+        const list = el("ul", { className: "method-list" });
+        asArray(items).forEach((item) => list.append(el("li", { text: safeText(item) })));
+        if (!list.children.length) list.append(el("li", { text: "No values present." }));
+        details.append(el("p", { className: `label ${kind}`, text: kind === "exact" ? "EXACT" : kind === "inferred" ? "INFERRED" : "ACTION" }), list);
+        host.append(details);
+      });
+    }
+
+    function bindControls() {
+      document.querySelectorAll(".metric-control").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.metric = button.getAttribute("data-metric") || "tokens";
+          document.querySelectorAll(".metric-control").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+          renderTrace();
+          renderSessions();
+        });
+      });
+      document.querySelectorAll(".filter-control").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.filter = button.getAttribute("data-filter") || "all";
+          document.querySelectorAll(".filter-control").forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+          renderSessions();
+        });
+      });
+    }
+
+    function renderAll() {
+      renderHero();
+      renderTrace();
+      renderCompare();
+      renderExactMetrics();
+      renderHeuristicMetrics();
+      renderToolSections();
+      renderBrowser();
+      renderAutomation();
+      renderContextPressure();
+      renderResponsibility();
+      renderActions();
+      renderSessions();
+      renderMethodology();
+    }
+
+    bindControls();
+    renderAll();
+  })();
+  </script>
+</body>
+</html>

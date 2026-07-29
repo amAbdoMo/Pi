@@ -27,8 +27,8 @@ test("workbench terminal modes enable SGR wheel reporting and restore terminal m
   assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1049h/);
   assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1007l/);
   assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1006h/);
-  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1000h/);
-  assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1000l/);
+  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1002h/);
+  assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1002l/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1006l/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1007h/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1049l/);
@@ -39,15 +39,23 @@ test("terminal mouse parser extracts repeated modified wheel events and keeps mi
   const shiftedDown = "\x1b[<69;10;4M";
   const ctrlUp = "\x1b[<80;10;4M";
   const click = "\x1b[<0;10;4M";
-  const parsed = parseTerminalMouseInput(`a${up}${shiftedDown}${ctrlUp}${click}z`);
+  const drag = "\x1b[<32;14;4M";
+  const release = "\x1b[<0;14;4m";
+  const parsed = parseTerminalMouseInput(`a${up}${shiftedDown}${ctrlUp}${click}${drag}${release}z`);
 
   assert.equal(parsed.data, "az");
   assert.equal(parsed.wheelNotches, 1);
-  assert.equal(parsed.mouseSequences, 4);
+  assert.equal(parsed.mouseSequences, 6);
+  assert.deepEqual(parsed.events.slice(-3).map(({ kind, button, x, y }) => ({ kind, button, x, y })), [
+    { kind: "press", button: 0, x: 10, y: 4 },
+    { kind: "drag", button: 0, x: 14, y: 4 },
+    { kind: "release", button: 0, x: 14, y: 4 },
+  ]);
   assert.deepEqual(parseTerminalMouseInput("\x1b[Mabc"), {
     data: "\x1b[Mabc",
     wheelNotches: 0,
     mouseSequences: 0,
+    events: [],
   });
 });
 

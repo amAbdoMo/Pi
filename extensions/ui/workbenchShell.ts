@@ -1,7 +1,7 @@
+import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import {
   matchesKey,
   truncateToWidth,
-  visibleWidth,
   type Component,
   type TUI,
 } from "@earendil-works/pi-tui";
@@ -20,7 +20,14 @@ import {
 import {
   parseTerminalMouseInput,
   type ParsedTerminalMouseInput,
+  type TerminalMouseEvent,
 } from "./terminalCompatibility.ts";
+import {
+  clampSelectionPoint,
+  highlightTerminalSelection,
+  selectedTerminalText,
+  type TextSelectionPoint,
+} from "./textSelection.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
@@ -47,9 +54,24 @@ interface ColumnRequest {
   height: number;
 }
 
+interface WorkbenchTextSelection {
+  anchor: TextSelectionPoint;
+  focus: TextSelectionPoint;
+  lines: string[];
+  dragging: boolean;
+  moved: boolean;
+  showReleasedFrame: boolean;
+}
+
+export interface WorkbenchShellOptions {
+  copyText?: (text: string) => Promise<void>;
+  onCopyError: (error: Error) => void;
+}
+
 export function installWorkbenchShell(
   tui: TUI,
   sidebar: Component,
+  options: WorkbenchShellOptions,
 ): WorkbenchShellHandle {
   const shellTui = tui as ShellTui;
   const existing = shellTui[WORKBENCH_SHELL_KEY];
@@ -57,7 +79,12 @@ export function installWorkbenchShell(
     existing.setSidebar(sidebar);
     return existing;
   }
-  const installation = new WorkbenchShellInstallation(tui, sidebar);
+  const installation = new WorkbenchShellInstallation(
+    tui,
+    sidebar,
+    options.copyText ?? copyToClipboard,
+    options.onCopyError,
+  );
   shellTui[WORKBENCH_SHELL_KEY] = installation;
   return installation;
 }
@@ -72,10 +99,15 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private scrollOffset = 0;
   private previousScrollLineCount: number | undefined;
   private alternateScreenActive = false;
+  private latestMainLines: string[] = [];
+  private latestMainWidth = 0;
+  private textSelection?: WorkbenchTextSelection;
 
   constructor(
     private readonly tui: TUI,
     sidebar: Component,
+    private readonly copyText: (text: string) => Promise<void>,
+    private readonly onCopyError: (error: Error) => void,
   ) {
     this.sidebar = sidebar;
     this.originalRender = tui.render.bind(tui);
@@ -97,6 +129,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   dispose(): void {
+    this.textSelection = undefined;
     this.removeScrollListener();
     this.tui.render = this.originalRender;
     this.tui.start = this.originalStart;
@@ -145,12 +178,20 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       metrics.maxOffset,
     );
     this.previousScrollLineCount = scrollLines.length;
-    const mainLines = fixedViewport(
+    const liveMainLines = fixedViewport(
       scrollLines,
       dockLines,
       dimensions.height,
       this.scrollOffset,
-    ).map((line) => fitLine(line, dimensions.mainWidth));
+    ).map((line) => clipLine(line, dimensions.mainWidth));
+    this.latestMainLines = liveMainLines;
+    this.latestMainWidth = dimensions.mainWidth;
+
+    this.reconcileTextSelection(liveMainLines);
+    const selectionLines = this.textSelection?.lines ?? liveMainLines;
+    const mainLines = this.textSelection
+      ? highlightTerminalSelection(selectionLines, this.textSelection)
+      : selectionLines;
     if (!dimensions.showSidebar) return mainLines;
     return combineColumns({
       mainLines,
@@ -164,25 +205,123 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private handleScrollInput(input: string): { consume?: true; data?: string } | undefined {
     const mouseInput = parseTerminalMouseInput(input);
     if (isWorkbenchModalActive()) return mouseListenerResult(mouseInput);
+    if (mouseInput.wheelNotches !== 0) return this.applyMouseScroll(mouseInput);
+    if (mouseInput.mouseSequences > 0) {
+      this.applyMouseSelection(mouseInput.events);
+      return mouseListenerResult(mouseInput);
+    }
 
-    const mouseResult = this.applyMouseScroll(mouseInput);
-    if (mouseResult) return mouseResult;
-
+    const selectionResult = this.applySelectionKey(input);
+    if (selectionResult) return selectionResult;
     const pageResult = this.applyPageScroll(input);
     if (pageResult) return pageResult;
-
     if (this.scrollOffset > 0) this.scrollOffset = 0;
     return undefined;
   }
 
   private applyMouseScroll(mouseInput: ParsedTerminalMouseInput): { consume?: true; data?: string } | undefined {
-    if (mouseInput.wheelNotches !== 0) {
-      this.scrollOffset = this.clampScrollOffset(
-        this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
-      );
-      this.tui.requestRender();
-    }
+    this.clearTextSelection();
+    this.scrollOffset = this.clampScrollOffset(
+      this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
+    );
+    this.tui.requestRender();
     return mouseListenerResult(mouseInput);
+  }
+
+  private applySelectionKey(input: string): { consume: true } | undefined {
+    if (!this.textSelection) return undefined;
+    if (matchesKey(input, "ctrl+c")) {
+      this.copyCurrentSelection();
+      this.clearTextSelection();
+      this.tui.requestRender();
+      return { consume: true };
+    }
+    this.clearTextSelection();
+    this.tui.requestRender();
+    return undefined;
+  }
+
+  private applyMouseSelection(events: readonly TerminalMouseEvent[]): void {
+    for (const event of events) {
+      if (event.kind === "press" && event.button === 0) this.beginTextSelection(event);
+      else if (event.kind === "drag" && event.button === 0) this.extendTextSelection(event);
+      else if (event.kind === "release") this.releaseTextSelection(event);
+    }
+  }
+
+  private beginTextSelection(event: TerminalMouseEvent): void {
+    const point = this.selectionPoint(event, this.latestMainLines);
+    if (!point) {
+      this.clearTextSelection();
+      return;
+    }
+    this.textSelection = {
+      anchor: point,
+      focus: point,
+      lines: [...this.latestMainLines],
+      dragging: true,
+      moved: false,
+      showReleasedFrame: false,
+    };
+    this.tui.requestRender();
+  }
+
+  private extendTextSelection(event: TerminalMouseEvent): void {
+    if (!this.textSelection?.dragging) return;
+    const point = this.selectionPoint(event, this.textSelection.lines);
+    if (!point) return;
+    this.textSelection.focus = point;
+    this.textSelection.moved = true;
+    this.tui.requestRender();
+  }
+
+  private releaseTextSelection(event: TerminalMouseEvent): void {
+    if (!this.textSelection?.dragging) return;
+    const point = this.selectionPoint(event, this.textSelection.lines);
+    if (point) {
+      this.textSelection.focus = point;
+      this.textSelection.moved ||= !samePoint(point, this.textSelection.anchor);
+    }
+    if (!this.textSelection.moved) {
+      this.clearTextSelection();
+      this.tui.requestRender();
+      return;
+    }
+    this.textSelection.dragging = false;
+    this.textSelection.showReleasedFrame = true;
+    this.copyCurrentSelection();
+    this.tui.requestRender();
+  }
+
+  private selectionPoint(
+    event: TerminalMouseEvent,
+    lines: readonly string[],
+  ): TextSelectionPoint | undefined {
+    if (event.x < 1 || event.x > this.latestMainWidth || event.y < 1) return undefined;
+    return clampSelectionPoint(lines, event.y - 1, event.x - 1);
+  }
+
+  private reconcileTextSelection(liveMainLines: string[]): void {
+    const selection = this.textSelection;
+    if (!selection || selection.dragging) return;
+    if (selection.showReleasedFrame) {
+      selection.showReleasedFrame = false;
+      return;
+    }
+    if (!sameLines(liveMainLines, selection.lines)) this.textSelection = undefined;
+  }
+
+  private copyCurrentSelection(): void {
+    if (!this.textSelection) return;
+    const text = selectedTerminalText(this.textSelection.lines, this.textSelection);
+    if (!text.trim()) return;
+    void this.copyText(text).catch((error: unknown) => {
+      this.onCopyError(error instanceof Error ? error : new Error(String(error)));
+    });
+  }
+
+  private clearTextSelection(): void {
+    this.textSelection = undefined;
   }
 
   private applyPageScroll(input: string): { consume: true } | undefined {
@@ -262,7 +401,18 @@ function combineColumns(request: ColumnRequest): string[] {
   return lines;
 }
 
+function clipLine(line: string, width: number): string {
+  return truncateToWidth(line, Math.max(0, width), "");
+}
+
 function fitLine(line: string, width: number): string {
-  const fitted = truncateToWidth(line, Math.max(0, width), "", true);
-  return fitted + " ".repeat(Math.max(0, width - visibleWidth(fitted)));
+  return truncateToWidth(line, Math.max(0, width), "", true);
+}
+
+function sameLines(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((line, index) => line === right[index]);
+}
+
+function samePoint(left: TextSelectionPoint, right: TextSelectionPoint): boolean {
+  return left.row === right.row && left.column === right.column && left.endColumn === right.endColumn;
 }
