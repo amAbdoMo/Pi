@@ -51,8 +51,6 @@ const requiredFiles = [
   "extensions/plan-mode/index.ts",
   "extensions/skills-browser/index.ts",
   "extensions/subagents/child-profile.ts",
-  "extensions/verification-loop/index.ts",
-  "extensions/verification-loop/blocker-card.ts",
   "extensions/workflow/index.ts",
   "extensions/workflow/schema.ts",
   "extensions/workflow/runner.ts",

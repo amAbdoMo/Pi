@@ -46,7 +46,7 @@ Inline workspace forms:
 
 Local workspaces may be Git or non-Git directories. Every phase must confirm a `.git` entry before a Git command. Live mode runs from an isolated empty directory and uses web or MCP evidence without local-project assumptions.
 
-Each phase runs in an isolated Pi RPC child with `PI_WORKFLOW_CHILD=1`. The verification extension uses that marker to retain temporary screenshot routing without starting a nested verification prompt, repair turn, or `verification_report` gate inside the workflow child.
+Each phase runs in an isolated Pi RPC child with `PI_WORKFLOW_CHILD=1`, keeping phase tools, context, and failures separate from the parent session.
 
 The workflow panel and status line show a running heartbeat and elapsed time. Child delegates and MCP outcomes are projected into the parent Workbench without merging process state, and Codex usage refreshes during and after the run.
 

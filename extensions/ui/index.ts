@@ -86,9 +86,15 @@ export default function uiExtension(pi: ExtensionAPI) {
         keybindings,
         () => requestPlanBuildModeToggle(pi.events),
       );
-      workbenchSidebar.attachDocked(tui, ctx.ui.theme, (error) => {
-        ctx.ui.notify(`Could not copy the selected text: ${error.message}`, "error");
-      });
+      workbenchSidebar.attachDocked(
+        tui,
+        ctx.ui.theme,
+        ({ renderRow, screenColumn, width }) =>
+          editor.placeCursorFromRenderedCell(renderRow, screenColumn, width),
+        (error) => {
+          ctx.ui.notify(`Could not copy the selected text: ${error.message}`, "error");
+        },
+      );
       editors.add(editor);
       return editor;
     });

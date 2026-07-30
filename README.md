@@ -34,33 +34,17 @@ Pi can support all of this through its extension system; the difference is that 
 - Content-fitted user message cards that grow only as wide as their rendered content
 - Compact assistant, tool, workflow, side-chat, and subagent presentation
 - Coordinated overlays for MCP, skills, agents, child consoles, side chat, workflows, and display settings
-- `PageUp`/`PageDown` chat navigation without an in-app scrollbar, with normal terminal-native drag selection and copy
+- Mouse-wheel and `PageUp`/`PageDown` chat navigation, precise drag selection/copy, and click-to-place composer cursor
 - Graphite-black `hypr-waves` theme with orange structure, red accents, and green verified-success states
 
 ### Agent workflows
 
 - **Plan/build mode** with context-aware `Tab` switching outside command autocomplete and read-only planning
 - **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
-- **Automatic feature verification** with post-change checks, real browser user journeys for UI work, one bounded repair, and blocker-aware user handoff
 - **Subagents** with optional task-specific model and thinking profiles
 - **Side chat** for temporary questions that do not enter the main conversation context
 - **Workflows** with focused `pipeline` and opt-in `deep-review` routes, strict YAML validation, blocker-aware routing, isolated phase sessions, and safe global/project overrides
 - **Fast mode** for supported GPT-5.4, GPT-5.5, and GPT-5.6 tiers, plus code-state undo/redo and custom tool rendering
-
-### Automatic feature verification
-
-The verification loop is enabled by default. It watches successful edit/write operations and Git workspace changes, invalidates stale evidence after later edits, and requires the agent to call `verification_report` before claiming a changed feature is complete.
-
-- Functional changes require a successful test, lint, build, type-check, or focused command-level check after the latest mutation.
-- UI changes additionally require browser navigation, an accessibility snapshot, user interaction or viewport resizing, then clean console and network inspection followed by a final screenshot.
-- A product defect gets one automatic repair/retest pass. A second failure stops instead of opening another automatic cycle.
-- Login, missing credentials, unreachable targets, unavailable browser sessions, and missing environments enter an `awaiting-user` blocker state. Further browser calls are blocked, except for one viewport screenshot when it adds useful evidence.
-- A useful blocker screenshot is rendered as an image in the Pi transcript, not as a file link. The temporary PNG is removed immediately; the transcript entry stays outside model context.
-- Pi then offers four choices: wait while the user logs into the existing browser, continue with non-browser checks and report the limitation, stop with a remaining-work summary, or accept a custom instruction.
-- Verification-only pages, fixtures, and proof harnesses require explicit confirmation. The default is to exercise the real feature.
-- Workflow RPC children keep temporary screenshot routing but do not start a second nested verification loop.
-
-UI journeys use a configured MCP browser that exposes `browser_*` tools. The workbench does not install or silently enable a browser server. Use `/verification status` to inspect missing evidence, `/verification resume` after resolving a blocker, `/verification reset` to clear evidence and retry, or `/verification off` to disable the gate for the current session.
 
 ### Tools and integrations
 
@@ -127,10 +111,10 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `Shift+Tab` | Change thinking level |
 | Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport during and after agent activity; scrolling up holds position while output continues |
 | Mouse drag | Select only the exact Workbench text range and copy it on release; `Ctrl+C` copies and clears an active selection |
+| Mouse click in composer | Place the typing cursor at the clicked character, including wrapped and RTL text |
 | `Shift+drag` | Use the terminal's native selection instead of Workbench selection |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
-| `/verification` | Inspect, enable, disable, reset, or resume blocker-aware feature verification |
 | `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
 | `/workflow` | List workflows or run focused `pipeline` or opt-in `deep-review` |
@@ -166,7 +150,7 @@ Pi asks whether to use the current folder, another existing folder, or no local 
 /workflow deep-review --cwd "C:\path\to\project" Review a release-critical change
 ```
 
-Local folders do not have to be Git repositories. Every phase confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools. Workflow children set `PI_WORKFLOW_CHILD=1`, so the parent verification extension does not create a nested repair loop inside Plan, Execute, Verify, or Review.
+Local folders do not have to be Git repositories. Every phase confirms a `.git` entry before using Git; live/remote runs use an isolated empty working directory and web/MCP tools. Workflow phases remain isolated RPC children.
 
 The panel and status line show phase activity and elapsed time. Delegates and MCP outcomes are projected into the parent Workbench without merging child process state, and Codex usage refreshes throughout the run and after settlement.
 

@@ -44,6 +44,7 @@ type RenderFunction = (width: number) => string[];
 interface MainViewportParts {
   scrollLines: string[];
   dockLines: string[];
+  composerDockRows?: { start: number; end: number };
 }
 
 interface ColumnRequest {
@@ -63,9 +64,16 @@ interface WorkbenchTextSelection {
   showReleasedFrame: boolean;
 }
 
+export interface ComposerCursorRequest {
+  renderRow: number;
+  screenColumn: number;
+  width: number;
+}
+
 export interface WorkbenchShellOptions {
   copyText?: (text: string) => Promise<void>;
   onCopyError: (error: Error) => void;
+  placeComposerCursor: (request: ComposerCursorRequest) => boolean;
 }
 
 export function installWorkbenchShell(
@@ -84,6 +92,7 @@ export function installWorkbenchShell(
     sidebar,
     options.copyText ?? copyToClipboard,
     options.onCopyError,
+    options.placeComposerCursor,
   );
   shellTui[WORKBENCH_SHELL_KEY] = installation;
   return installation;
@@ -102,12 +111,15 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private latestMainLines: string[] = [];
   private latestMainWidth = 0;
   private textSelection?: WorkbenchTextSelection;
+  private composerScreenRows?: { start: number; end: number; renderRowOffset: number };
+  private composerClickCandidate?: { x: number; y: number };
 
   constructor(
     private readonly tui: TUI,
     sidebar: Component,
     private readonly copyText: (text: string) => Promise<void>,
     private readonly onCopyError: (error: Error) => void,
+    private readonly placeComposerCursor: (request: ComposerCursorRequest) => boolean,
   ) {
     this.sidebar = sidebar;
     this.originalRender = tui.render.bind(tui);
@@ -130,6 +142,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
 
   dispose(): void {
     this.textSelection = undefined;
+    this.composerClickCandidate = undefined;
     this.removeScrollListener();
     this.tui.render = this.originalRender;
     this.tui.start = this.originalStart;
@@ -160,7 +173,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.tui.terminal.rows,
       this.sidebarVisible,
     );
-    const { scrollLines, dockLines } = mainViewportParts(
+    const { scrollLines, dockLines, composerDockRows } = mainViewportParts(
       this.tui,
       this.originalRender,
       dimensions.mainWidth,
@@ -176,6 +189,12 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.previousScrollLineCount,
       scrollLines.length,
       metrics.maxOffset,
+    );
+    this.composerScreenRows = visibleComposerRows(
+      composerDockRows,
+      dockLines.length,
+      metrics.scrollHeight,
+      metrics.dockHeight,
     );
     this.previousScrollLineCount = scrollLines.length;
     const liveMainLines = fixedViewport(
@@ -220,6 +239,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private applyMouseScroll(mouseInput: ParsedTerminalMouseInput): { consume?: true; data?: string } | undefined {
+    this.composerClickCandidate = undefined;
     this.clearTextSelection();
     this.scrollOffset = this.clampScrollOffset(
       this.scrollOffset + mouseInput.wheelNotches * MOUSE_WHEEL_SCROLL_ROWS,
@@ -229,6 +249,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private applySelectionKey(input: string): { consume: true } | undefined {
+    this.composerClickCandidate = undefined;
     if (!this.textSelection) return undefined;
     if (matchesKey(input, "ctrl+c")) {
       this.copyCurrentSelection();
@@ -243,10 +264,49 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
 
   private applyMouseSelection(events: readonly TerminalMouseEvent[]): void {
     for (const event of events) {
-      if (event.kind === "press" && event.button === 0) this.beginTextSelection(event);
-      else if (event.kind === "drag" && event.button === 0) this.extendTextSelection(event);
-      else if (event.kind === "release") this.releaseTextSelection(event);
+      if (event.kind === "press" && event.button === 0) {
+        if (!this.beginComposerClick(event)) this.beginTextSelection(event);
+      } else if (event.kind === "drag" && event.button === 0) {
+        this.promoteMovedComposerClickToSelection(event);
+        this.extendTextSelection(event);
+      } else if (event.kind === "release") {
+        if (!this.releaseComposerClick(event)) this.releaseTextSelection(event);
+      }
     }
+  }
+
+  private beginComposerClick(event: TerminalMouseEvent): boolean {
+    const screenRow = event.y - 1;
+    const composerRows = this.composerScreenRows;
+    if (!composerRows || screenRow < composerRows.start || screenRow >= composerRows.end) return false;
+    this.clearTextSelection();
+    this.composerClickCandidate = { x: event.x, y: event.y };
+    return true;
+  }
+
+  private promoteMovedComposerClickToSelection(event: TerminalMouseEvent): void {
+    const candidate = this.composerClickCandidate;
+    if (!candidate || (candidate.x === event.x && candidate.y === event.y)) return;
+    this.composerClickCandidate = undefined;
+    this.beginTextSelection({
+      ...event,
+      kind: "press",
+      x: candidate.x,
+      y: candidate.y,
+    });
+  }
+
+  private releaseComposerClick(event: TerminalMouseEvent): boolean {
+    const candidate = this.composerClickCandidate;
+    this.composerClickCandidate = undefined;
+    if (!candidate || candidate.x !== event.x || candidate.y !== event.y) return false;
+    const composerRows = this.composerScreenRows;
+    if (!composerRows) return false;
+    return this.placeComposerCursor({
+      renderRow: composerRows.renderRowOffset + event.y - 1 - composerRows.start,
+      screenColumn: event.x - 1,
+      width: this.latestMainWidth,
+    });
   }
 
   private beginTextSelection(event: TerminalMouseEvent): void {
@@ -377,9 +437,16 @@ function mainViewportParts(tui: TUI, fallbackRender: RenderFunction, width: numb
   if (dockChildren.length === 0) {
     return { scrollLines: fallbackRender(width), dockLines: [] };
   }
+
+  const renderedDockChildren = dockChildren.map((component) => component.render(width));
+  const composerStart = renderedDockChildren[0]?.length ?? 0;
+  const composerLength = renderedDockChildren[1]?.length ?? 0;
   return {
     scrollLines: renderComponents(scrollChildren, width),
-    dockLines: renderComponents(dockChildren, width),
+    dockLines: renderedDockChildren.flat(),
+    composerDockRows: composerLength > 0
+      ? { start: composerStart, end: composerStart + composerLength }
+      : undefined,
   };
 }
 
@@ -387,6 +454,24 @@ function renderComponents(components: readonly Component[], width: number): stri
   const lines: string[] = [];
   for (const component of components) lines.push(...component.render(width));
   return lines;
+}
+
+function visibleComposerRows(
+  composerDockRows: { start: number; end: number } | undefined,
+  dockLineCount: number,
+  scrollHeight: number,
+  dockHeight: number,
+): { start: number; end: number; renderRowOffset: number } | undefined {
+  if (!composerDockRows) return undefined;
+  const clippedDockRows = Math.max(0, dockLineCount - dockHeight);
+  const visibleStart = Math.max(composerDockRows.start, clippedDockRows);
+  const visibleEnd = Math.min(composerDockRows.end, dockLineCount);
+  if (visibleStart >= visibleEnd) return undefined;
+  return {
+    start: scrollHeight + visibleStart - clippedDockRows,
+    end: scrollHeight + visibleEnd - clippedDockRows,
+    renderRowOffset: visibleStart - composerDockRows.start,
+  };
 }
 
 function combineColumns(request: ColumnRequest): string[] {

@@ -108,16 +108,39 @@ const codingAgentStub = String.raw`
     constructor(tui) {
       this.tui = tui;
       this.text = "";
+      this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
+      this.lastWidth = 1;
+      this.scrollOffset = 0;
       this.autocompleteVisible = false;
       this.handledInputs = [];
     }
-    getText() { return this.text; }
-    setText(text) { this.text = text; }
+    getText() { return this.state.lines.join("\n"); }
+    getLines() { return [...this.state.lines]; }
+    getCursor() { return { line: this.state.cursorLine, col: this.state.cursorCol }; }
+    setText(text) {
+      this.text = text;
+      this.state.lines = String(text).split("\n");
+      this.state.cursorLine = this.state.lines.length - 1;
+      this.state.cursorCol = this.state.lines.at(-1).length;
+    }
+    setCursorCol(column) { this.state.cursorCol = Math.max(0, Math.min(column, this.state.lines[this.state.cursorLine].length)); }
+    buildVisualLineMap(width) {
+      return this.state.lines.flatMap((line, logicalLine) => {
+        if (!line) return [{ logicalLine, startCol: 0, length: 0 }];
+        const rows = [];
+        for (let startCol = 0; startCol < line.length; startCol += width) {
+          rows.push({ logicalLine, startCol, length: Math.min(width, line.length - startCol) });
+        }
+        return rows;
+      });
+    }
+    cancelAutocomplete() { this.autocompleteVisible = false; }
+    exitHistoryBrowsing() {}
     isShowingAutocomplete() { return this.autocompleteVisible; }
     setAutocompleteVisible(visible) { this.autocompleteVisible = visible; }
     handleInput(data) { this.handledInputs.push(data); }
     invalidate() {}
-    render() { return [this.text]; }
+    render(width) { this.lastWidth = Math.max(1, width - 1); return [this.text]; }
   }
 `;
 
@@ -601,6 +624,7 @@ function chatRows(tui) {
 
 const copyOptions = {
   onCopyError: (error) => assert.fail(error),
+  placeComposerCursor: () => false,
 };
 
 function createWorkbenchTui() {
@@ -685,12 +709,43 @@ test("workbench shell routes mouse wheel to chat and preserves position while st
   assert.equal(input("\x1b[<64;10;4M"), undefined);
 });
 
+test("workbench shell routes composer clicks and preserves drag selection", () => {
+  const { tui, input } = createWorkbenchTui();
+  const cursorRequests = [];
+  const copied = [];
+  const handle = installWorkbenchShell(tui, component([]), {
+    ...copyOptions,
+    copyText: async (text) => { copied.push(text); },
+    placeComposerCursor: (request) => {
+      cursorRequests.push(request);
+      return true;
+    },
+  });
+
+  try {
+    tui.render(80);
+    assert.deepEqual(input("\x1b[<0;7;6M"), { consume: true });
+    assert.deepEqual(input("\x1b[<0;7;6m"), { consume: true });
+    assert.deepEqual(cursorRequests, [{ renderRow: 0, screenColumn: 6, width: 80 }]);
+    assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
+
+    input("\x1b[<0;1;6M");
+    input("\x1b[<32;4;6M");
+    input("\x1b[<0;4;6m");
+    assert.deepEqual(cursorRequests.length, 1);
+    assert.deepEqual(copied, ["dock"]);
+  } finally {
+    handle.dispose();
+  }
+});
+
 test("workbench shell drag-selects only text cells and copies the exact range", () => {
   const { tui, input } = createWorkbenchTui();
   const copied = [];
   const handle = installWorkbenchShell(tui, component([]), {
     copyText: async (text) => { copied.push(text); },
     onCopyError: copyOptions.onCopyError,
+    placeComposerCursor: copyOptions.placeComposerCursor,
   });
 
   try {
@@ -723,6 +778,7 @@ test("workbench shell reports clipboard failures", async () => {
   const handle = installWorkbenchShell(tui, component([]), {
     copyText: async () => { throw new Error("clipboard unavailable"); },
     onCopyError: (error) => copyErrors.push(error.message),
+    placeComposerCursor: copyOptions.placeComposerCursor,
   });
 
   try {
@@ -743,6 +799,7 @@ test("workbench shell preserves a selection while streaming and releases it on f
   const handle = installWorkbenchShell(tui, component([]), {
     copyText: async (text) => { copied.push(text); },
     onCopyError: copyOptions.onCopyError,
+    placeComposerCursor: copyOptions.placeComposerCursor,
   });
 
   try {
@@ -789,6 +846,50 @@ function createTerminalEditor() {
   );
   return { editor, modeToggles: () => modeToggles };
 }
+
+test("terminal editor places the cursor from LTR, wrapped, and RTL mouse cells", () => {
+  const { editor } = createTerminalEditor();
+
+  editor.setText("hello world");
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(4, 11, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 6 });
+
+  editor.setText("x".repeat(80));
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(5, 8, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 74 });
+
+  editor.setText("مرحبا");
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(4, 70, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 4 });
+  assert.equal(editor.placeCursorFromRenderedCell(4, 10, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 5 });
+  assert.equal(editor.placeCursorFromRenderedCell(4, 75, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+
+  editor.setText("אבג");
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(4, 72, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+  assert.equal(editor.placeCursorFromRenderedCell(4, 73, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 1 });
+  assert.equal(editor.placeCursorFromRenderedCell(4, 75, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 3 });
+
+  editor.setText("لاب");
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(4, 73, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 2 });
+  assert.equal(editor.placeCursorFromRenderedCell(4, 74, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 0 });
+
+  editor.setText("م".repeat(80));
+  editor.render(80);
+  assert.equal(editor.placeCursorFromRenderedCell(5, 68, 80), true);
+  assert.deepEqual(editor.getCursor(), { line: 0, col: 79 });
+});
 
 test("terminal editor delegates slash and visible autocomplete Tab input", () => {
   const { editor, modeToggles } = createTerminalEditor();

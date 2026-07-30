@@ -37,6 +37,7 @@ import {
 import { state } from "./state.ts";
 import {
   installWorkbenchShell,
+  type ComposerCursorRequest,
   type WorkbenchShellHandle,
 } from "./workbenchShell.ts";
 import {
@@ -69,7 +70,12 @@ export class WorkbenchSidebarController {
   private desiredVisible = false;
   private unsubscribeModals?: () => void;
 
-  attachDocked(tui: TUI, theme: Theme, onCopyError: (error: Error) => void): void {
+  attachDocked(
+    tui: TUI,
+    theme: Theme,
+    placeComposerCursor: (request: ComposerCursorRequest) => boolean,
+    onCopyError: (error: Error) => void,
+  ): void {
     this.handle?.hide();
     this.handle = undefined;
     this.component?.dispose();
@@ -82,7 +88,10 @@ export class WorkbenchSidebarController {
       () => tui.terminal.rows,
       () => tui.terminal.columns,
     );
-    this.shell = installWorkbenchShell(tui, this.component, { onCopyError });
+    this.shell = installWorkbenchShell(tui, this.component, {
+      onCopyError,
+      placeComposerCursor,
+    });
     this.syncVisibility();
   }
 

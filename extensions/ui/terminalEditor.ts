@@ -2,6 +2,7 @@ import { CustomEditor } from "@earendil-works/pi-coding-agent";
 import {
   CURSOR_MARKER,
   matchesKey,
+  visibleWidth,
   type EditorTheme,
   type TUI,
 } from "@earendil-works/pi-tui";
@@ -24,7 +25,12 @@ import {
 } from "./imagePaste.ts";
 import { highlightPasteMarkers } from "./pasteMarkers.ts";
 import { isEmptyBracketedPaste } from "./terminalCompatibility.ts";
-import { visualRtlText } from "./rtlText.ts";
+import {
+  logicalIndexAtRtlVisualColumn,
+  rtlVisualWidth,
+  usesVisualRtlReordering,
+  visualRtlText,
+} from "./rtlText.ts";
 import type { KeybindingsManager } from "./types.ts";
 import { composerFrame, directionStatus } from "./workbenchLayout.ts";
 
@@ -47,6 +53,34 @@ function stripAnsi(input: string): string {
 function looksLikeEditorBorder(line: string): boolean {
   const clean = stripAnsi(line).trim();
   return clean.includes("─") && /^[─ ↑↓0-9more]+$/.test(clean);
+}
+
+interface EditorVisualLine {
+  logicalLine: number;
+  startCol: number;
+  length: number;
+}
+
+interface EditorRuntimeAdapter {
+  state: { lines: string[]; cursorLine: number };
+  lastWidth: number;
+  scrollOffset: number;
+  buildVisualLineMap(width: number): EditorVisualLine[];
+  setCursorCol(column: number): void;
+  cancelAutocomplete?(): void;
+  exitHistoryBrowsing?(): void;
+  lastAction?: unknown;
+}
+
+interface ComposerEditorLayout {
+  outerPadding: number;
+  frame: ReturnType<typeof composerFrame>;
+  direction: string;
+  isRtl: boolean;
+  prompt: string;
+  promptWidth: number;
+  editorWidth: number;
+  inputStartRow: number;
 }
 
 export class TerminalEditor extends CustomEditor {
@@ -115,16 +149,29 @@ export class TerminalEditor extends CustomEditor {
     }
   }
 
+  placeCursorFromRenderedCell(renderRow: number, screenColumn: number, width: number): boolean {
+    const layout = composerEditorLayout(width, this.getText());
+    const inputRow = Math.floor(renderRow) - layout.inputStartRow;
+    if (inputRow < 0) return false;
+
+    const runtime = this as unknown as EditorRuntimeAdapter;
+    if (!supportsMouseCursorPlacement(runtime)) return false;
+    const target = editorCursorTarget(runtime, layout, inputRow, screenColumn);
+    if (!target) return false;
+
+    runtime.cancelAutocomplete?.();
+    runtime.exitHistoryBrowsing?.();
+    runtime.lastAction = null;
+    runtime.state.cursorLine = target.line;
+    runtime.setCursorCol(target.column);
+    this.requestRender();
+    return true;
+  }
+
   override render(width: number): string[] {
     const text = this.getText();
-    const outerPadding = width >= 3 ? 1 : 0;
-    const frame = composerFrame(Math.max(1, width - outerPadding * 2));
-    const direction = directionStatus(text);
-    const isRtl = direction.startsWith("RTL");
-    const promptSymbol = text.startsWith("!") ? "# " : isRtl ? " ‹" : "› ";
-    const prompt = frame.innerWidth >= 3 ? color("accent", promptSymbol) : "";
-    const promptWidth = textWidth(prompt);
-    const editorWidth = Math.max(1, frame.innerWidth - promptWidth);
+    const layout = composerEditorLayout(width, text);
+    const { outerPadding, frame, direction, isRtl, prompt, promptWidth, editorWidth } = layout;
 
     const stockLines = super
       .render(editorWidth)
@@ -154,6 +201,107 @@ export class TerminalEditor extends CustomEditor {
     const verticalGutter = " ".repeat(width);
     return [verticalGutter, ...composerLines, verticalGutter];
   }
+}
+
+function composerEditorLayout(width: number, text: string): ComposerEditorLayout {
+  const outerPadding = width >= 3 ? 1 : 0;
+  const frame = composerFrame(Math.max(1, width - outerPadding * 2));
+  const direction = directionStatus(text);
+  const isRtl = direction.startsWith("RTL");
+  const promptSymbol = text.startsWith("!") ? "# " : isRtl ? " ‹" : "› ";
+  const prompt = frame.innerWidth >= 3 ? color("accent", promptSymbol) : "";
+  const promptWidth = textWidth(prompt);
+  return {
+    outerPadding,
+    frame,
+    direction,
+    isRtl,
+    prompt,
+    promptWidth,
+    editorWidth: Math.max(1, frame.innerWidth - promptWidth),
+    inputStartRow: (outerPadding > 0 ? 1 : 0) + 3,
+  };
+}
+
+function supportsMouseCursorPlacement(runtime: EditorRuntimeAdapter): boolean {
+  return !!runtime.state &&
+    Array.isArray(runtime.state.lines) &&
+    Number.isFinite(runtime.lastWidth) &&
+    Number.isFinite(runtime.scrollOffset) &&
+    typeof runtime.buildVisualLineMap === "function" &&
+    typeof runtime.setCursorCol === "function";
+}
+
+function editorCursorTarget(
+  runtime: EditorRuntimeAdapter,
+  layout: ComposerEditorLayout,
+  inputRow: number,
+  screenColumn: number,
+): { line: number; column: number } | undefined {
+  const visualLine = runtime.buildVisualLineMap(runtime.lastWidth)[runtime.scrollOffset + inputRow];
+  if (!visualLine) return undefined;
+  const logicalText = runtime.state.lines[visualLine.logicalLine] ?? "";
+  const segment = logicalText.slice(visualLine.startCol, visualLine.startCol + visualLine.length);
+  const segmentHit = composerSegmentHit(layout, screenColumn, segment, inputRow);
+  return {
+    line: visualLine.logicalLine,
+    column: visualLine.startCol + logicalSegmentIndex(segment, segmentHit),
+  };
+}
+
+function logicalSegmentIndex(
+  segment: string,
+  hit: { column: number; visuallyReordered: boolean },
+): number {
+  if (!hit.visuallyReordered) return logicalIndexAtVisualColumn(segment, Math.max(0, hit.column));
+  return hit.column < 0
+    ? segment.length
+    : logicalIndexAtRtlVisualColumn(segment, hit.column, visibleWidth);
+}
+
+function composerSegmentHit(
+  layout: ComposerEditorLayout,
+  screenColumn: number,
+  segment: string,
+  inputRow: number,
+): { column: number; visuallyReordered: boolean } {
+  const contentStart = layout.outerPadding + (layout.frame.framed ? 2 : 0);
+  const visuallyReordered = layout.isRtl && usesVisualRtlReordering(segment);
+  if (!layout.isRtl) {
+    const column = Math.max(0, Math.floor(screenColumn) - contentStart - layout.promptWidth);
+    return { column, visuallyReordered };
+  }
+  return {
+    column: rtlSegmentColumn(layout, screenColumn, segment, inputRow),
+    visuallyReordered,
+  };
+}
+
+function rtlSegmentColumn(
+  layout: ComposerEditorLayout,
+  screenColumn: number,
+  segment: string,
+  inputRow: number,
+): number {
+  const contentStart = layout.outerPadding + (layout.frame.framed ? 2 : 0);
+  const visuallyReordered = usesVisualRtlReordering(segment);
+  const segmentWidth = visuallyReordered
+    ? rtlVisualWidth(segment, visibleWidth)
+    : visibleWidth(segment);
+  const continuationInset = inputRow > 0 ? layout.promptWidth : 0;
+  const visualStart = contentStart + continuationInset + Math.max(0, layout.editorWidth - segmentWidth);
+  if (screenColumn < visualStart) return visuallyReordered ? -1 : 0;
+  return Math.max(0, Math.floor(screenColumn) - visualStart);
+}
+
+function logicalIndexAtVisualColumn(text: string, visualColumn: number): number {
+  const targetColumn = Math.max(0, Math.floor(visualColumn));
+  let currentColumn = 0;
+  for (const { segment, index } of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) {
+    if (targetColumn < currentColumn + visibleWidth(segment)) return index;
+    currentColumn += visibleWidth(segment);
+  }
+  return text.length;
 }
 
 function rtlComposerLine(text: string, prompt: string, width: number): string {

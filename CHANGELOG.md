@@ -3,13 +3,12 @@
 ## Unreleased
 
 - Added a privacy-safe 30-day session analyzer and standalone HTML workflow audit with exact-versus-heuristic labelling, anonymous sessions, public-output guards, and responsive interactive views.
-- Replaced three automatic verification repairs with one bounded pass and added blocker-aware pause/resume behavior for login, credentials, target, browser, and environment failures.
-- Added transcript-rendered blocker screenshots, four explicit user choices, real-target verification policy, and confirmation before creating verification-only pages or fixtures.
-- Prevented workflow RPC children from starting nested verification loops while retaining temporary screenshot routing.
+- Removed the custom automatic feature-verification extension, its injected requirements, retry gate, command surface, and dedicated regression suite.
 - Made `pipeline` the focused everyday workflow and preserved the previous multi-agent consensus process as opt-in `deep-review`.
-- Added portable session/tool efficiency guidance for repeated reads, equivalent failures, context pressure, proportional verification, and delegation.
+- Added portable session/tool efficiency guidance for repeated reads, equivalent failures, context pressure, and delegation.
 - Moved completed plan tasks into the scrollable transcript before the final assistant response, while keeping the live widget only during active work.
 - Added precise Workbench drag selection with clipboard copy while preserving mouse-wheel scrolling during streaming and idle periods; selection highlighting no longer paints padded terminal rows.
+- Added click-to-place cursor support inside the composer for plain, wrapped, wide-character, and RTL text.
 
 ## 0.12.3
 
