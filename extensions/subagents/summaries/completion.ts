@@ -4,6 +4,8 @@ import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core"
 import { generateSummary, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { CompletionPayload, SubagentRecord, SubagentSettings } from "../types.ts";
 import { bytes, formatTokens, oneLine } from "../utils.ts";
+import { resolveSummaryRuntime } from "./model.ts";
+import { enforcePayloadByteLimit } from "./payload-limit.ts";
 
 export function extractiveOutputSummary(output: string, maxBytes: number): string {
   const lines = output
@@ -40,8 +42,11 @@ export async function summarizeOutputForPayload(
   signal?: AbortSignal,
   thinkingLevel?: ThinkingLevel,
 ): Promise<{ text: string; summarized: boolean }> {
-  const model = ctx?.model;
-  if (model) {
+  const summaryRuntime = ctx
+    ? resolveSummaryRuntime(ctx, settings, thinkingLevel)
+    : undefined;
+  const model = summaryRuntime?.model;
+  if (ctx && model) {
     try {
       const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
       if (auth.ok) {
@@ -61,7 +66,7 @@ export async function summarizeOutputForPayload(
           signal,
           "Summarize this sub-agent final output for the parent model. Preserve conclusions, evidence, files changed/read, commands, risks, blockers, and next steps. Do not include the full transcript.",
           undefined,
-          thinkingLevel,
+          summaryRuntime.thinkingLevel,
         );
         return { text: summary, summarized: true };
       }
@@ -88,6 +93,7 @@ export function buildCompletionPayload(
     `Sub-agent ${record.id} (${record.generatedLabel}) ${record.status}.`,
     `Task: ${oneLine(record.task, 1_200)}`,
     `Context: ${record.contextMode}`,
+    ...(record.profile ? [`Profile: ${record.profile}`] : []),
     `Depth: ${record.depth}/${settings.maxDepth}`,
   ];
   if (record.sessionFile) lines.push(`Session: ${record.sessionFile}`);
@@ -176,6 +182,7 @@ export async function makeCompletionPayload(
       "The child completed, but even the summarized payload exceeded returnMaxBytes. Use the referenced child session/final-output file for the full result.";
     payload = buildCompletionPayload(record, payloadOutput, settings, true);
   }
+  payload = enforcePayloadByteLimit(payload, settings.returnMaxBytes);
   return {
     id: record.id,
     label: record.generatedLabel,
@@ -191,6 +198,7 @@ export async function makeCompletionPayload(
     sessionDir: record.sessionDir,
     outputPath,
     usage: record.usage,
+    profile: record.profile,
     model: record.model,
     thinkingLevel: record.thinkingLevel,
     error: record.error,

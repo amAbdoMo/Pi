@@ -14,8 +14,9 @@ import {
   eventLabel,
 } from "../render-utils.ts";
 import { parseSubagentStatusCount, summarizeRpcEvent } from "../status.ts";
-import { argsSummary, now, oneLine } from "../utils.ts";
+import { argsSummary, codePointSuffix, now, oneLine } from "../utils.ts";
 import { updateStatus } from "./status-ui.ts";
+import { boundDelegateDetails } from "./detail-bounds.ts";
 import type { SubagentRuntimeState } from "./state.ts";
 
 export function removeActiveWhenSettled(
@@ -33,7 +34,10 @@ export function pushEvent(record: SubagentRecord, event: RpcEvent) {
   if (event.type === "message_update") {
     const delta = event.assistantMessageEvent?.delta;
     if (typeof delta === "string" && delta) {
-      record.streamingMessageBuffer = `${record.streamingMessageBuffer ?? ""}${delta}`.slice(-2_000);
+      record.streamingMessageBuffer = codePointSuffix(
+        `${record.streamingMessageBuffer ?? ""}${delta}`,
+        2_000,
+      );
       record.lastMessageSnippet = oneLine(record.streamingMessageBuffer, 260);
     }
     return;
@@ -126,7 +130,7 @@ export function toDelegateDetails(
   record: SubagentRecord,
   currentSettings: SubagentSettings,
 ): DelegateDetails {
-  return {
+  return boundDelegateDetails({
     id: record.id,
     label: record.generatedLabel,
     status: record.status,
@@ -138,12 +142,13 @@ export function toDelegateDetails(
     sessionDir: record.sessionDir,
     lastMessageSnippet: record.lastMessageSnippet,
     usage: record.usage,
+    profile: record.profile,
     model: record.model,
     thinkingLevel: record.thinkingLevel,
     error: record.error,
     finalOutput: record.finalOutput,
     events: record.events.slice(-40),
-  };
+  }, currentSettings.returnMaxBytes);
 }
 
 export function renderProgress(record: SubagentRecord): string {

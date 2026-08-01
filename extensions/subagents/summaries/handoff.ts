@@ -7,6 +7,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SubagentSettings } from "../types.ts";
 import { argsSummary, bytes, extractMessageText, oneLine } from "../utils.ts";
+import { resolveSummaryRuntime } from "./model.ts";
+import {
+  truncateUtf8Prefix,
+  truncateUtf8Suffix,
+} from "./payload-limit.ts";
 
 export function selectRecentMessages(
   messages: AgentMessage[],
@@ -44,8 +49,10 @@ export function fallbackHandoffSummary(
         const args = part.arguments ?? {};
         const filePath = args.path ?? args.file_path;
         if (typeof filePath === "string") {
-          if (part.name === "read") readFiles.add(filePath);
-          if (part.name === "write" || part.name === "edit") modifiedFiles.add(filePath);
+          const wellFormedPath = filePath.toWellFormed();
+          if (part.name === "read") readFiles.add(wellFormedPath);
+          if (part.name === "write" || part.name === "edit")
+            modifiedFiles.add(wellFormedPath);
         }
         toolLines.push(`- ${part.name}: ${argsSummary(args)}`);
       }
@@ -119,7 +126,8 @@ export async function generateHandoffSummary(
     "Explicitly state this is a summary, not the full transcript.",
   ].join("\n");
 
-  const model = ctx.model;
+  const summaryRuntime = resolveSummaryRuntime(ctx, settings, thinkingLevel);
+  const model = summaryRuntime.model;
   if (model) {
     try {
       const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
@@ -133,7 +141,7 @@ export async function generateHandoffSummary(
           signal,
           instructions,
           undefined,
-          thinkingLevel,
+          summaryRuntime.thinkingLevel,
         );
         const maxSummaryBytes = settings.handoffTokenBudget * 4;
         if (bytes(summary) > maxSummaryBytes)
@@ -156,9 +164,7 @@ export function deterministicSummary(text: string, maxBytes: number): string {
   if (bytes(text) <= maxBytes) return text;
   const headBudget = Math.max(500, Math.floor(maxBytes * 0.7));
   const tailBudget = Math.max(300, maxBytes - headBudget - 200);
-  let head = text.slice(0, headBudget);
-  while (bytes(head) > headBudget) head = head.slice(0, -1);
-  let tail = text.slice(-tailBudget);
-  while (bytes(tail) > tailBudget) tail = tail.slice(1);
+  const head = truncateUtf8Prefix(text, headBudget);
+  const tail = truncateUtf8Suffix(text, tailBudget);
   return `${head}\n\n[Summary compressed: middle omitted; full source remains in the parent/child session logs.]\n\n${tail}`;
 }

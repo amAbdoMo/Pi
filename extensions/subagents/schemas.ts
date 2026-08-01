@@ -1,6 +1,9 @@
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { CHILD_THINKING_LEVELS } from "./child-profile.ts";
+import {
+  CHILD_PROFILE_NAMES,
+  CHILD_THINKING_LEVELS,
+} from "./child-profile.ts";
 
 export const DelegateParams = Type.Object({
   title: Type.Optional(
@@ -18,16 +21,22 @@ export const DelegateParams = Type.Object({
       default: "compact",
     }),
   ),
+  profile: Type.Optional(
+    StringEnum(CHILD_PROFILE_NAMES, {
+      description:
+        "Adaptive task profile. fast=Luna low; balanced=Terra medium; implementation/review=Terra high; deep=Sol high; critical=Sol xhigh. Explicit model/thinking values override the profile.",
+    }),
+  ),
   model: Type.Optional(
     Type.String({
       description:
-        "Optional child model as provider/model. Omit to inherit the parent model.",
+        "Optional child model as provider/model. Overrides profile; omit with no profile to inherit the parent model.",
     }),
   ),
   thinking: Type.Optional(
     StringEnum(CHILD_THINKING_LEVELS, {
       description:
-        "Optional child thinking level. Omit to inherit the parent thinking level.",
+        "Optional child thinking level. Overrides profile; omit with no profile to inherit the parent thinking level.",
     }),
   ),
 });

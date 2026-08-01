@@ -1,5 +1,6 @@
 import { Text } from "@earendil-works/pi-tui";
 import { AskParentParams, DelegateParams } from "../schemas.ts";
+import { DELEGATE_PROMPT_GUIDELINES } from "../prompts.ts";
 import { OneLineList, renderToolTree } from "../render-utils.ts";
 import type { DelegateDetails } from "../types.ts";
 import { generatedLabel, oneLine } from "../utils.ts";
@@ -15,16 +16,10 @@ export function registerSubagentTools(state: SubagentRuntimeState) {
       name: "delegate",
       label: "Delegate",
       description:
-        "Spawn one general-purpose sub-agent in a separate Pi RPC subprocess. Optionally choose its model and thinking level; omitted values inherit the parent. Default context is a compact parent handoff summary; use fresh only for unrelated work. Multiple delegate tool calls may run concurrently.",
+        "Spawn one general-purpose sub-agent in a separate Pi RPC subprocess. Choose an adaptive task profile or an explicit model/thinking level; with neither, inherit the parent. Default context is a compact parent handoff summary; use fresh only for unrelated work. Multiple delegate tool calls may run concurrently.",
       promptSnippet:
-        "Spawn one focused general-purpose sub-agent, optionally with a task-sized model and thinking level.",
-      promptGuidelines: [
-        "Use delegate only when a separate focused agent materially helps; do not delegate routine tiny steps.",
-        "When using delegate, provide a short title so the UI can display 'Delegate: <title>'.",
-        "Choose the smallest capable child model and lowest sufficient thinking level; omit model/thinking to inherit the parent when unsure.",
-        "delegate context defaults to compact summary only, not full transcript; use context='fresh' for unrelated tasks.",
-        "Avoid parallel write-capable delegates in the same checkout unless tasks are independent; they can clobber each other.",
-      ],
+        "Spawn one focused general-purpose sub-agent with an adaptive profile or explicit model/thinking level.",
+      promptGuidelines: [...DELEGATE_PROMPT_GUIDELINES],
       parameters: DelegateParams,
       executionMode: "parallel",
       async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -35,9 +30,11 @@ export function registerSubagentTools(state: SubagentRuntimeState) {
           args.title?.trim?.() || generatedLabel(args.task ?? "delegated task"),
           80,
         );
-        const profile = [args.model, args.thinking].filter(Boolean).join(" • ");
+        const executionProfile = [args.profile, args.model, args.thinking]
+          .filter(Boolean)
+          .join(" • ");
         return new OneLineList([
-          `${theme.fg("toolTitle", theme.bold("Delegate:"))} ${theme.fg("accent", title)}${profile ? ` ${theme.fg("dim", profile)}` : ""}`,
+          `${theme.fg("toolTitle", theme.bold("Delegate:"))} ${theme.fg("accent", title)}${executionProfile ? ` ${theme.fg("dim", executionProfile)}` : ""}`,
         ]);
       },
       renderResult(result, _options, theme) {

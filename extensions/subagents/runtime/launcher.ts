@@ -4,11 +4,15 @@ import type {
   AgentToolUpdateCallback,
 } from "@earendil-works/pi-agent-core";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { childProfileArgs, resolveChildProfile } from "../child-profile.ts";
+import { resolveAvailableChildProfile } from "../child-profile.ts";
 import { buildInitialPrompt } from "../prompts.ts";
 import { loadSettings } from "../settings.ts";
 import { RpcProcess } from "../rpc-process.ts";
-import { generateHandoffSummary, makeCompletionPayload } from "../summaries.ts";
+import {
+  buildParentDelegateResult,
+  generateHandoffSummary,
+  makeCompletionPayload,
+} from "../summaries.ts";
 import type {
   CompletionPayload,
   DelegateDetails,
@@ -27,6 +31,14 @@ import {
   oneLine,
 } from "../utils.ts";
 import { startBridgeWatcher } from "./ask-parent.ts";
+import { boundDelegateDetails } from "./detail-bounds.ts";
+import { boundedChildError } from "./errors.ts";
+import {
+  getOrCreateHandoffPromise,
+  waitForHandoffSummary,
+} from "./handoff-cache.ts";
+import { buildChildLaunchArgs } from "./invocation.ts";
+import { delegateLimitIssue } from "./limits.ts";
 import {
   abortChild,
   handleRpcEvent,
@@ -54,22 +66,17 @@ export async function launchChild(
   ensureDir(path.join(record.bridgeDir, "requests"));
   ensureDir(path.join(record.bridgeDir, "answers"));
 
-  const args = [
-    "--mode",
-    "rpc",
-    "--name",
-    record.generatedLabel,
-    "-e",
-    state.extensionPath,
-  ];
-  if (childSettings.persistSessions) args.push("--session-dir", record.sessionDir);
-  else args.push("--no-session");
-  args.push(
-    ...childProfileArgs({
+  const args = buildChildLaunchArgs({
+    parentArgs: process.argv,
+    label: record.generatedLabel,
+    extensionPath: state.extensionPath,
+    persistSessions: childSettings.persistSessions,
+    sessionDir: record.sessionDir,
+    profile: {
       model: record.model,
       thinking: record.thinkingLevel,
-    }),
-  );
+    },
+  });
 
   const invocation = getPiInvocation(args);
   const env: Record<string, string | undefined> = {
@@ -134,7 +141,7 @@ export async function launchChild(
     );
   } catch (err) {
     if (record.status !== "aborted") record.status = "failed";
-    record.error = err instanceof Error ? err.message : String(err);
+    record.error = boundedChildError(err);
     record.finalOutput = record.finalOutput || record.error;
     record.endedAt = now();
     liveUpdate?.notify(true);
@@ -192,6 +199,59 @@ function waitForChildFinish(
   });
 }
 
+function handoffCacheKey(
+  state: SubagentRuntimeState,
+  ctx: ExtensionContext,
+): string {
+  const branch = ctx.sessionManager.getBranch() as Array<{
+    id?: string;
+    timestamp?: number;
+  }>;
+  const latest = branch.at(-1);
+  const summaryProfile = state.settings.profiles[state.settings.summaryProfile];
+  return [
+    currentRootId(ctx),
+    branch.length,
+    latest?.id ?? latest?.timestamp ?? "empty",
+    state.settings.handoffTokenBudget,
+    state.settings.handoffKeepRecentTokens,
+    state.settings.summaryProfile,
+    summaryProfile.model,
+    summaryProfile.thinking,
+  ].join(":");
+}
+
+async function cachedHandoffSummary(
+  state: SubagentRuntimeState,
+  ctx: ExtensionContext,
+  signal: AbortSignal | undefined,
+): Promise<string> {
+  const key = handoffCacheKey(state, ctx);
+  const cached = getOrCreateHandoffPromise(state.handoffCache, key, () =>
+    generateHandoffSummary(
+      ctx,
+      state.settings,
+      undefined,
+      state.pi.getThinkingLevel?.(),
+    ),
+  );
+  state.handoffCache = cached.entry;
+  void cached.summary.catch(() => {
+    if (state.handoffCache?.key === key) state.handoffCache = undefined;
+  });
+  return waitForHandoffSummary(cached.summary, signal);
+}
+
+function isModelAvailable(ctx: ExtensionContext, modelReference: string): boolean {
+  const separator = modelReference.indexOf("/");
+  if (separator <= 0 || separator === modelReference.length - 1) return false;
+  const provider = modelReference.slice(0, separator);
+  const modelId = modelReference.slice(separator + 1);
+  return ctx.modelRegistry
+    .getAvailable()
+    .some((model) => model.provider === provider && model.id === modelId);
+}
+
 export async function spawnDelegate(
   state: SubagentRuntimeState,
   params: DelegateRequest,
@@ -203,36 +263,52 @@ export async function spawnDelegate(
   state.settings = loadSettings(ctx.cwd);
   if (process.env.PI_SUBAGENT_MAX_DEPTH) state.settings.maxDepth = state.envMaxDepth;
   const contextMode = params.context ?? state.settings.defaultContext;
-  if (!state.settings.allowChildSubagents || state.currentDepth >= state.settings.maxDepth) {
+  const limitIssue = delegateLimitIssue({
+    allowChildSubagents: state.settings.allowChildSubagents,
+    currentDepth: state.currentDepth,
+    maxDepth: state.settings.maxDepth,
+    activeCount: state.active.size,
+    maxConcurrent: state.settings.maxConcurrent,
+  });
+  if (limitIssue) {
     return {
       content: [
         {
           type: "text",
-          text: `Cannot delegate: maxDepth ${state.settings.maxDepth} reached at depth ${state.currentDepth}.`,
+          text: `Cannot delegate: ${limitIssue.message}.`,
         },
       ],
-      details: {
-        id: "",
-        label: "max depth",
-        status: "failed",
-        contextMode,
-        depth: state.currentDepth,
-        maxDepth: state.settings.maxDepth,
-        task: params.task,
-        error: "max depth reached",
-        events: [],
-      },
+      details: boundDelegateDetails(
+        {
+          id: "",
+          label: limitIssue.kind,
+          status: "failed",
+          contextMode,
+          depth: state.currentDepth,
+          maxDepth: state.settings.maxDepth,
+          task: params.task,
+          error: limitIssue.message,
+          events: [],
+        },
+        state.settings.returnMaxBytes,
+      ),
     };
   }
 
   const id = makeId();
   const label = oneLine(params.title?.trim() || generatedLabel(params.task), 48);
-  const profile = resolveChildProfile(
-    { model: params.model, thinking: params.thinking },
+  const profile = resolveAvailableChildProfile(
+    {
+      profile: params.profile,
+      model: params.model,
+      thinking: params.thinking,
+    },
     {
       model: ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined,
       thinking: state.pi.getThinkingLevel?.(),
     },
+    state.settings.profiles,
+    (model) => isModelAvailable(ctx, model),
   );
   const rootId = currentRootId(ctx);
   const depth = state.currentDepth + 1;
@@ -248,6 +324,7 @@ export async function spawnDelegate(
     task: params.task,
     contextMode,
     createdAt: now(),
+    profile: params.profile,
     model: profile.model,
     thinkingLevel: profile.thinking,
     sessionDir,
@@ -259,15 +336,30 @@ export async function spawnDelegate(
   state.active.set(id, record);
   updateStatus(state, ctx);
 
-  const handoff =
-    contextMode === "compact"
-      ? await generateHandoffSummary(
-          ctx,
-          state.settings,
-          signal,
-          state.pi.getThinkingLevel?.(),
-        )
-      : undefined;
+  let handoff: string | undefined;
+  try {
+    handoff =
+      contextMode === "compact"
+        ? await cachedHandoffSummary(state, ctx, signal)
+        : undefined;
+  } catch (error) {
+    record.status = signal?.aborted ? "aborted" : "failed";
+    record.error = boundedChildError(error);
+    record.finalOutput = record.error;
+    record.endedAt = now();
+    removeActiveWhenSettled(state, record);
+    const completion = await makeCompletionPayload(
+      record,
+      ctx,
+      state.settings,
+      signal,
+      state.pi.getThinkingLevel?.(),
+    );
+    return buildParentDelegateResult(
+      completion,
+      toDelegateDetails(record, state.settings),
+    );
+  }
   const initialPrompt = buildInitialPrompt(
     params.task,
     contextMode,
@@ -278,10 +370,29 @@ export async function spawnDelegate(
   const liveUpdate = makeLiveUpdater(state, record, onUpdate);
   record.completion = launchChild(state, record, initialPrompt, ctx, signal, liveUpdate);
 
-  const completion = await record.completion;
-  removeActiveWhenSettled(state, record);
-  return {
-    content: [{ type: "text", text: oneLine(completion.output || completion.payload || "", 220) }],
-    details: toDelegateDetails(record, state.settings),
-  };
+  let completion: CompletionPayload;
+  try {
+    completion = await record.completion;
+  } catch (error) {
+    record.status = signal?.aborted ? "aborted" : "failed";
+    record.error = boundedChildError(error);
+    record.finalOutput = record.finalOutput || record.error;
+    record.endedAt = now();
+    clearInterval(record.bridgeTimer);
+    if (record.client) await record.client.stop().catch(() => undefined);
+    liveUpdate?.close();
+    completion = await makeCompletionPayload(
+      record,
+      ctx,
+      state.settings,
+      signal,
+      state.pi.getThinkingLevel?.(),
+    );
+  } finally {
+    removeActiveWhenSettled(state, record);
+  }
+  return buildParentDelegateResult(
+    completion,
+    toDelegateDetails(record, state.settings),
+  );
 }

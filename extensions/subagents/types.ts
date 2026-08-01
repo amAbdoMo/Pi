@@ -1,4 +1,8 @@
-import type { ChildThinkingLevel } from "./child-profile.ts";
+import type {
+  ChildProfileMap,
+  ChildProfileName,
+  ChildThinkingLevel,
+} from "./child-profile.ts";
 import type { RpcProcess } from "./rpc-process.ts";
 
 export type ContextMode = "compact" | "fresh";
@@ -7,6 +11,7 @@ export interface DelegateRequest {
   title?: string;
   task: string;
   context?: ContextMode;
+  profile?: ChildProfileName;
   model?: string;
   thinking?: ChildThinkingLevel;
 }
@@ -45,6 +50,7 @@ export type LiveDelegateUpdater = {
 
 export interface SubagentSettings {
   maxDepth: number;
+  maxConcurrent: number;
   defaultContext: ContextMode;
   handoffTokenBudget: number;
   handoffKeepRecentTokens: number;
@@ -57,6 +63,8 @@ export interface SubagentSettings {
   showInNormalResume: boolean;
   killChildrenOnParentExit: boolean;
   allowChildSubagents: boolean;
+  profiles: ChildProfileMap;
+  summaryProfile: ChildProfileName;
 }
 
 export interface UsageStats {
@@ -101,6 +109,7 @@ export interface SubagentRecord {
   finalOutput?: string;
   error?: string;
   usage?: UsageStats;
+  profile?: ChildProfileName;
   model?: string;
   thinkingLevel?: ChildThinkingLevel;
   nestedActiveCount?: number;
@@ -124,6 +133,7 @@ export interface DelegateDetails {
   sessionDir?: string;
   lastMessageSnippet?: string;
   usage?: UsageStats;
+  profile?: ChildProfileName;
   model?: string;
   thinkingLevel?: ChildThinkingLevel;
   error?: string;
@@ -146,6 +156,7 @@ export interface CompletionPayload {
   sessionDir?: string;
   outputPath?: string;
   usage?: UsageStats;
+  profile?: ChildProfileName;
   model?: string;
   thinkingLevel?: ChildThinkingLevel;
   error?: string;

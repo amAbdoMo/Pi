@@ -9,6 +9,7 @@
 - Moved completed plan tasks into the scrollable transcript before the final assistant response, while keeping the live widget only during active work.
 - Added precise Workbench drag selection with clipboard copy while preserving mouse-wheel scrolling during streaming and idle periods; selection highlighting no longer paints padded terminal rows.
 - Added click-to-place cursor support inside the composer for plain, wrapped, wide-character, and RTL text.
+- Reworked subagent delegation around adaptive GPT-5.6 profiles, complete bounded parent-visible results, proportional parent review, cached compact handoffs, low-cost summaries, and default recursion/concurrency limits.
 
 ## 0.12.3
 

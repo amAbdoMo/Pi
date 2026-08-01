@@ -13,6 +13,23 @@
   "terminal": {
     "showTerminalProgress": true
   },
+  "subagents": {
+    "maxDepth": 1,
+    "maxConcurrent": 3,
+    "defaultContext": "compact",
+    "handoffTokenBudget": 4000,
+    "handoffKeepRecentTokens": 2000,
+    "returnMaxBytes": 24000,
+    "summaryProfile": "fast",
+    "profiles": {
+      "fast": { "model": "openai-codex/gpt-5.6-luna", "thinking": "low" },
+      "balanced": { "model": "openai-codex/gpt-5.6-terra", "thinking": "medium" },
+      "implementation": { "model": "openai-codex/gpt-5.6-terra", "thinking": "high" },
+      "review": { "model": "openai-codex/gpt-5.6-terra", "thinking": "high" },
+      "deep": { "model": "openai-codex/gpt-5.6-sol", "thinking": "high" },
+      "critical": { "model": "openai-codex/gpt-5.6-sol", "thinking": "xhigh" }
+    }
+  },
   "steeringMode": "one-at-a-time",
   "quietStartup": true,
   "enableInstallTelemetry": false,

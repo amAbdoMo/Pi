@@ -54,6 +54,19 @@ export function currentRootId(ctx?: ExtensionContext): string {
   );
 }
 
+export function codePointPrefix(text: string, limit: number): string {
+  return Array.from(text.toWellFormed())
+    .slice(0, Math.max(0, limit))
+    .join("");
+}
+
+export function codePointSuffix(text: string, limit: number): string {
+  const safeLimit = Math.max(0, limit);
+  return safeLimit === 0
+    ? ""
+    : Array.from(text.toWellFormed()).slice(-safeLimit).join("");
+}
+
 export function generatedLabel(task: string): string {
   const words = task
     .replace(/[`*_#>\[\](){}]/g, " ")
@@ -62,15 +75,14 @@ export function generatedLabel(task: string): string {
     .filter(Boolean)
     .slice(0, 7)
     .join(" ");
-  return words.length > 48
-    ? `${words.slice(0, 45)}...`
-    : words || "delegated task";
+  return words ? oneLine(words, 48) : "delegated task";
 }
 
 export function oneLine(text: string, limit = 160): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > limit
-    ? `${normalized.slice(0, Math.max(0, limit - 1))}…`
+  const normalized = text.toWellFormed().replace(/\s+/g, " ").trim();
+  const characters = Array.from(normalized);
+  return characters.length > limit
+    ? `${codePointPrefix(normalized, Math.max(0, limit - 1))}…`
     : normalized;
 }
 

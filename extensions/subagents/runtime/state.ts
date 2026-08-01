@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { SubagentRecord, SubagentSettings } from "../types.ts";
+import type { HandoffCacheEntry } from "./handoff-cache.ts";
 
 export interface SubagentRuntimeState {
   pi: ExtensionAPI;
@@ -12,4 +13,5 @@ export interface SubagentRuntimeState {
   envMaxDepth: number;
   isChild: boolean;
   extensionPath: string;
+  handoffCache?: HandoffCacheEntry;
 }
