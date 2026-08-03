@@ -16,8 +16,9 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, "utf8"));
 }
 
-test("package reconciliation preserves user filters and unrelated local packages", () => {
+test("package reconciliation preserves user filters and unrelated local packages", (t) => {
   const testRoot = temporaryDirectory("pi-apply-config-");
+  t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
   const agentDir = path.join(testRoot, ".pi", "agent");
   const setupCheckout = path.join(testRoot, "ours", "Projects", "Pi");
   const legacySetupCheckout = path.join(testRoot, "legacy", "Projects", "Pi");
@@ -87,8 +88,9 @@ test("package reconciliation preserves user filters and unrelated local packages
   assert.equal((appendedPolicy.match(/pi-workbench:managed-policy:end/g) || []).length, 1);
 });
 
-test("system policy update fails closed when managed markers are malformed", () => {
+test("system policy update fails closed when managed markers are malformed", (t) => {
   const testRoot = temporaryDirectory("pi-system-policy-malformed-");
+  t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
   const agentDir = path.join(testRoot, ".pi", "agent");
   const systemPolicyFile = path.join(testRoot, "APPEND_SYSTEM.md");
   const targetFile = path.join(agentDir, "APPEND_SYSTEM.md");
@@ -107,8 +109,9 @@ test("system policy update fails closed when managed markers are malformed", () 
   assert.equal(fs.readFileSync(targetFile, "utf8"), original);
 });
 
-test("config capture copies shared preferences without runtime or credential fields", () => {
+test("config capture copies shared preferences without runtime or credential fields", (t) => {
   const testRoot = temporaryDirectory("pi-capture-config-");
+  t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
   const testRepo = path.join(testRoot, "repo");
   const agentDir = path.join(testRoot, "agent");
   fs.mkdirSync(path.join(testRepo, "scripts"), { recursive: true });
