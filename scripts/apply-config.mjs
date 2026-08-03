@@ -9,6 +9,8 @@ const REQUIRED_PACKAGES = [
 ];
 const RETIRED_PACKAGES = new Set(["npm:pi-mcp-adapter"]);
 const SETUP_PACKAGE_NAMES = new Set(["pi-workbench", "amabdomo-pi"]);
+const SYSTEM_POLICY_START = "<!-- pi-workbench:managed-policy:start -->";
+const SYSTEM_POLICY_END = "<!-- pi-workbench:managed-policy:end -->";
 
 function readJson(filePath) {
   try {
@@ -80,6 +82,78 @@ function ensureMcpConfig(filePath) {
   console.log(`Created ${filePath}`);
 }
 
+function systemPolicySource(argumentsList) {
+  const flagIndex = argumentsList.indexOf("--system-policy");
+  if (flagIndex === -1) return undefined;
+  if (!argumentsList[flagIndex + 1]) throw new Error("--system-policy requires a file path");
+  return path.resolve(argumentsList[flagIndex + 1]);
+}
+
+function writeTextRecoverably(filePath, contents) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const token = `${process.pid}-${Date.now()}`;
+  const temporaryPath = `${filePath}.tmp-${token}`;
+  const backupPath = `${filePath}.backup-${token}`;
+  const hadExistingFile = fs.existsSync(filePath);
+  fs.writeFileSync(temporaryPath, contents);
+
+  try {
+    if (hadExistingFile) fs.renameSync(filePath, backupPath);
+    fs.renameSync(temporaryPath, filePath);
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    if (hadExistingFile && !fs.existsSync(filePath) && fs.existsSync(backupPath)) {
+      fs.renameSync(backupPath, filePath);
+    }
+    throw error;
+  }
+
+  if (hadExistingFile) {
+    try {
+      fs.rmSync(backupPath, { force: true });
+    } catch (error) {
+      console.warn(`Updated ${filePath}, but could not remove backup ${backupPath}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
+function applySystemPolicy(agentDir, sourcePath) {
+  if (!sourcePath) return;
+
+  const policy = fs.readFileSync(sourcePath, "utf8").trim();
+  if (!policy) throw new Error(`System policy is empty: ${sourcePath}`);
+
+  const targetPath = path.join(agentDir, "APPEND_SYSTEM.md");
+  const existing = fs.existsSync(targetPath) ? fs.readFileSync(targetPath, "utf8") : "";
+  const startIndex = existing.indexOf(SYSTEM_POLICY_START);
+  const endIndex = existing.indexOf(SYSTEM_POLICY_END);
+  const hasStart = startIndex !== -1;
+  const hasEnd = endIndex !== -1;
+  if (hasStart !== hasEnd || (hasStart && endIndex < startIndex)) {
+    throw new Error(`Cannot update malformed managed policy markers in ${targetPath}`);
+  }
+  if (
+    (hasStart && existing.indexOf(SYSTEM_POLICY_START, startIndex + SYSTEM_POLICY_START.length) !== -1)
+    || (hasEnd && existing.indexOf(SYSTEM_POLICY_END, endIndex + SYSTEM_POLICY_END.length) !== -1)
+  ) {
+    throw new Error(`Cannot update duplicate managed policy markers in ${targetPath}`);
+  }
+
+  const managedBlock = `${SYSTEM_POLICY_START}\n${policy}\n${SYSTEM_POLICY_END}`;
+  let updated;
+  if (hasStart) {
+    const managedEnd = endIndex + SYSTEM_POLICY_END.length;
+    updated = `${existing.slice(0, startIndex)}${managedBlock}${existing.slice(managedEnd)}`;
+  } else {
+    const prefix = existing.trimEnd();
+    updated = `${prefix ? `${prefix}\n\n` : ""}${managedBlock}\n`;
+  }
+
+  if (updated === existing) return;
+  writeTextRecoverably(targetPath, updated);
+  console.log(`Updated ${targetPath}`);
+}
+
 const agentDir =
   process.env.PI_CODING_AGENT_DIR ||
   process.env.PI_AGENT_DIR ||
@@ -110,3 +184,4 @@ keybindings["tui.input.copy"] = ["ctrl+c"];
 keybindings["app.clear"] = [];
 keybindings["app.clipboard.pasteImage"] = [];
 writeJson(keybindingsFile, keybindings);
+applySystemPolicy(agentDir, systemPolicySource(process.argv.slice(2)));

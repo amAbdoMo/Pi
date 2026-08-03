@@ -29,6 +29,9 @@ test("package reconciliation preserves user filters and unrelated local packages
   fs.writeFileSync(path.join(setupCheckout, "package.json"), JSON.stringify({ name: "pi-workbench" }));
   fs.writeFileSync(path.join(legacySetupCheckout, "package.json"), JSON.stringify({ name: "amabdomo-pi" }));
   fs.writeFileSync(path.join(unrelatedPiPackage, "package.json"), JSON.stringify({ name: "unrelated-pi" }));
+  const systemPolicyFile = path.join(testRoot, "APPEND_SYSTEM.md");
+  fs.writeFileSync(systemPolicyFile, "# Managed test policy\n\n- Keep verification real.\n");
+  fs.writeFileSync(path.join(agentDir, "APPEND_SYSTEM.md"), "# Personal instructions\n\n- Preserve this line.\n");
 
   const filteredContextMode = { source: "npm:context-mode", extensions: ["keep-context-filter"] };
   const filteredHypa = { source: "npm:@hypabolic/pi-hypa", extensions: ["keep-hypa-filter"] };
@@ -53,10 +56,11 @@ test("package reconciliation preserves user filters and unrelated local packages
 
   const environment = { ...process.env, PI_CODING_AGENT_DIR: agentDir };
   for (let run = 0; run < 2; run++) {
-    execFileSync(process.execPath, [path.join(root, "scripts", "apply-config.mjs")], {
-      env: environment,
-      stdio: "pipe",
-    });
+    execFileSync(
+      process.execPath,
+      [path.join(root, "scripts", "apply-config.mjs"), "--system-policy", systemPolicyFile],
+      { env: environment, stdio: "pipe" },
+    );
   }
 
   const settings = readJson(path.join(agentDir, "settings.json"));
@@ -74,6 +78,33 @@ test("package reconciliation preserves user filters and unrelated local packages
   assert.match(fs.readFileSync(path.join(agentDir, "mcp.jsonc"), "utf8"), /"mcp"\s*:\s*\{\}/);
   assert.equal(settings.defaultModel, "keep-model");
   assert.equal(settings.defaultThinkingLevel, "minimal");
+
+  const appendedPolicy = fs.readFileSync(path.join(agentDir, "APPEND_SYSTEM.md"), "utf8");
+  assert.match(appendedPolicy, /# Personal instructions/);
+  assert.match(appendedPolicy, /Preserve this line/);
+  assert.match(appendedPolicy, /# Managed test policy/);
+  assert.equal((appendedPolicy.match(/pi-workbench:managed-policy:start/g) || []).length, 1);
+  assert.equal((appendedPolicy.match(/pi-workbench:managed-policy:end/g) || []).length, 1);
+});
+
+test("system policy update fails closed when managed markers are malformed", () => {
+  const testRoot = temporaryDirectory("pi-system-policy-malformed-");
+  const agentDir = path.join(testRoot, ".pi", "agent");
+  const systemPolicyFile = path.join(testRoot, "APPEND_SYSTEM.md");
+  const targetFile = path.join(agentDir, "APPEND_SYSTEM.md");
+  fs.mkdirSync(agentDir, { recursive: true });
+  fs.writeFileSync(systemPolicyFile, "# Managed policy\n");
+  fs.writeFileSync(targetFile, "Personal content\n<!-- pi-workbench:managed-policy:start -->\n");
+  const original = fs.readFileSync(targetFile, "utf8");
+
+  assert.throws(() => {
+    execFileSync(
+      process.execPath,
+      [path.join(root, "scripts", "apply-config.mjs"), "--system-policy", systemPolicyFile],
+      { env: { ...process.env, PI_CODING_AGENT_DIR: agentDir }, stdio: "pipe" },
+    );
+  });
+  assert.equal(fs.readFileSync(targetFile, "utf8"), original);
 });
 
 test("config capture copies shared preferences without runtime or credential fields", () => {

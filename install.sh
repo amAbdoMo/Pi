@@ -7,16 +7,21 @@ PI_PACKAGES=(
   "npm:context-mode"
 )
 CONFIG_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs"
+SYSTEM_POLICY_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/APPEND_SYSTEM.md"
 FONT_SETUP_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1"
 TERMINAL_SETTINGS_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-terminal-font.mjs"
 WARP_SETTINGS_SCRIPT_URL="https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-warp-settings.mjs"
-CONFIG_SCRIPT_FILE="$(mktemp "${TMPDIR:-/tmp}/pi-workbench-config.XXXXXX")"
+CONFIG_SCRIPT_BASE="$(mktemp "${TMPDIR:-/tmp}/pi-workbench-config.XXXXXX")"
+CONFIG_SCRIPT_FILE="$CONFIG_SCRIPT_BASE.mjs"
+mv "$CONFIG_SCRIPT_BASE" "$CONFIG_SCRIPT_FILE"
+SYSTEM_POLICY_FILE="$(mktemp "${TMPDIR:-/tmp}/pi-workbench-policy.XXXXXX")"
 FONT_SETUP_SCRIPT_FILE=""
 TERMINAL_SETTINGS_SCRIPT_FILE=""
 WARP_SETTINGS_SCRIPT_FILE=""
 
 cleanup() {
   rm -f "$CONFIG_SCRIPT_FILE"
+  rm -f "$SYSTEM_POLICY_FILE"
   if [[ -n "$FONT_SETUP_SCRIPT_FILE" ]]; then rm -f "$FONT_SETUP_SCRIPT_FILE"; fi
   if [[ -n "$TERMINAL_SETTINGS_SCRIPT_FILE" ]]; then rm -f "$TERMINAL_SETTINGS_SCRIPT_FILE"; fi
   if [[ -n "$WARP_SETTINGS_SCRIPT_FILE" ]]; then rm -f "$WARP_SETTINGS_SCRIPT_FILE"; fi
@@ -24,13 +29,14 @@ cleanup() {
 trap cleanup EXIT
 
 curl -fsSL "$CONFIG_SCRIPT_URL" -o "$CONFIG_SCRIPT_FILE"
-node --input-type=module < "$CONFIG_SCRIPT_FILE"
+curl -fsSL "$SYSTEM_POLICY_URL" -o "$SYSTEM_POLICY_FILE"
+node "$CONFIG_SCRIPT_FILE" --system-policy "$SYSTEM_POLICY_FILE"
 
 for package in "${PI_PACKAGES[@]}"; do
   pi install "$package"
 done
 pi update --extensions
-node --input-type=module < "$CONFIG_SCRIPT_FILE"
+node "$CONFIG_SCRIPT_FILE" --system-policy "$SYSTEM_POLICY_FILE"
 
 case "$(uname -s)" in
   MINGW*|MSYS*|CYGWIN*)

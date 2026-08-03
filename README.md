@@ -92,8 +92,9 @@ The installer is safe to run again. It:
 2. Installs the optional Hypa and context-mode companions.
 3. Removes duplicate development checkouts and the retired external MCP adapter from shared settings.
 4. Applies safe defaults without replacing existing model or thinking preferences.
-5. Creates an empty personal `mcp.jsonc` only when one does not already exist.
-6. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
+5. Installs or refreshes the managed global agent policy in `~/.pi/agent/APPEND_SYSTEM.md` while preserving personal instructions outside its marked block.
+6. Creates an empty personal `mcp.jsonc` only when one does not already exist.
+7. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
 
 ### Package only
 

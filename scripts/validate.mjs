@@ -108,13 +108,31 @@ for (const requiredWarpSetting of ["font_name", "input_box_type_setting", "class
 
 for (const installer of ["install.ps1", "install.sh"]) {
   const installerSource = fs.readFileSync(path.join(root, installer), "utf8");
-  for (const requiredReference of ["set-warp-settings.mjs", "WarpSettingsScript"]) {
+  for (const requiredReference of ["set-warp-settings.mjs", "WarpSettingsScript", "APPEND_SYSTEM.md", "system-policy"]) {
     if (!installerSource.includes(requiredReference)) {
       throw new Error(`${installer} does not provision ${requiredReference}`);
     }
   }
   if (installerSource.includes("pi-mcp-adapter")) {
     throw new Error(`${installer} still installs the retired pi-mcp-adapter package`);
+  }
+}
+
+const applyConfigSource = fs.readFileSync(path.join(root, "scripts/apply-config.mjs"), "utf8");
+for (const policyMarker of ["pi-workbench:managed-policy:start", "pi-workbench:managed-policy:end"]) {
+  if (!applyConfigSource.includes(policyMarker)) {
+    throw new Error(`apply-config.mjs is missing ${policyMarker}`);
+  }
+}
+
+const agentPolicy = fs.readFileSync(path.join(root, "APPEND_SYSTEM.md"), "utf8");
+for (const requiredWordPressPolicy of [
+  "do not create standalone HTML review pages",
+  "ask one concise question offering three choices",
+  "Not tested in a real WordPress environment.",
+]) {
+  if (!agentPolicy.includes(requiredWordPressPolicy)) {
+    throw new Error(`APPEND_SYSTEM.md is missing WordPress policy: ${requiredWordPressPolicy}`);
   }
 }
 
