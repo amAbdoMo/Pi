@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  canTrackTodoProgress,
   extractTodoItems,
   getTodoCounts,
+  hasIncompleteTodoItems,
   MAX_TODO_EVIDENCE_CHARS,
   normalizeTodoItems,
   todoStatusSymbol,
@@ -91,4 +93,22 @@ test("progress counts and symbols reflect every explicit task state", () => {
     failed: 1,
   });
   assert.deepEqual(items.map((item) => todoStatusSymbol(item.status)), ["○", "◉", "✓", "✓", "✕"]);
+});
+
+test("unfinished plans can enter or resume tracked execution only outside plan mode", () => {
+  const pendingItems = [{ step: 1, text: "Implement the approved change", status: "pending" }];
+  const completedItems = [{
+    step: 1,
+    text: "Implement the approved change",
+    status: "completed",
+    evidence: "Focused test passed",
+  }];
+
+  assert.equal(hasIncompleteTodoItems(pendingItems), true);
+  assert.equal(hasIncompleteTodoItems(completedItems), false);
+  assert.equal(canTrackTodoProgress(false, false, pendingItems), true);
+  assert.equal(canTrackTodoProgress(true, false, pendingItems), false);
+  assert.equal(canTrackTodoProgress(false, true, completedItems), true);
+  assert.equal(canTrackTodoProgress(false, false, completedItems), false);
+  assert.equal(canTrackTodoProgress(false, true, []), false);
 });

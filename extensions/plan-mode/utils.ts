@@ -186,6 +186,18 @@ export function getTodoCounts(todoItems: readonly TodoItem[]): TodoCounts {
 	return counts;
 }
 
+export function hasIncompleteTodoItems(todoItems: readonly TodoItem[]): boolean {
+	return todoItems.some((todoItem) => todoItem.status !== "completed");
+}
+
+export function canTrackTodoProgress(
+	planModeEnabled: boolean,
+	executionMode: boolean,
+	todoItems: readonly TodoItem[],
+): boolean {
+	return todoItems.length > 0 && (executionMode || (!planModeEnabled && hasIncompleteTodoItems(todoItems)));
+}
+
 export function transitionTodoItems(
 	todoItems: readonly TodoItem[],
 	step: number,

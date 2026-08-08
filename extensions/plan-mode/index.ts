@@ -23,8 +23,10 @@ import {
 } from "./modeEvents.ts";
 import { publishPlanProgress } from "./progressState.ts";
 import {
+	canTrackTodoProgress,
 	extractTodoItems,
 	getTodoCounts,
+	hasIncompleteTodoItems,
 	isSafeCommand,
 	MAX_TODO_EVIDENCE_CHARS,
 	normalizeTodoItems,
@@ -207,8 +209,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (!executionMode || todoItems.length === 0) throw new Error("No tracked plan is currently executing.");
-			todoItems = transitionTodoItems(todoItems, params.step, params.status, params.evidence);
+			if (!canTrackTodoProgress(planModeEnabled, executionMode, todoItems)) {
+				throw new Error("No tracked plan is currently executing.");
+			}
+			const nextTodoItems = transitionTodoItems(todoItems, params.step, params.status, params.evidence);
+			if (!executionMode) executionMode = true;
+			todoItems = nextTodoItems;
 			const updatedItem = todoItems.find((todoItem) => todoItem.step === params.step)!;
 			if (todoItems.every((todoItem) => todoItem.status === "completed")) {
 				announceCompletedPlan(ctx);
@@ -225,9 +231,9 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function enterBuildMode(ctx: ExtensionContext, message = "Build mode enabled. Full access restored."): void {
 		planModeEnabled = false;
-		executionMode = false;
+		executionMode = hasIncompleteTodoItems(todoItems);
 		restoreNormalModeTools();
-		ctx.ui.notify(message);
+		ctx.ui.notify(executionMode ? `${message} Current plan tracking started.` : message);
 		updateStatus(ctx);
 		persistState();
 	}

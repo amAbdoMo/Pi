@@ -10,7 +10,8 @@ Read-only planning mode plus an explicit return-to-build command for safe code a
 - Built-in write tools are disabled while planning
 - Bash is restricted to allowlisted read-only commands while planning
 - Numbered `Plan:` sections are extracted into tracked steps
-- `[DONE:n]` markers track execution progress
+- `plan_progress` records running, completed-with-evidence, and failed states
+- Switching from plan to build mode starts tracking an unfinished plan
 - Progress widget shows completion status during execution
 - Session state persists across resume
 
@@ -34,9 +35,9 @@ Plan:
 3. Third step description
 ```
 
-4. Choose **Execute the plan** when prompted.
-5. During execution, Pi marks steps complete with `[DONE:n]` tags.
-6. Use `/build` anytime to leave plan mode and restore full tool access.
+4. Choose **Execute the plan** when prompted, or switch to build mode with `Tab` or `/build`.
+5. During execution, Pi uses `plan_progress` to mark work running, completed with evidence, or failed.
+6. If an unfinished list was paused in build mode, the next valid `plan_progress` update resumes tracking automatically.
 
 ## How it works
 
@@ -50,8 +51,9 @@ Plan:
 ### Build / execution mode
 
 - Previous active tools are restored.
+- An unfinished plan enters tracked execution when plan mode switches to build mode.
 - Pi receives the remaining plan steps.
-- Completed steps are tracked through `[DONE:n]` markers.
+- `plan_progress` updates refresh the task card, footer status, and Workbench sidebar immediately.
 
 ## Bash allowlist
 

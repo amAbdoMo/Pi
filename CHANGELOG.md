@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Restored responsive plan progress when switching from plan to build mode and made valid progress updates resume unfinished plans that were left paused in build mode.
 - Restored the Workbench sidebar after `/reload` and `/resume` by preserving and rebinding the docked shell across session lifecycle changes.
 - Restored Pi 0.84 Workbench docking by adapting transcript, status, widget, editor, and footer grouping to the new document-root TUI layout.
 - Added a managed global WordPress verification policy that prefers real staging/local sites, asks before synthetic HTML fixtures, requires explicit unverified-state reporting, and preserves personal `APPEND_SYSTEM.md` instructions during cross-device setup.
