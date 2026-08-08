@@ -217,6 +217,11 @@ const { TerminalEditor } = await import(
 const { WorkbenchSidebar, WorkbenchSidebarController } = await import(
   "../extensions/ui/workbenchSidebar.ts"
 );
+const { state: workbenchState, updateState } = await import(
+  "../extensions/ui/state.ts"
+);
+const { editors } = await import("../extensions/ui/editorRegistry.ts");
+const { default: uiExtension } = await import("../extensions/ui/index.ts");
 const { publishMcpStatus } = await import(
   "../extensions/mcp/status.ts"
 );
@@ -345,6 +350,90 @@ function assertWidthSafe(lines, width) {
     );
   }
 }
+
+test("sidebar rendering after reload does not read the stale session context", () => {
+  const previousState = { ...workbenchState };
+  let stale = false;
+  const staleContext = {
+    ui: { theme },
+    cwd: "C:\\project",
+    model: {
+      id: "gpt-test",
+      provider: "anthropic",
+      api: "anthropic-messages",
+      contextWindow: 100_000,
+    },
+    sessionManager: {
+      getSessionId() {
+        if (stale) throw new Error("stale session context");
+        return "reload-regression-session";
+      },
+      getSessionName() {
+        if (stale) throw new Error("stale session context");
+        return "Reload regression";
+      },
+    },
+    getContextUsage() {
+      if (stale) throw new Error("stale session context");
+      return { tokens: 1_000 };
+    },
+  };
+
+  updateState(staleContext, { getThinkingLevel: () => "off" });
+  stale = true;
+  const { sidebar, output } = renderSidebar();
+
+  try {
+    assert.doesNotThrow(() => output());
+    assert.match(output(), /Reload regression/);
+    assert.equal(workbenchState.getFastModeActive?.(), false);
+  } finally {
+    sidebar.dispose();
+    for (const key of Object.keys(workbenchState)) delete workbenchState[key];
+    Object.assign(workbenchState, previousState);
+  }
+});
+
+test("session rename events update the live workbench state", async () => {
+  const handlers = new Map();
+  const eventListeners = new Map();
+  const pi = {
+    events: {
+      emit(channel, data) {
+        for (const listener of eventListeners.get(channel) ?? []) listener(data);
+      },
+      on(channel, listener) {
+        const listeners = eventListeners.get(channel) ?? [];
+        listeners.push(listener);
+        eventListeners.set(channel, listeners);
+        return () => eventListeners.set(
+          channel,
+          listeners.filter((candidate) => candidate !== listener),
+        );
+      },
+    },
+    registerCommand() {},
+    registerShortcut() {},
+    on(event, handler) { handlers.set(event, handler); },
+  };
+  let renderRequests = 0;
+  const editor = { requestRender: () => { renderRequests += 1; } };
+  const previousSessionName = workbenchState.sessionName;
+
+  uiExtension(pi);
+  editors.add(editor);
+  try {
+    await handlers.get("session_info_changed")(
+      { name: "Renamed during reload" },
+      { mode: "tui" },
+    );
+    assert.equal(workbenchState.sessionName, "Renamed during reload");
+    assert.equal(renderRequests, 1);
+  } finally {
+    editors.delete(editor);
+    workbenchState.sessionName = previousSessionName;
+  }
+});
 
 test("the final plan step enters the transcript before the next assistant response", async () => {
   const harness = createPlanModeHarness();

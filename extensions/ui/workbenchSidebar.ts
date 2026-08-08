@@ -291,7 +291,7 @@ export class WorkbenchSidebar implements Component {
   }
 
   private sessionLines(width: number): string[] {
-    const sessionName = state.getSessionName?.() || "Current session";
+    const sessionName = state.sessionName || "Current session";
     const location = `󰉋 ${state.folder || "~"}   ${state.branch || "—"}`;
     return [
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),

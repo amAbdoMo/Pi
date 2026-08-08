@@ -3,7 +3,10 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import path from "node:path";
-import { isFastModeActive } from "../fast-mode/state.ts";
+import {
+  getFastModeForSession,
+  supportsFastMode,
+} from "../fast-mode/state.ts";
 import { isOpenAICodexProvider } from "./providers.ts";
 import type { HeaderState, UiTheme } from "./types.ts";
 
@@ -23,9 +26,12 @@ export function updateState(ctx: ExtensionContext, pi: ExtensionAPI): void {
   state.model = ctx.model?.id ?? "model";
   state.provider = ctx.model?.provider;
   state.thinking = pi.getThinkingLevel?.() ?? "off";
-  state.fastModeActive = isFastModeActive(ctx);
-  state.getFastModeActive = () => isFastModeActive(ctx);
-  state.getSessionName = () => ctx.sessionManager.getSessionName();
+  const sessionId = ctx.sessionManager.getSessionId();
+  const fastModeSupported = supportsFastMode(ctx);
+  state.fastModeActive = getFastModeForSession(sessionId) && fastModeSupported;
+  state.getFastModeActive = () =>
+    getFastModeForSession(sessionId) && fastModeSupported;
+  state.sessionName = ctx.sessionManager.getSessionName();
   state.contextWindow = Number((ctx.model as any)?.contextWindow) || undefined;
   state.contextTokens =
     ctx.getContextUsage?.()?.tokens ?? state.contextTokens ?? 0;

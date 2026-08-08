@@ -77,8 +77,12 @@ export function supportsFastMode(ctx: ExtensionContext): boolean {
   );
 }
 
+export function getFastModeForSession(sessionId: string): boolean {
+  return store().enabledBySession.get(sessionId) === true;
+}
+
 export function getFastMode(ctx: ExtensionContext): boolean {
-  return store().enabledBySession.get(fastModeSessionKey(ctx)) === true;
+  return getFastModeForSession(fastModeSessionKey(ctx));
 }
 
 export function setFastMode(ctx: ExtensionContext, enabled: boolean): void {

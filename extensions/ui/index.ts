@@ -17,7 +17,7 @@ import { editors, notifyEditors } from "./editorRegistry.ts";
 import { updateBranch } from "./git.ts";
 import { workbenchHeader } from "./piHeader.ts";
 import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
-import { updateState } from "./state.ts";
+import { state, updateState } from "./state.ts";
 import { hasActiveSubagents, subscribeSubagents } from "./subagents.ts";
 import { TerminalEditor } from "./terminalEditor.ts";
 import {
@@ -127,6 +127,13 @@ export default function uiExtension(pi: ExtensionAPI) {
     if (ctx.mode !== "tui") return;
     updateState(ctx, pi);
     void refreshChatGptUsage(ctx, { force: true });
+    notifyEditors();
+    workbenchSidebar.invalidate();
+  });
+
+  pi.on("session_info_changed", async (event, ctx) => {
+    if (ctx.mode !== "tui") return;
+    state.sessionName = event.name;
     notifyEditors();
     workbenchSidebar.invalidate();
   });

@@ -19,7 +19,7 @@ export type HeaderState = {
   cwd: string;
   folder: string;
   branch: string;
-  getSessionName?: () => string | undefined;
+  sessionName?: string;
   contextTokens?: number;
   contextWindow?: number;
   chatGptFiveHourUsedPercent?: number;
