@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Restored Pi 0.84 Workbench docking by adapting transcript, status, widget, editor, and footer grouping to the new document-root TUI layout.
 - Added a managed global WordPress verification policy that prefers real staging/local sites, asks before synthetic HTML fixtures, requires explicit unverified-state reporting, and preserves personal `APPEND_SYSTEM.md` instructions during cross-device setup.
 - Added a privacy-safe 30-day session analyzer and standalone HTML workflow audit with exact-versus-heuristic labelling, anonymous sessions, public-output guards, and responsive interactive views.
 - Removed the custom automatic feature-verification extension, its injected requirements, retry gate, command surface, and dedicated regression suite.

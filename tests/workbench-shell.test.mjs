@@ -80,11 +80,9 @@ test("scroll anchor remains on the same chat rows while streaming appends output
   assert.equal(preserveScrollAnchor(7, 24, 10, 6), 6);
 });
 
-test("above-editor widgets scroll while status editor and footer stay docked", () => {
+test("Pi 0.84 document tree keeps above-editor widgets scrollable and bottom chrome docked", () => {
   const children = [
-    "header",
-    "resources",
-    "chat",
+    "document",
     "pending",
     "status",
     "above-editor-widget",
@@ -94,7 +92,7 @@ test("above-editor widgets scroll while status editor and footer stay docked", (
   ];
 
   assert.deepEqual(splitWorkbenchChildren(children), {
-    scrollChildren: ["header", "resources", "chat", "pending", "above-editor-widget"],
+    scrollChildren: ["document", "pending", "above-editor-widget"],
     dockChildren: ["status", "editor", "below-editor-widget", "footer"],
   });
 });
