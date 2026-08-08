@@ -214,7 +214,7 @@ const {
 const { TerminalEditor } = await import(
   "../extensions/ui/terminalEditor.ts"
 );
-const { WorkbenchSidebar } = await import(
+const { WorkbenchSidebar, WorkbenchSidebarController } = await import(
   "../extensions/ui/workbenchSidebar.ts"
 );
 const { publishMcpStatus } = await import(
@@ -682,6 +682,25 @@ test("text selection snaps both cells of a wide glyph to one grapheme", () => {
   assert.deepEqual(secondCell, firstCell);
   assert.equal(selectedTerminalText(lines, { anchor: firstCell, focus: secondCell }), "界");
   assert.equal(highlightTerminalSelection(lines, { anchor: firstCell, focus: secondCell })[0], "A\x1b[7m界\x1b[27mB");
+});
+
+test("docked sidebar survives a transient narrow width while a session resumes", () => {
+  const { tui } = createWorkbenchTui();
+  const controller = new WorkbenchSidebarController();
+  controller.attachDocked(
+    tui,
+    theme,
+    copyOptions.placeComposerCursor,
+    copyOptions.onCopyError,
+  );
+
+  try {
+    assert.doesNotMatch(tui.render(80).join("\n"), /Pi workspace/);
+    tui.terminal.columns = 160;
+    assert.match(tui.render(160).join("\n"), /Pi workspace/);
+  } finally {
+    controller.dispose();
+  }
 });
 
 test("workbench shell routes mouse wheel to chat and preserves position while streaming", () => {

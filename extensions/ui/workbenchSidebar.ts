@@ -80,7 +80,7 @@ export class WorkbenchSidebarController {
     this.handle = undefined;
     this.component?.dispose();
     this.tui = tui;
-    this.desiredVisible = sidebarPresentation(tui.terminal.columns) === "rail";
+    this.desiredVisible = true;
     this.component = new WorkbenchSidebar(
       theme,
       () => this.hide(),
@@ -175,9 +175,7 @@ export class WorkbenchSidebarController {
 
   private syncVisibility(): void {
     if (this.shell) {
-      const visible = this.desiredVisible &&
-        sidebarPresentation(this.tui?.terminal.columns ?? 0) === "rail";
-      this.shell.setSidebarVisible(visible);
+      this.shell.setSidebarVisible(this.desiredVisible);
       this.component?.invalidate();
       return;
     }
