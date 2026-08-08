@@ -155,17 +155,22 @@ export class WorkbenchSidebarController {
     this.component?.invalidate();
   }
 
-  dispose(): void {
+  detachForSessionChange(): void {
     this.unsubscribeModals?.();
     this.unsubscribeModals = undefined;
     this.handle?.hide();
     this.handle = undefined;
-    this.shell?.dispose();
     this.shell = undefined;
     this.component?.dispose();
     this.component = undefined;
     this.tui = undefined;
     this.desiredVisible = false;
+  }
+
+  dispose(): void {
+    const shell = this.shell;
+    this.detachForSessionChange();
+    shell?.dispose();
   }
 
   private hide(): void {

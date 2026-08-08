@@ -33,7 +33,7 @@ const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
 
 export interface WorkbenchShellHandle {
-  setSidebar(component: Component): void;
+  rebind(component: Component, options: WorkbenchShellOptions): void;
   setSidebarVisible(visible: boolean): void;
   dispose(): void;
 }
@@ -84,7 +84,7 @@ export function installWorkbenchShell(
   const shellTui = tui as ShellTui;
   const existing = shellTui[WORKBENCH_SHELL_KEY];
   if (existing) {
-    existing.setSidebar(sidebar);
+    existing.rebind(sidebar, options);
     return existing;
   }
   const installation = new WorkbenchShellInstallation(
@@ -104,6 +104,9 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private readonly originalStop: () => void;
   private readonly removeScrollListener: () => void;
   private sidebar: Component;
+  private copyText: (text: string) => Promise<void>;
+  private onCopyError: (error: Error) => void;
+  private placeComposerCursor: (request: ComposerCursorRequest) => boolean;
   private sidebarVisible = true;
   private scrollOffset = 0;
   private previousScrollLineCount: number | undefined;
@@ -117,11 +120,14 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   constructor(
     private readonly tui: TUI,
     sidebar: Component,
-    private readonly copyText: (text: string) => Promise<void>,
-    private readonly onCopyError: (error: Error) => void,
-    private readonly placeComposerCursor: (request: ComposerCursorRequest) => boolean,
+    copyText: (text: string) => Promise<void>,
+    onCopyError: (error: Error) => void,
+    placeComposerCursor: (request: ComposerCursorRequest) => boolean,
   ) {
     this.sidebar = sidebar;
+    this.copyText = copyText;
+    this.onCopyError = onCopyError;
+    this.placeComposerCursor = placeComposerCursor;
     this.originalRender = tui.render.bind(tui);
     this.originalStart = tui.start.bind(tui);
     this.originalStop = tui.stop.bind(tui);
@@ -129,8 +135,11 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.install();
   }
 
-  setSidebar(component: Component): void {
+  rebind(component: Component, options: WorkbenchShellOptions): void {
     this.sidebar = component;
+    this.copyText = options.copyText ?? copyToClipboard;
+    this.onCopyError = options.onCopyError;
+    this.placeComposerCursor = options.placeComposerCursor;
     this.tui.requestRender(true);
   }
 

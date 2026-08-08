@@ -155,7 +155,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     workbenchSidebar.invalidate();
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (event) => {
     resetChatGptUsage();
     unsubscribePlanBuildMode?.();
     unsubscribePlanBuildMode = undefined;
@@ -163,7 +163,8 @@ export default function uiExtension(pi: ExtensionAPI) {
     unsubscribeSubagents = undefined;
     subagentUsagePoller?.dispose();
     subagentUsagePoller = undefined;
-    workbenchSidebar.dispose();
+    if (event.reason === "quit") workbenchSidebar.dispose();
+    else workbenchSidebar.detachForSessionChange();
     editors.clear();
   });
 }
