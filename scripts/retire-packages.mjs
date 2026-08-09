@@ -65,6 +65,15 @@ function packageHasDependency(manifest, packageName) {
     .some((field) => Object.hasOwn(manifest[field] ?? {}, packageName));
 }
 
+function windowsNpmRunner(parts, managerName) {
+  const directCommand = path.basename(parts[0]).replace(/\.(cmd|exe)$/i, "").toLowerCase();
+  if (process.platform !== "win32" || directCommand !== "npm") return undefined;
+
+  const npmCli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
+  if (!fs.existsSync(npmCli)) throw new Error(`Cannot locate npm CLI: ${npmCli}`);
+  return { command: process.execPath, prefixArgs: [npmCli, ...parts.slice(1)], name: managerName };
+}
+
 function configuredNpmRunner(settings) {
   const parts = Array.isArray(settings.npmCommand) && settings.npmCommand.length > 0
     ? settings.npmCommand
@@ -72,7 +81,11 @@ function configuredNpmRunner(settings) {
   const separator = parts.lastIndexOf("--");
   const managerCommand = separator >= 0 ? parts[separator + 1] : parts[0];
   const name = path.basename(managerCommand ?? "").replace(/\.(cmd|exe)$/i, "").toLowerCase();
-  return { command: parts[0], prefixArgs: parts.slice(1), name };
+  return windowsNpmRunner(parts, name) ?? {
+    command: parts[0],
+    prefixArgs: parts.slice(1),
+    name,
+  };
 }
 
 function uninstallArguments(managerName, installRoot) {

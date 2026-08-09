@@ -104,6 +104,31 @@ test("retired Hypa cleanup removes whitespace and versioned settings without del
   assert.equal(fs.readFileSync(managerLog, "utf8"), "uninstalled\n");
 });
 
+test("retired package cleanup resolves the platform default npm executable", (t) => {
+  const testRoot = temporaryDirectory("pi-retire-default-npm-");
+  t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
+  const agentDir = path.join(testRoot, ".pi", "agent");
+  const installRoot = path.join(agentDir, "npm");
+  const packageDirectory = path.join(installRoot, "node_modules", "@hypabolic", "pi-hypa");
+  fs.mkdirSync(packageDirectory, { recursive: true });
+  fs.writeFileSync(
+    path.join(installRoot, "package.json"),
+    JSON.stringify({ private: true, dependencies: { "@hypabolic/pi-hypa": "0.1.13" } }),
+  );
+  fs.writeFileSync(
+    path.join(agentDir, "settings.json"),
+    JSON.stringify({ packages: ["npm:@hypabolic/pi-hypa"] }),
+  );
+
+  execFileSync(process.execPath, [path.join(root, "scripts", "retire-packages.mjs")], {
+    env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+    stdio: "pipe",
+  });
+
+  assert.equal(fs.existsSync(packageDirectory), false);
+  assert.deepEqual(readJson(path.join(agentDir, "settings.json")).packages, []);
+});
+
 test("retired package cleanup preserves a directly installed Hypa runtime", (t) => {
   const testRoot = temporaryDirectory("pi-retire-direct-hypa-");
   t.after(() => fs.rmSync(testRoot, { recursive: true, force: true }));
