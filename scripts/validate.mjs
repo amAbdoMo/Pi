@@ -23,6 +23,8 @@ if (
   || packageLock.packages?.[""]?.name !== packageManifest.name
   || packageLock.version !== packageManifest.version
   || packageLock.packages?.[""]?.version !== packageManifest.version
+  || packageLock.packages?.[""]?.bin?.["pi-workbench-install"] !== "scripts/install-cli.mjs"
+  || packageLock.packages?.[""]?.engines?.node !== packageManifest.engines?.node
 ) {
   throw new Error("package.json and package-lock.json metadata do not match");
 }
@@ -72,6 +74,9 @@ const requiredFiles = [
   "APPEND_SYSTEM.md",
   "scripts/apply-config.mjs",
   "scripts/capture-config.mjs",
+  "scripts/install-cli.mjs",
+  "scripts/retire-packages.mjs",
+  "scripts/setup-ffmpeg.mjs",
   "scripts/setup-terminal-font.ps1",
   "scripts/set-terminal-font.mjs",
   "scripts/set-warp-settings.mjs",
@@ -108,13 +113,22 @@ for (const requiredWarpSetting of ["font_name", "input_box_type_setting", "class
 
 for (const installer of ["install.ps1", "install.sh"]) {
   const installerSource = fs.readFileSync(path.join(root, installer), "utf8");
-  for (const requiredReference of ["set-warp-settings.mjs", "WarpSettingsScript", "APPEND_SYSTEM.md", "system-policy"]) {
+  for (const requiredReference of [
+    "set-warp-settings.mjs",
+    "WarpSettingsScript",
+    "APPEND_SYSTEM.md",
+    "system-policy",
+    "retire-packages.mjs",
+    "setup-ffmpeg.mjs",
+  ]) {
     if (!installerSource.includes(requiredReference)) {
       throw new Error(`${installer} does not provision ${requiredReference}`);
     }
   }
-  if (installerSource.includes("pi-mcp-adapter")) {
-    throw new Error(`${installer} still installs the retired pi-mcp-adapter package`);
+  for (const retiredPackage of ["pi-mcp-adapter", "@hypabolic/pi-hypa"]) {
+    if (installerSource.includes(retiredPackage)) {
+      throw new Error(`${installer} still installs the retired ${retiredPackage} package`);
+    }
   }
 }
 
@@ -139,14 +153,22 @@ for (const requiredWordPressPolicy of [
 const settings = parsedJson.get("settings.example.json");
 const requiredPackages = [
   "git:github.com/amAbdoMo/Pi",
-  "npm:@hypabolic/pi-hypa",
   "npm:context-mode",
 ];
 for (const packageSpec of requiredPackages) {
   if (!settings.packages?.includes(packageSpec)) throw new Error(`Missing recommended package: ${packageSpec}`);
 }
-if (settings.packages?.includes("npm:pi-mcp-adapter")) {
-  throw new Error("The retired pi-mcp-adapter package must not be reinstalled");
+for (const retiredPackage of ["npm:pi-mcp-adapter", "npm:@hypabolic/pi-hypa"]) {
+  if (settings.packages?.some((packageSpec) => {
+    const source = typeof packageSpec === "string" ? packageSpec : packageSpec?.source;
+    const normalizedSource = source?.replace(/^npm:\s*/, "npm:");
+    return normalizedSource === retiredPackage || normalizedSource?.startsWith(`${retiredPackage}@`);
+  })) {
+    throw new Error(`The retired ${retiredPackage} package must not be reinstalled`);
+  }
+}
+if (Object.keys(packageManifest.bin ?? {}).length !== 1 || packageManifest.bin?.["pi-workbench-install"] !== "./scripts/install-cli.mjs") {
+  throw new Error("package.json must expose exactly one deterministic pi-workbench-install bin");
 }
 for (const dependency of ["@modelcontextprotocol/sdk", "arabic-reshaper", "bidi-js", "jsonc-parser", "typebox", "yaml"]) {
   if (!packageManifest.dependencies?.[dependency]) throw new Error(`Missing runtime dependency: ${dependency}`);

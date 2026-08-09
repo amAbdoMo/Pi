@@ -55,9 +55,7 @@ Subagent profile defaults are `fast` (Luna/low), `balanced` (Terra/medium), `imp
 - OpenAI image generation and image editing
 - Persistent user, global, and project memory
 - Scrollable `/skills` browser without filling slash-command autocomplete with every skill
-- Optional companion packages installed by the setup script:
-  - `npm:@hypabolic/pi-hypa`
-  - `npm:context-mode`
+- Optional `npm:context-mode` companion installed by the setup script
 
 ### Terminal and language support
 
@@ -72,29 +70,47 @@ Subagent profile defaults are `fast` (Luna/low), `balanced` (Terra/medium), `imp
 
 ## Install
 
-A working Pi installation is required. Pi packages execute code with the same access as Pi, so review third-party packages before installing them.
+A working Pi installation, Git, and Node.js 20 or newer are required. Pi packages execute code with the same access as Pi, so review third-party packages before installing them.
 
-### Full setup — Windows PowerShell
+### Full setup — one command
+
+```bash
+npx --yes github:amAbdoMo/Pi
+```
+
+This convenience command installs the current default branch directly from GitHub; npm publication is not required. Add `--skip-ffmpeg` to leave video tools unchanged.
+
+<details>
+<summary>Direct installer alternatives</summary>
+
+Windows PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.ps1 | iex
 ```
 
-### Full setup — macOS, Linux, or Git Bash
+macOS, Linux, or Git Bash:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/amAbdoMo/Pi/main/install.sh | bash
 ```
 
-The installer is safe to run again. It:
+</details>
 
-1. Installs or updates the Pi Workbench git package.
-2. Installs the optional Hypa and context-mode companions.
+The direct alternatives fetch helper files from the current `main` branch; use the npx command when revision-local installer assets are required.
+
+The installer is designed to be run again. It:
+
+1. Removes the retired Hypa package from shared settings and Pi-managed package storage without adding antivirus exclusions. Ambiguous user-level command shims are preserved.
+2. Installs or updates the Pi Workbench git package and the optional context-mode companion.
 3. Removes duplicate development checkouts and the retired external MCP adapter from shared settings.
 4. Applies safe defaults without replacing existing model or thinking preferences.
 5. Installs or refreshes the managed global agent policy in `~/.pi/agent/APPEND_SYSTEM.md` while preserving personal instructions outside its marked block.
 6. Creates an empty personal `mcp.jsonc` only when one does not already exist.
-7. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
+7. Installs and verifies FFmpeg plus FFprobe through an already available trusted system package manager so screen recordings can be inspected. No media binaries are bundled; unsupported or non-privileged systems receive a warning with manual installation guidance instead.
+8. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
+
+> **Hypa security note:** `npm:@hypabolic/pi-hypa` is no longer installed by this setup after a native Windows executable under that package triggered an antivirus detection. The reviewed `@hypabolic/hypa-win32-x64@0.1.13` artifact is unsigned. Its available provenance does not prove that verdict is either malicious or a false positive, so the installer removes the package rather than weakening antivirus protection.
 
 ### Package only
 
@@ -225,7 +241,7 @@ Update the package without changing terminal settings:
 pi update --extensions
 ```
 
-Rerun the one-command installer when shared settings, companion packages, fonts, or terminal integration should also be reconciled.
+Rerun `npx --yes github:amAbdoMo/Pi` when shared settings, companion packages, video tools, fonts, or terminal integration should also be reconciled.
 
 ## Project structure
 
@@ -235,7 +251,7 @@ Rerun the one-command installer when shared settings, companion packages, fonts,
 | `themes/hypr-waves.json` | Shared terminal theme |
 | `settings.example.json` | Safe, portable Pi defaults |
 | `keybindings.json` | Shared clipboard and interaction bindings |
-| `scripts/` | Configuration, terminal setup, validation, privacy-safe session analysis, and report generation |
+| `scripts/` | One-line installation, secure package retirement, FFmpeg provisioning, configuration, terminal setup, validation, privacy-safe session analysis, and report generation |
 | `reports/pi-workflow-audit.html` | Standalone public-safe 30-day session and workflow audit |
 | `tests/` | Behavior and regression coverage |
 | `install.ps1`, `install.sh` | One-command installers and updaters |

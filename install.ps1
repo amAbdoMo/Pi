@@ -1,42 +1,84 @@
-$ErrorActionPreference = 'Stop'
+param(
+  [string]$SourceRoot,
+  [switch]$SkipFfmpeg
+)
 
+$ErrorActionPreference = 'Stop'
+$RepositoryRawBase = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main'
 $PiPackages = @(
   'git:github.com/amAbdoMo/Pi',
-  'npm:@hypabolic/pi-hypa',
   'npm:context-mode'
 )
-$ConfigScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/apply-config.mjs'
-$SystemPolicyUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/APPEND_SYSTEM.md'
-$FontSetupScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/setup-terminal-font.ps1'
-$TerminalSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-terminal-font.mjs'
-$WarpSettingsScriptUrl = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main/scripts/set-warp-settings.mjs'
-$ConfigScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-config-$([guid]::NewGuid()).mjs"
-$SystemPolicyFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-policy-$([guid]::NewGuid()).md"
-$FontSetupScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-font-$([guid]::NewGuid()).ps1"
-$TerminalSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-terminal-$([guid]::NewGuid()).mjs"
-$WarpSettingsScriptFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-warp-$([guid]::NewGuid()).mjs"
+$DownloadedFiles = @()
+
+function Invoke-CheckedNative {
+  param(
+    [Parameter(Mandatory = $true)][string]$Command,
+    [Parameter(Mandatory = $true)][string[]]$Arguments
+  )
+
+  & $Command @Arguments
+  if ($LASTEXITCODE -ne 0) {
+    throw "$Command failed with exit code $LASTEXITCODE"
+  }
+}
+
+function Resolve-SetupAsset {
+  param([Parameter(Mandatory = $true)][string]$RelativePath)
+
+  if ($SourceRoot) {
+    $Candidate = Join-Path $SourceRoot $RelativePath
+    if (-not (Test-Path -LiteralPath $Candidate -PathType Leaf)) {
+      throw "Missing setup asset: $Candidate"
+    }
+    return (Resolve-Path -LiteralPath $Candidate).Path
+  }
+
+  $Extension = [System.IO.Path]::GetExtension($RelativePath)
+  $TemporaryFile = Join-Path ([System.IO.Path]::GetTempPath()) "pi-workbench-$([guid]::NewGuid())$Extension"
+  $script:DownloadedFiles += $TemporaryFile
+  Invoke-WebRequest -UseBasicParsing -Uri "$RepositoryRawBase/$RelativePath" -OutFile $TemporaryFile
+  return $TemporaryFile
+}
 
 try {
-  Invoke-WebRequest -UseBasicParsing -Uri $ConfigScriptUrl -OutFile $ConfigScriptFile
-  Invoke-WebRequest -UseBasicParsing -Uri $SystemPolicyUrl -OutFile $SystemPolicyFile
-  Invoke-WebRequest -UseBasicParsing -Uri $FontSetupScriptUrl -OutFile $FontSetupScriptFile
-  Invoke-WebRequest -UseBasicParsing -Uri $TerminalSettingsScriptUrl -OutFile $TerminalSettingsScriptFile
-  Invoke-WebRequest -UseBasicParsing -Uri $WarpSettingsScriptUrl -OutFile $WarpSettingsScriptFile
-  node $ConfigScriptFile --system-policy $SystemPolicyFile
+  if ($SourceRoot) {
+    $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
+  }
+
+  $ConfigScriptFile = Resolve-SetupAsset 'scripts/apply-config.mjs'
+  $RetirementScriptFile = Resolve-SetupAsset 'scripts/retire-packages.mjs'
+  $FfmpegSetupScriptFile = Resolve-SetupAsset 'scripts/setup-ffmpeg.mjs'
+  $SystemPolicyFile = Resolve-SetupAsset 'APPEND_SYSTEM.md'
+  $FontSetupScriptFile = Resolve-SetupAsset 'scripts/setup-terminal-font.ps1'
+  $TerminalSettingsScriptFile = Resolve-SetupAsset 'scripts/set-terminal-font.mjs'
+  $WarpSettingsScriptFile = Resolve-SetupAsset 'scripts/set-warp-settings.mjs'
+
+  Invoke-CheckedNative -Command 'node' -Arguments @($RetirementScriptFile)
+  Invoke-CheckedNative -Command 'node' -Arguments @($ConfigScriptFile, '--system-policy', $SystemPolicyFile)
 
   foreach ($Package in $PiPackages) {
-    pi install $Package
+    Invoke-CheckedNative -Command 'pi' -Arguments @('install', $Package)
   }
-  pi update --extensions
+  Invoke-CheckedNative -Command 'pi' -Arguments @('update', '--extensions')
+  Invoke-CheckedNative -Command 'node' -Arguments @($ConfigScriptFile, '--system-policy', $SystemPolicyFile)
 
-  node $ConfigScriptFile --system-policy $SystemPolicyFile
+  if (-not $SkipFfmpeg) {
+    try {
+      & node $FfmpegSetupScriptFile
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning 'FFmpeg setup was not completed; video inspection will remain unavailable until FFmpeg is installed.'
+      }
+    } catch {
+      Write-Warning "FFmpeg setup was not completed: $($_.Exception.Message)"
+    }
+  }
+
   & $FontSetupScriptFile -TerminalSettingsScript $TerminalSettingsScriptFile -WarpSettingsScript $WarpSettingsScriptFile
 } finally {
-  Remove-Item $ConfigScriptFile -Force -ErrorAction SilentlyContinue
-  Remove-Item $SystemPolicyFile -Force -ErrorAction SilentlyContinue
-  Remove-Item $FontSetupScriptFile -Force -ErrorAction SilentlyContinue
-  Remove-Item $TerminalSettingsScriptFile -Force -ErrorAction SilentlyContinue
-  Remove-Item $WarpSettingsScriptFile -Force -ErrorAction SilentlyContinue
+  foreach ($DownloadedFile in $DownloadedFiles) {
+    Remove-Item $DownloadedFile -Force -ErrorAction SilentlyContinue
+  }
 }
 
 Write-Host 'Done. Restart Pi with: pi'

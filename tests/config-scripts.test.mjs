@@ -35,7 +35,7 @@ test("package reconciliation preserves user filters and unrelated local packages
   fs.writeFileSync(path.join(agentDir, "APPEND_SYSTEM.md"), "# Personal instructions\n\n- Preserve this line.\n");
 
   const filteredContextMode = { source: "npm:context-mode", extensions: ["keep-context-filter"] };
-  const filteredHypa = { source: "npm:@hypabolic/pi-hypa", extensions: ["keep-hypa-filter"] };
+  const filteredHypa = { source: "npm: @hypabolic/pi-hypa@0.1.13", extensions: ["retired-filter"] };
   fs.writeFileSync(
     path.join(agentDir, "settings.json"),
     JSON.stringify({
@@ -46,8 +46,9 @@ test("package reconciliation preserves user filters and unrelated local packages
         "npm:context-mode",
         filteredContextMode,
         filteredHypa,
-        "npm:@hypabolic/pi-hypa",
-        "npm:pi-mcp-adapter",
+        "npm: @hypabolic/pi-hypa",
+        "npm:@hypabolic/pi-hypa-tools",
+        "npm:pi-mcp-adapter@1.0.0",
         { source: "npm:pi-mcp-adapter", extensions: ["legacy-adapter"] },
       ],
       defaultModel: "keep-model",
@@ -72,10 +73,10 @@ test("package reconciliation preserves user filters and unrelated local packages
   assert.ok(!sources.includes(path.relative(agentDir, setupCheckout)));
   assert.ok(!sources.includes(path.relative(agentDir, legacySetupCheckout)));
   assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:context-mode"), filteredContextMode);
-  assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:@hypabolic/pi-hypa"), filteredHypa);
   assert.equal(sources.filter((source) => source === "npm:context-mode").length, 1);
-  assert.equal(sources.filter((source) => source === "npm:@hypabolic/pi-hypa").length, 1);
-  assert.equal(sources.includes("npm:pi-mcp-adapter"), false);
+  assert.equal(sources.some((source) => /^npm:\s*@hypabolic\/pi-hypa(?:@|$)/.test(source ?? "")), false);
+  assert.ok(sources.includes("npm:@hypabolic/pi-hypa-tools"));
+  assert.equal(sources.some((source) => source?.startsWith("npm:pi-mcp-adapter")), false);
   assert.match(fs.readFileSync(path.join(agentDir, "mcp.jsonc"), "utf8"), /"mcp"\s*:\s*\{\}/);
   assert.equal(settings.defaultModel, "keep-model");
   assert.equal(settings.defaultThinkingLevel, "minimal");

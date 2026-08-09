@@ -4,6 +4,12 @@
   "private": true,
   "description": "A polished terminal workbench, theme, and extension suite for Pi.",
   "type": "module",
+  "bin": {
+    "pi-workbench-install": "./scripts/install-cli.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "homepage": "https://github.com/amAbdoMo/Pi#readme",
   "repository": {
     "type": "git",

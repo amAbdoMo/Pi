@@ -2,7 +2,6 @@
   "theme": "hypr-waves",
   "packages": [
     "git:github.com/amAbdoMo/Pi",
-    "npm:@hypabolic/pi-hypa",
     "npm:context-mode"
   ],
   "defaultProvider": "openai-codex",

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added a cross-platform `npx --yes github:amAbdoMo/Pi` setup command that runs revision-local installer assets and propagates native command failures.
+- Retired Hypa from default setup after an antivirus detection under its package and confirmation that the reviewed `@hypabolic/hypa-win32-x64@0.1.13` artifact is unsigned; repeat installs remove managed package files without weakening antivirus protection.
+- Added best-effort FFmpeg and FFprobe provisioning through trusted system package managers so fresh workspaces can inspect screen recordings without bundling media binaries.
 - Restored responsive plan progress when switching from plan to build mode and made valid progress updates resume unfinished plans that were left paused in build mode.
 - Restored the Workbench sidebar after `/reload` and `/resume` by preserving and rebinding the docked shell across session lifecycle changes.
 - Restored Pi 0.84 Workbench docking by adapting transcript, status, widget, editor, and footer grouping to the new document-root TUI layout.

@@ -4,10 +4,12 @@ import path from "node:path";
 
 const REQUIRED_PACKAGES = [
   "git:github.com/amAbdoMo/Pi",
-  "npm:@hypabolic/pi-hypa",
   "npm:context-mode",
 ];
-const RETIRED_PACKAGES = new Set(["npm:pi-mcp-adapter"]);
+const RETIRED_NPM_PACKAGES = new Set([
+  "@hypabolic/pi-hypa",
+  "pi-mcp-adapter",
+]);
 const SETUP_PACKAGE_NAMES = new Set(["pi-workbench", "amabdomo-pi"]);
 const SYSTEM_POLICY_START = "<!-- pi-workbench:managed-policy:start -->";
 const SYSTEM_POLICY_END = "<!-- pi-workbench:managed-policy:end -->";
@@ -23,6 +25,16 @@ function readJson(filePath) {
 
 function packageSource(packageSpec) {
   return typeof packageSpec === "string" ? packageSpec : packageSpec?.source;
+}
+
+function npmPackageName(source) {
+  if (typeof source !== "string" || !source.startsWith("npm:")) return undefined;
+  const match = source.slice(4).trim().match(/^(@[^/]+\/[^@]+|[^@]+)(?:@.+)?$/);
+  return match?.[1];
+}
+
+function isRetiredPackageSource(source) {
+  return RETIRED_NPM_PACKAGES.has(npmPackageName(source));
 }
 
 function isLocalSource(source) {
@@ -51,7 +63,7 @@ function mergePackages(existingPackages, agentDir) {
     if (isThisSetupCheckout(packageSpec, agentDir)) continue;
 
     const source = packageSource(packageSpec);
-    if (RETIRED_PACKAGES.has(source)) continue;
+    if (isRetiredPackageSource(source)) continue;
     if (!REQUIRED_PACKAGES.includes(source)) {
       preservedPackages.push(packageSpec);
       continue;
@@ -70,8 +82,7 @@ function mergePackages(existingPackages, agentDir) {
 }
 
 function writeJson(filePath, value) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`);
+  writeTextRecoverably(filePath, `${JSON.stringify(value, null, 2)}\n`);
   console.log(`Updated ${filePath}`);
 }
 
