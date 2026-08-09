@@ -1,4 +1,6 @@
 const EMPTY_BRACKETED_PASTE = "\x1b[200~\x1b[201~";
+const LEGACY_ARABIC_ALT_S = "\x1bس";
+const LEGACY_LATIN_ALT_S = "\x1bs";
 const SGR_MOUSE_SEQUENCE = /\x1b\[<(\d+);(\d+);(\d+)([mM])/g;
 const MOUSE_MODIFIER_MASK = 4 | 8 | 16;
 const MOTION_MASK = 32;
@@ -27,6 +29,14 @@ export interface ParsedTerminalMouseInput {
 
 export function isEmptyBracketedPaste(inputSequence: string): boolean {
   return inputSequence === EMPTY_BRACKETED_PASTE;
+}
+
+export function legacyArabicAltSShortcut(
+  inputSequence: string,
+): string | undefined {
+  return inputSequence === LEGACY_ARABIC_ALT_S
+    ? LEGACY_LATIN_ALT_S
+    : undefined;
 }
 
 export function parseTerminalMouseInput(inputSequence: string): ParsedTerminalMouseInput {

@@ -24,7 +24,10 @@ import {
   savePastedText,
 } from "./imagePaste.ts";
 import { highlightPasteMarkers } from "./pasteMarkers.ts";
-import { isEmptyBracketedPaste } from "./terminalCompatibility.ts";
+import {
+  isEmptyBracketedPaste,
+  legacyArabicAltSShortcut,
+} from "./terminalCompatibility.ts";
 import {
   logicalIndexAtRtlVisualColumn,
   rtlVisualWidth,
@@ -102,6 +105,11 @@ export class TerminalEditor extends CustomEditor {
   }
 
   override handleInput(inputSequence: string): void {
+    const arabicAltS = isWarpTerminal()
+      ? legacyArabicAltSShortcut(inputSequence)
+      : undefined;
+    if (arabicAltS && this.onExtensionShortcut?.(arabicAltS)) return;
+
     if (matchesKey(inputSequence, "tab")) {
       const slashCommand = this.getText().trimStart().startsWith("/");
       if (this.isShowingAutocomplete() || slashCommand) {

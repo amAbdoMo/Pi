@@ -12,10 +12,12 @@
 - Added portable session/tool efficiency guidance for repeated reads, equivalent failures, context pressure, and delegation.
 - Moved completed plan tasks into the scrollable transcript before the final assistant response, while keeping the live widget only during active work.
 - Added precise Workbench drag selection with clipboard copy while preserving mouse-wheel scrolling during streaming and idle periods; selection highlighting no longer paints padded terminal rows.
-- Reworked Workbench selection around logical transcript rows and added edge-held auto-scroll, so dragging beyond the visible chat continues into off-screen content while wheel scrolling remains independent.
+- Reworked Workbench selection around logical transcript rows and added faster edge-held auto-scroll, so dragging beyond the visible chat continues into off-screen content while wheel scrolling remains independent.
 - Removed the compact Workbench banner and restored the large gradient Pi art only for initial startup and genuinely new sessions.
 - Added click-to-place cursor support inside the composer for plain, wrapped, wide-character, and RTL text.
 - Reworked subagent delegation around adaptive GPT-5.6 profiles, complete bounded parent-visible results, proportional parent review, cached compact handoffs, low-cost summaries, and default recursion/concurrency limits.
+- Made Warp's legacy Arabic-layout `Alt+S` sequence honor the configured Agents shortcut without changing normal Arabic input or Kitty keyboard events.
+- Unified Agents and Child Console outer frames with the sidebar's continuous title rule, padding, background, and closed-border design.
 
 ## 0.12.3
 

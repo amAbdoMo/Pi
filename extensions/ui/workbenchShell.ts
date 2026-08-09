@@ -33,7 +33,7 @@ import {
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
-const SELECTION_AUTO_SCROLL_INTERVAL_MS = 50;
+const SELECTION_AUTO_SCROLL_INTERVAL_MS = 40;
 
 export interface WorkbenchShellHandle {
   rebind(component: Component, options: WorkbenchShellOptions): void;

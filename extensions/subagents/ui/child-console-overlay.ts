@@ -3,7 +3,12 @@ import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Component } from "@earendil-works/pi-tui";
 import type { SubagentRecord } from "../types.ts";
 import { formatDuration, now } from "../utils.ts";
-import { framedPanel, renderToolTree, statusText } from "../render-utils.ts";
+import {
+  framedPanel,
+  framedPanelContentWidth,
+  renderToolTree,
+  statusText,
+} from "../render-utils.ts";
 
 export class ChildConsoleOverlay implements Component {
   private scroll = 0;
@@ -24,7 +29,7 @@ export class ChildConsoleOverlay implements Component {
   render(width: number): string[] {
     if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
     const t = this.theme;
-    const contentWidth = Math.max(1, width - 4);
+    const contentWidth = framedPanelContentWidth(width);
     const maxRows = this.getBodyRows();
     const hint = t.fg("dim", "↑↓ scroll · i/s steer · a abort · r refresh · Esc parent");
     const lines = [
@@ -41,13 +46,12 @@ export class ChildConsoleOverlay implements Component {
     body.push(hint);
     const wrapped = body.map((line) => truncateToWidth(line, contentWidth, "…", true));
     this.cachedWidth = width;
-    this.cachedLines = framedPanel(
-      t,
-      `Sub-agent / ${this.record.generatedLabel || this.record.id}`,
-      wrapped,
+    this.cachedLines = framedPanel(t, {
+      title: `Sub-agent / ${this.record.generatedLabel || this.record.id}`,
+      body: wrapped,
       width,
-      Math.min(maxRows, 24),
-    );
+      minBodyRows: Math.min(maxRows, 24),
+    });
     return this.cachedLines;
   }
 

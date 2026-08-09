@@ -118,7 +118,7 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `Shift+drag` | Use the terminal's native selection instead of Workbench selection |
 | `/sidebar` | Toggle the workbench sidebar |
 | `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
-| `/agents` | Open subagent management |
+| `Alt+S` or `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
 | `/workflow` | List workflows or run focused `pipeline` or opt-in `deep-review` |
 | `/mcp` | Configure, connect, disconnect, and inspect MCP servers |

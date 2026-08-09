@@ -5,6 +5,7 @@ import type { SubagentRecord } from "../types.ts";
 import { formatDuration, now } from "../utils.ts";
 import {
   framedPanel,
+  framedPanelContentWidth,
   renderToolTree,
   statusRank,
   statusText,
@@ -36,7 +37,7 @@ export class AgentsOverlay implements Component {
     const records = this.sortedRecords();
     if (this.selected >= records.length)
       this.selected = Math.max(0, records.length - 1);
-    const contentWidth = Math.max(1, width - 4);
+    const contentWidth = framedPanelContentWidth(width);
     const bodyRows = this.getBodyRows();
     const body =
       this.mode === "detail" && records[this.selected]
@@ -46,13 +47,12 @@ export class AgentsOverlay implements Component {
       this.mode === "detail" && records[this.selected]
         ? `Sub-agent / ${this.label(records[this.selected])}`
         : "Sub-agents";
-    const lines = framedPanel(
-      this.theme,
+    const lines = framedPanel(this.theme, {
       title,
       body,
       width,
-      Math.min(bodyRows + 2, this.mode === "detail" ? 24 : 20),
-    );
+      minBodyRows: Math.min(bodyRows + 2, this.mode === "detail" ? 24 : 20),
+    });
     this.cachedWidth = width;
     this.cachedLines = lines.map((line) => truncateToWidth(line, width, "…", true));
     return this.cachedLines;

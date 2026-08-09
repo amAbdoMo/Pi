@@ -508,13 +508,12 @@ test("completed plan transcript recovery is idempotent across resume", async () 
 
 test("workbench frames remain width-safe without heavy borders", () => {
   for (const width of [8, 12, 24, 52]) {
-    const subagent = framedSubagentPanel(
-      theme,
-      "Sub-agent / a-very-long-agent-label",
-      ["A deliberately long activity line that must be fitted."],
+    const subagent = framedSubagentPanel(theme, {
+      title: "Sub-agent / a-very-long-agent-label",
+      body: ["A deliberately long activity line that must be fitted."],
       width,
-      3,
-    );
+      minBodyRows: 3,
+    });
     const sideChat = framedSideChatPanel(
       theme,
       "Side chat with a title that exceeds narrow terminals",
@@ -524,7 +523,13 @@ test("workbench frames remain width-safe without heavy borders", () => {
 
     assertWidthSafe(subagent, width);
     assertWidthSafe(sideChat, width);
-    assert.ok(subagent[0].startsWith("┌"));
+    assert.ok(subagent[0].startsWith("┌─"));
+    assert.ok(subagent[0].endsWith("┐"));
+    assert.ok(subagent.at(-1).startsWith("└"));
+    assert.ok(subagent.at(-1).endsWith("┘"));
+    assert.ok(subagent.slice(1, -1).every((line) =>
+      line.startsWith("│") && line.endsWith("│")
+    ));
     assert.ok(sideChat[0].startsWith("┌"));
     assert.doesNotMatch(subagent.join("\n"), /[┏┓┗┛━┃]/u);
   }
@@ -1160,6 +1165,33 @@ test("terminal editor places the cursor from LTR, wrapped, and RTL mouse cells",
   editor.render(80);
   assert.equal(editor.placeCursorFromRenderedCell(5, 68, 80), true);
   assert.deepEqual(editor.getCursor(), { line: 0, col: 79 });
+});
+
+test("terminal editor routes Warp Arabic Alt+S through the configured extension shortcut", () => {
+  const previousTermProgram = process.env.TERM_PROGRAM;
+  const previousWarpSession = process.env.WARP_IS_LOCAL_SHELL_SESSION;
+  process.env.TERM_PROGRAM = "WarpTerminal";
+  delete process.env.WARP_IS_LOCAL_SHELL_SESSION;
+
+  try {
+    const { editor } = createTerminalEditor();
+    const shortcutInputs = [];
+    editor.onExtensionShortcut = (input) => {
+      shortcutInputs.push(input);
+      return input === "\x1bs";
+    };
+
+    editor.handleInput("\x1bس");
+    editor.handleInput("س");
+
+    assert.deepEqual(shortcutInputs, ["\x1bs"]);
+    assert.deepEqual(editor.handledInputs, ["س"]);
+  } finally {
+    if (previousTermProgram === undefined) delete process.env.TERM_PROGRAM;
+    else process.env.TERM_PROGRAM = previousTermProgram;
+    if (previousWarpSession === undefined) delete process.env.WARP_IS_LOCAL_SHELL_SESSION;
+    else process.env.WARP_IS_LOCAL_SHELL_SESSION = previousWarpSession;
+  }
 });
 
 test("terminal editor delegates slash and visible autocomplete Tab input", () => {

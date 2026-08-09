@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseTerminalMouseInput } from "../extensions/ui/terminalCompatibility.ts";
+import {
+  legacyArabicAltSShortcut,
+  parseTerminalMouseInput,
+} from "../extensions/ui/terminalCompatibility.ts";
 import {
   fixedViewport,
   preserveScrollAnchor,
@@ -59,6 +62,13 @@ test("terminal mouse parser extracts repeated modified wheel events and keeps mi
     mouseSequences: 0,
     events: [],
   });
+});
+
+test("legacy Arabic Alt+S normalizes without changing text or Kitty input", () => {
+  assert.equal(legacyArabicAltSShortcut("\x1bس"), "\x1bs");
+  for (const input of ["س", "\x1bش", "\x1bs", "\x1b[1587::115;3u"]) {
+    assert.equal(legacyArabicAltSShortcut(input), undefined);
+  }
 });
 
 test("composer dock stays at the bottom when chat content is short", () => {

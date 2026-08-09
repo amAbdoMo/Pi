@@ -30,6 +30,7 @@ import {
   type TodoItem,
   type TodoStatus,
 } from "../plan-mode/utils.ts";
+import { framedPanel } from "./framedPanel.ts";
 import {
   isWorkbenchModalActive,
   subscribeWorkbenchModals,
@@ -251,7 +252,11 @@ export class WorkbenchSidebar implements Component {
     const bodyWidth = sidebarPanelContentWidth(panelWidth);
     const bodyRows = Math.max(10, this.availableRows() - 2);
     const body = this.bodyLines(bodyWidth, bodyRows);
-    const panel = framedPanel(this.theme, "Pi workspace", body, panelWidth);
+    const panel = framedPanel(this.theme, {
+      title: "Pi workspace",
+      body,
+      width: panelWidth,
+    });
     this.cachedLines = panel.map((line) => `${" ".repeat(gutterWidth)}${line}`);
     this.cachedWidth = width;
     return this.cachedLines;
@@ -569,40 +574,4 @@ function framedSection(theme: Theme, title: string, body: string[], width: numbe
   }
   lines.push(border(`└${"─".repeat(width - 2)}┘`));
   return lines;
-}
-
-function framedPanel(theme: Theme, title: string, body: string[], width: number): string[] {
-  const innerWidth = Math.max(2, width - 2);
-  const horizontalPadding = innerWidth >= 4 ? 2 : 0;
-  const contentWidth = sidebarPanelContentWidth(width);
-  const titleRule = sidebarTitleRule(width, title);
-  const border = (text: string) => theme.fg("border", text);
-  const lines = [
-    border(titleRule.left) + theme.fg("accent", theme.bold(titleRule.title)) + border(titleRule.right),
-  ];
-  const padding = " ".repeat(horizontalPadding);
-  for (const line of body) {
-    const content = truncateToWidth(line, contentWidth, "…", true);
-    const fill = " ".repeat(Math.max(0, contentWidth - visibleWidth(content)));
-    lines.push(`${border("│")}${padding}${content}${fill}${padding}${border("│")}`);
-  }
-  lines.push(border(`└${"─".repeat(innerWidth)}┘`));
-  return lines.map((line) =>
-    paintPanelBackground(
-      theme,
-      truncateToWidth(line, width, "", true),
-    ),
-  );
-}
-
-function paintPanelBackground(theme: Theme, line: string): string {
-  const backgroundAnsi = theme.getBgAnsi?.("customMessageBg");
-  if (backgroundAnsi) {
-    const painted = line.replace(
-      /\x1b\[(?:0|49)m/g,
-      (reset) => `${reset}${backgroundAnsi}`,
-    );
-    return `${backgroundAnsi}${painted}\x1b[49m`;
-  }
-  return theme.bg("customMessageBg", line);
 }
