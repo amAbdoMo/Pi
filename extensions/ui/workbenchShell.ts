@@ -32,6 +32,8 @@ import {
 } from "./textSelection.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
+const KITTY_IMAGE_PREFIX = "\x1b_G";
+const ITERM_IMAGE_PREFIX = "\x1b]1337;File=";
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
 const SELECTION_AUTO_SCROLL_INTERVAL_MS = 40;
 
@@ -50,7 +52,7 @@ interface MainViewportParts {
   composerDockRows?: { start: number; end: number };
 }
 
-interface ColumnRequest {
+export interface ColumnRequest {
   mainLines: readonly string[];
   sidebarLines: readonly string[];
   mainWidth: number;
@@ -272,7 +274,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.reconcileTextSelection(liveMainLines, scrollLines);
     const mainLines = this.highlightSelection(liveMainLines);
     if (!dimensions.showSidebar) return mainLines;
-    return combineColumns({
+    return combineWorkbenchColumns({
       mainLines,
       sidebarLines: this.sidebar.render(dimensions.sidebarWidth),
       mainWidth: dimensions.mainWidth,
@@ -683,19 +685,42 @@ function visibleComposerRows(
   };
 }
 
-function combineColumns(request: ColumnRequest): string[] {
+export function combineWorkbenchColumns(request: ColumnRequest): string[] {
   const { mainLines, sidebarLines, mainWidth, sidebarWidth, height } = request;
   const lines: string[] = [];
+  let protectedImageRows = 0;
   for (let row = 0; row < height; row++) {
-    lines.push(
-      fitLine(mainLines[row] ?? "", mainWidth) +
-      fitLine(sidebarLines[row] ?? "", sidebarWidth),
-    );
+    const mainLine = mainLines[row] ?? "";
+    protectedImageRows = Math.max(protectedImageRows, inlineImageRows(mainLine));
+    const fittedMain = protectedImageRows > 0
+      ? preserveImageColumn(mainLine, mainWidth)
+      : fitLine(mainLine, mainWidth);
+    lines.push(fittedMain + fitLine(sidebarLines[row] ?? "", sidebarWidth));
+    protectedImageRows = Math.max(0, protectedImageRows - 1);
   }
   return lines;
 }
 
+function inlineImageRows(line: string): number {
+  const kittyStart = line.indexOf(KITTY_IMAGE_PREFIX);
+  if (kittyStart >= 0) {
+    const controlsEnd = line.indexOf(";", kittyStart + KITTY_IMAGE_PREFIX.length);
+    const controls = controlsEnd >= 0
+      ? line.slice(kittyStart + KITTY_IMAGE_PREFIX.length, controlsEnd)
+      : "";
+    const rows = /(?:^|,)r=(\d+)(?:,|$)/.exec(controls)?.[1];
+    return Math.max(1, Number.parseInt(rows ?? "1", 10) || 1);
+  }
+  return line.includes(ITERM_IMAGE_PREFIX) ? 1 : 0;
+}
+
+function preserveImageColumn(line: string, width: number): string {
+  const cursorColumns = Math.max(0, Math.floor(width));
+  return cursorColumns > 0 ? `${line}\x1b[${cursorColumns}C` : line;
+}
+
 function clipLine(line: string, width: number): string {
+  if (inlineImageRows(line) > 0) return line;
   return truncateToWidth(line, Math.max(0, width), "");
 }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Preserved Kitty and iTerm inline-image rows while composing the docked Workbench, preventing valid screenshots from being replaced by blank terminal space.
 - Preserved unrelated multiline Warp TOML arrays during terminal setup while keeping managed settings fail-closed and byte-stable.
 - Refreshed vulnerable MCP transitive dependencies without lifecycle scripts and extended retired-package cleanup to remove stale `pi-mcp-adapter` installations.
 - Added stable automatic session titles derived from each session's first substantive task, with manual names preserved and unnamed resumed sessions backfilled.

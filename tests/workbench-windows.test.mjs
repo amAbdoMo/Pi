@@ -203,7 +203,7 @@ const { SideChatOverlay } = await import(
 const { renderWorkflowPanel, statusIcon } = await import(
   "../extensions/workflow/index.ts"
 );
-const { installWorkbenchShell } = await import(
+const { combineWorkbenchColumns, installWorkbenchShell } = await import(
   "../extensions/ui/workbenchShell.ts"
 );
 const { sessionPiHeader } = await import("../extensions/ui/piHeader.ts");
@@ -974,6 +974,36 @@ test("docked sidebar survives a transient narrow width while a session resumes",
   } finally {
     controller.dispose();
   }
+});
+
+test("workbench columns preserve inline image commands and reserved rows", () => {
+  const kittyImage = "\x1b_Ga=T,f=100,q=2,C=1,c=12,r=3,i=7;AAAA\x1b\\";
+  const kittyRows = combineWorkbenchColumns({
+    mainLines: [kittyImage, "", "", "text"],
+    sidebarLines: ["one", "two", "three", "four"],
+    mainWidth: 10,
+    sidebarWidth: 6,
+    height: 4,
+  });
+
+  assert.deepEqual(kittyRows, [
+    `${kittyImage}\x1b[10Cone   `,
+    "\x1b[10Ctwo   ",
+    "\x1b[10Cthree ",
+    "text      four  ",
+  ]);
+
+  const itermImage = "\x1b]1337;File=inline=1:AAAA\x07";
+  assert.deepEqual(
+    combineWorkbenchColumns({
+      mainLines: [itermImage],
+      sidebarLines: ["ok"],
+      mainWidth: 8,
+      sidebarWidth: 4,
+      height: 1,
+    }),
+    [`${itermImage}\x1b[8Cok  `],
+  );
 });
 
 test("workbench shell routes mouse wheel to chat and preserves position while streaming", () => {
