@@ -65,6 +65,7 @@ resolve_asset() {
 
 resolve_asset CONFIG_SCRIPT_FILE "scripts/apply-config.mjs"
 resolve_asset RETIREMENT_SCRIPT_FILE "scripts/retire-packages.mjs"
+resolve_asset DEPENDENCY_REFRESH_SCRIPT_FILE "scripts/refresh-managed-dependencies.mjs"
 resolve_asset FFMPEG_SETUP_SCRIPT_FILE "scripts/setup-ffmpeg.mjs"
 resolve_asset SYSTEM_POLICY_FILE "APPEND_SYSTEM.md"
 
@@ -86,6 +87,7 @@ for package in "${PI_PACKAGES[@]}"; do
 done
 pi update --extensions
 node "$CONFIG_SCRIPT_FILE" --system-policy "$SYSTEM_POLICY_FILE"
+node "$DEPENDENCY_REFRESH_SCRIPT_FILE"
 
 if [[ $SKIP_FFMPEG -eq 0 ]]; then
   if ! node "$FFMPEG_SETUP_SCRIPT_FILE"; then

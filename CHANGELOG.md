@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserved unrelated multiline Warp TOML arrays during terminal setup while keeping managed settings fail-closed and byte-stable.
+- Refreshed vulnerable MCP transitive dependencies without lifecycle scripts and extended retired-package cleanup to remove stale `pi-mcp-adapter` installations.
 - Added stable automatic session titles derived from each session's first substantive task, with manual names preserved and unnamed resumed sessions backfilled.
 - Added a cross-platform `npx --yes github:amAbdoMo/Pi` setup command that runs revision-local installer assets and propagates native command failures.
 - Retired Hypa from default setup after an antivirus detection under its package and confirmation that the reviewed `@hypabolic/hypa-win32-x64@0.1.13` artifact is unsigned; repeat installs remove managed package files without weakening antivirus protection.

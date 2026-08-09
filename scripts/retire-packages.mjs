@@ -4,7 +4,8 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const RETIRED_PACKAGE = "@hypabolic/pi-hypa";
+const RETIRED_PACKAGES = ["@hypabolic/pi-hypa", "pi-mcp-adapter"];
+const RETIRED_PACKAGE_SET = new Set(RETIRED_PACKAGES);
 const HYPA_RUNTIME_PACKAGE = "@hypabolic/hypa";
 
 function packageSource(packageSpec) {
@@ -48,11 +49,11 @@ function writeJsonRecoverably(filePath, jsonDocument) {
   }
 }
 
-function removeRetiredSettingsEntry(settingsFile) {
+function removeRetiredSettingsEntries(settingsFile) {
   const settings = readJson(settingsFile);
   const packages = Array.isArray(settings.packages) ? settings.packages : [];
   const retained = packages.filter((packageSpec) =>
-    npmPackageName(packageSource(packageSpec)) !== RETIRED_PACKAGE
+    !RETIRED_PACKAGE_SET.has(npmPackageName(packageSource(packageSpec)))
   );
   if (retained.length === packages.length) return false;
   settings.packages = retained;
@@ -65,13 +66,25 @@ function packageHasDependency(manifest, packageName) {
     .some((field) => Object.hasOwn(manifest[field] ?? {}, packageName));
 }
 
-function windowsNpmRunner(parts, managerName) {
+function windowsPackageManagerRunner(parts, managerName) {
+  const directExecutable = path.extname(parts[0]).toLowerCase() === ".exe";
   const directCommand = path.basename(parts[0]).replace(/\.(cmd|exe)$/i, "").toLowerCase();
-  if (process.platform !== "win32" || directCommand !== "npm") return undefined;
+  if (process.platform !== "win32" || directCommand !== managerName || directExecutable) return undefined;
 
-  const npmCli = path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
-  if (!fs.existsSync(npmCli)) throw new Error(`Cannot locate npm CLI: ${npmCli}`);
-  return { command: process.execPath, prefixArgs: [npmCli, ...parts.slice(1)], name: managerName };
+  const candidates = managerName === "npm"
+    ? [path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")]
+    : managerName === "pnpm"
+      ? [
+        path.join(process.env.APPDATA ?? "", "npm", "node_modules", "pnpm", "bin", "pnpm.cjs"),
+        path.join(path.dirname(process.execPath), "node_modules", "corepack", "dist", "pnpm.js"),
+      ]
+      : [];
+  const cli = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!cli) {
+    if (candidates.length > 0) throw new Error(`Cannot locate ${managerName} CLI`);
+    return undefined;
+  }
+  return { command: process.execPath, prefixArgs: [cli, ...parts.slice(1)], name: managerName };
 }
 
 function configuredNpmRunner(settings) {
@@ -81,21 +94,21 @@ function configuredNpmRunner(settings) {
   const separator = parts.lastIndexOf("--");
   const managerCommand = separator >= 0 ? parts[separator + 1] : parts[0];
   const name = path.basename(managerCommand ?? "").replace(/\.(cmd|exe)$/i, "").toLowerCase();
-  return windowsNpmRunner(parts, name) ?? {
+  return windowsPackageManagerRunner(parts, name) ?? {
     command: parts[0],
     prefixArgs: parts.slice(1),
     name,
   };
 }
 
-function uninstallArguments(managerName, installRoot) {
+function uninstallArguments(managerName, installRoot, packageNames) {
   if (managerName === "bun") {
-    return ["remove", RETIRED_PACKAGE, "--cwd", installRoot, "--ignore-scripts"];
+    return ["remove", ...packageNames, "--cwd", installRoot, "--ignore-scripts"];
   }
   if (managerName === "pnpm") {
     return [
       "remove",
-      RETIRED_PACKAGE,
+      ...packageNames,
       "--prefix",
       installRoot,
       "--config.ignore-scripts=true",
@@ -104,7 +117,7 @@ function uninstallArguments(managerName, installRoot) {
   if (managerName === "npm") {
     return [
       "uninstall",
-      RETIRED_PACKAGE,
+      ...packageNames,
       "--prefix",
       installRoot,
       "--ignore-scripts",
@@ -114,15 +127,17 @@ function uninstallArguments(managerName, installRoot) {
   throw new Error(`Unsupported npmCommand package manager: ${managerName || "unknown"}`);
 }
 
+function installedPackageDirectory(installRoot, packageName) {
+  return path.join(installRoot, "node_modules", ...packageName.split("/"));
+}
+
 function retirementPaths(agentDir) {
   const installRoot = path.join(agentDir, "npm");
-  const hypabolicRoot = path.join(installRoot, "node_modules", "@hypabolic");
   return {
     settingsFile: path.join(agentDir, "settings.json"),
     installRoot,
     packageFile: path.join(installRoot, "package.json"),
-    packageDirectory: path.join(hypabolicRoot, "pi-hypa"),
-    hypabolicRoot,
+    hypabolicRoot: path.join(installRoot, "node_modules", "@hypabolic"),
   };
 }
 
@@ -136,31 +151,37 @@ function remainingHypaPackages(hypabolicRoot) {
   }
 }
 
-function uninstallRetiredPackage(settings, paths) {
+function installedRetiredPackages(paths) {
   const manifest = readJson(paths.packageFile);
-  const needsUninstall = packageHasDependency(manifest, RETIRED_PACKAGE) ||
-    fs.existsSync(paths.packageDirectory);
-  if (!needsUninstall) return false;
+  return RETIRED_PACKAGES.filter((packageName) =>
+    packageHasDependency(manifest, packageName) ||
+    fs.existsSync(installedPackageDirectory(paths.installRoot, packageName))
+  );
+}
+
+function uninstallRetiredPackages(settings, paths, packageNames) {
+  if (packageNames.length === 0) return false;
 
   const npmRunner = configuredNpmRunner(settings);
-  const uninstallArgs = uninstallArguments(npmRunner.name, paths.installRoot);
+  const uninstallArgs = uninstallArguments(npmRunner.name, paths.installRoot, packageNames);
   const uninstall = spawnSync(npmRunner.command, [...npmRunner.prefixArgs, ...uninstallArgs], {
     shell: false,
     stdio: "inherit",
   });
   if (uninstall.error) throw uninstall.error;
   if (uninstall.status !== 0) {
-    throw new Error(`Could not remove retired ${RETIRED_PACKAGE} package (exit ${uninstall.status ?? "unknown"}).`);
+    throw new Error(`Could not remove retired packages ${packageNames.join(", ")} (exit ${uninstall.status ?? "unknown"}).`);
   }
   return true;
 }
 
 function verifyRetirement(paths) {
-  const manifest = readJson(paths.packageFile);
-  if (packageHasDependency(manifest, RETIRED_PACKAGE) || fs.existsSync(paths.packageDirectory)) {
-    throw new Error(`Retired package remains installed: ${RETIRED_PACKAGE}`);
+  const remainingRetired = installedRetiredPackages(paths);
+  if (remainingRetired.length > 0) {
+    throw new Error(`Retired packages remain installed: ${remainingRetired.join(", ")}`);
   }
 
+  const manifest = readJson(paths.packageFile);
   const directHypa = packageHasDependency(manifest, HYPA_RUNTIME_PACKAGE);
   const remainingPackages = remainingHypaPackages(paths.hypabolicRoot);
   if (!directHypa && remainingPackages.length > 0) {
@@ -168,23 +189,24 @@ function verifyRetirement(paths) {
   }
 }
 
-function retireHypa() {
+function retirePackages() {
   const agentDir = process.env.PI_CODING_AGENT_DIR ||
     process.env.PI_AGENT_DIR ||
     path.join(os.homedir(), ".pi", "agent");
   const paths = retirementPaths(agentDir);
   const settings = readJson(paths.settingsFile);
-  const wasConfigured = removeRetiredSettingsEntry(paths.settingsFile);
-  const wasUninstalled = uninstallRetiredPackage(settings, paths);
+  const wasConfigured = removeRetiredSettingsEntries(paths.settingsFile);
+  const retiredPackages = installedRetiredPackages(paths);
+  const wasUninstalled = uninstallRetiredPackages(settings, paths, retiredPackages);
   verifyRetirement(paths);
   if (wasConfigured || wasUninstalled) {
-    console.log(`Retired package removed: npm:${RETIRED_PACKAGE}`);
+    console.log(`Retired packages removed: ${RETIRED_PACKAGES.map((name) => `npm:${name}`).join(", ")}`);
   }
 }
 
 try {
-  retireHypa();
+  retirePackages();
 } catch (error) {
-  console.error(`Hypa cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(`Retired package cleanup failed: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
 }

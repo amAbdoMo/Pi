@@ -76,6 +76,7 @@ const requiredFiles = [
   "scripts/capture-config.mjs",
   "scripts/install-cli.mjs",
   "scripts/retire-packages.mjs",
+  "scripts/refresh-managed-dependencies.mjs",
   "scripts/setup-ffmpeg.mjs",
   "scripts/setup-terminal-font.ps1",
   "scripts/set-terminal-font.mjs",
@@ -119,6 +120,7 @@ for (const installer of ["install.ps1", "install.sh"]) {
     "APPEND_SYSTEM.md",
     "system-policy",
     "retire-packages.mjs",
+    "refresh-managed-dependencies.mjs",
     "setup-ffmpeg.mjs",
   ]) {
     if (!installerSource.includes(requiredReference)) {

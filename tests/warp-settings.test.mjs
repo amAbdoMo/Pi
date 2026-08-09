@@ -20,6 +20,15 @@ osc52_clipboard_access = "write_only"
 [terminal.input] # Warp input settings
 input_box_type_setting = "universal"
 
+[agents.execution_profiles.default]
+command_denylist = [
+  "literal ] # remains data",
+  "git [status]", # retain this explanation
+]
+nested_rules = [
+  [1]
+]
+
 [account]
 is_settings_sync_enabled = true
 `;
@@ -32,6 +41,11 @@ is_settings_sync_enabled = true
   assert.match(configured, /font_name = "DejaVuSansM Nerd Font Mono" # retain this explanation/);
   assert.match(configured, /input_box_type_setting = "classic"/);
   assert.match(configured, /osc52_clipboard_access = "write_only"/);
+  assert.match(
+    configured,
+    /command_denylist = \[\n  "literal \] # remains data",\n  "git \[status\]", # retain this explanation\n\]/,
+  );
+  assert.match(configured, /nested_rules = \[\n  \[1\]\n\]/);
   assert.match(configured, /is_settings_sync_enabled = true/);
   assert.equal(fs.readFileSync(`${settingsFile}.pi-workbench-backup`, "utf8"), original);
   assert.equal(fs.readdirSync(directory).some((name) => name.endsWith(".tmp")), false);
@@ -126,6 +140,29 @@ input_box_type_setting.mode = "classic"
 mode = "classic"
 `,
       expectedError: /terminal\.input\.input_box_type_setting is defined as a table/,
+    },
+    {
+      original: `[agents.execution_profiles.default]
+command_denylist = [
+  "git status",
+`,
+      expectedError: /unterminated TOML array/,
+    },
+    {
+      original: `[appearance.text]
+font_name = [
+  "Hack",
+]
+`,
+      expectedError: /multiline appearance\.text\.font_name arrays are not supported safely/,
+    },
+    {
+      original: `[terminal.input]
+input_box_type_setting = [
+  "classic",
+]
+`,
+      expectedError: /multiline terminal\.input\.input_box_type_setting arrays are not supported safely/,
     },
   ];
 

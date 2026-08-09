@@ -48,6 +48,7 @@ try {
 
   $ConfigScriptFile = Resolve-SetupAsset 'scripts/apply-config.mjs'
   $RetirementScriptFile = Resolve-SetupAsset 'scripts/retire-packages.mjs'
+  $DependencyRefreshScriptFile = Resolve-SetupAsset 'scripts/refresh-managed-dependencies.mjs'
   $FfmpegSetupScriptFile = Resolve-SetupAsset 'scripts/setup-ffmpeg.mjs'
   $SystemPolicyFile = Resolve-SetupAsset 'APPEND_SYSTEM.md'
   $FontSetupScriptFile = Resolve-SetupAsset 'scripts/setup-terminal-font.ps1'
@@ -62,6 +63,7 @@ try {
   }
   Invoke-CheckedNative -Command 'pi' -Arguments @('update', '--extensions')
   Invoke-CheckedNative -Command 'node' -Arguments @($ConfigScriptFile, '--system-policy', $SystemPolicyFile)
+  Invoke-CheckedNative -Command 'node' -Arguments @($DependencyRefreshScriptFile)
 
   if (-not $SkipFfmpeg) {
     try {

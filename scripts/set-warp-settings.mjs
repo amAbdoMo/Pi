@@ -16,10 +16,6 @@ function tableHeaderName(line) {
   return line.match(/^\s*\[([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)\]\s*(?:#.*)?$/)?.[1];
 }
 
-function isTableHeader(line) {
-  return tableHeaderName(line) !== undefined;
-}
-
 function tomlCommentSuffix(line) {
   let quote;
   let escaped = false;
@@ -41,7 +37,7 @@ function tomlCommentSuffix(line) {
   return "";
 }
 
-function assignmentKey(line) {
+function tomlAssignment(line) {
   let quote;
   let escaped = false;
   for (let index = 0; index < line.length; index++) {
@@ -55,11 +51,39 @@ function assignmentKey(line) {
     } else if (character === "#" && !quote) {
       return undefined;
     } else if (character === "=" && !quote) {
-      return line.slice(0, index).trim();
+      return {
+        key: line.slice(0, index).trim(),
+        value: line.slice(index + 1),
+      };
     }
     escaped = false;
   }
   return undefined;
+}
+
+function tomlArrayDepth(text, initialDepth, settingsFile) {
+  let depth = initialDepth;
+  let quote;
+  let escaped = false;
+  for (const character of text) {
+    if (quote === '"' && character === "\\" && !escaped) {
+      escaped = true;
+      continue;
+    }
+    if ((character === '"' || character === "'") && !escaped) {
+      quote = quote === character ? undefined : quote ?? character;
+    } else if (character === "#" && !quote) {
+      break;
+    } else if (!quote && character === "[") {
+      depth += 1;
+    } else if (!quote && character === "]") {
+      depth -= 1;
+      if (depth < 0) throw new Error(`${settingsFile}: unsupported TOML array syntax`);
+    }
+    escaped = false;
+  }
+  if (quote) throw new Error(`${settingsFile}: unsupported TOML string syntax in array`);
+  return depth;
 }
 
 function assertSupportedTargetPath(currentTable, key, target, settingsFile) {
@@ -77,7 +101,13 @@ function assertSupportedTargetPath(currentTable, key, target, settingsFile) {
 
 function assertSupportedTomlSubset(original, settingsFile) {
   let currentTable = "";
+  let arrayDepth = 0;
   for (const line of original.split(/\r?\n/)) {
+    if (arrayDepth > 0) {
+      arrayDepth = tomlArrayDepth(line, arrayDepth, settingsFile);
+      continue;
+    }
+
     const trimmedLine = line.trim();
     if (!trimmedLine || trimmedLine.startsWith("#")) continue;
     if (trimmedLine.startsWith("[")) {
@@ -90,26 +120,60 @@ function assertSupportedTomlSubset(original, settingsFile) {
       continue;
     }
 
-    const key = assignmentKey(line);
-    if (!key || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    const assignment = tomlAssignment(line);
+    if (!assignment?.key || !/^[A-Za-z0-9_-]+$/.test(assignment.key)) {
       throw new Error(`${settingsFile}: unsupported TOML assignment syntax`);
     }
     for (const target of WARP_SETTING_TARGETS) {
-      assertSupportedTargetPath(currentTable, key, target, settingsFile);
+      assertSupportedTargetPath(currentTable, assignment.key, target, settingsFile);
+    }
+
+    if (assignment.value.trimStart().startsWith("[")) {
+      arrayDepth = tomlArrayDepth(assignment.value, 0, settingsFile);
+      const managedTarget = WARP_SETTING_TARGETS.find((target) =>
+        currentTable === target.table && assignment.key === target.key
+      );
+      if (arrayDepth > 0 && managedTarget) {
+        throw new Error(`${settingsFile}: multiline ${managedTarget.table}.${managedTarget.key} arrays are not supported safely`);
+      }
     }
   }
+  if (arrayDepth > 0) throw new Error(`${settingsFile}: unterminated TOML array`);
+}
+
+function tomlTableHeaders(lines, settingsFile) {
+  const headers = [];
+  let arrayDepth = 0;
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    if (arrayDepth > 0) {
+      arrayDepth = tomlArrayDepth(line, arrayDepth, settingsFile);
+      continue;
+    }
+
+    const headerName = tableHeaderName(line);
+    if (headerName) {
+      headers.push({ name: headerName, index });
+      continue;
+    }
+
+    const assignment = tomlAssignment(line);
+    if (assignment?.value.trimStart().startsWith("[")) {
+      arrayDepth = tomlArrayDepth(assignment.value, 0, settingsFile);
+    }
+  }
+  return headers;
 }
 
 function tableBounds(lines, tableName, settingsFile) {
-  const starts = lines
-    .map((line, index) => (tableHeaderName(line) === tableName ? index : -1))
-    .filter((index) => index >= 0);
+  const headers = tomlTableHeaders(lines, settingsFile);
+  const starts = headers.filter((header) => header.name === tableName);
   if (starts.length > 1) throw new Error(`${settingsFile}: duplicate [${tableName}] table`);
   if (starts.length === 0) return undefined;
 
-  const start = starts[0];
-  const nextHeader = lines.findIndex((line, index) => index > start && isTableHeader(line));
-  return { start, end: nextHeader < 0 ? lines.length : nextHeader };
+  const start = starts[0].index;
+  const nextHeader = headers.find((header) => header.index > start);
+  return { start, end: nextHeader?.index ?? lines.length };
 }
 
 function assignTomlString(lines, assignmentTarget, settingsFile) {

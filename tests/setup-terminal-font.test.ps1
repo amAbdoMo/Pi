@@ -46,6 +46,12 @@ font_size = 16.0
 
 [terminal.input]
 input_box_type_setting = "universal"
+
+[agents.execution_profiles.default]
+command_denylist = [
+  "git status",
+  "npm publish",
+]
 '@)
 
   $setupArguments = @{
@@ -79,6 +85,7 @@ input_box_type_setting = "universal"
   $configuredWarpSettings = Get-Content -Raw $warpSettingsFile
   if ($configuredWarpSettings -notmatch 'font_name = "DejaVuSansM Nerd Font Mono"') { throw 'Warp Nerd Font was not configured' }
   if ($configuredWarpSettings -notmatch 'input_box_type_setting = "classic"') { throw 'Warp classic input was not configured' }
+  if ($configuredWarpSettings -notmatch 'command_denylist = \[\r?\n  "git status",\r?\n  "npm publish",\r?\n\]') { throw 'Warp multiline denylist was not preserved' }
   if (-not (Test-Path "$warpSettingsFile.pi-workbench-backup")) { throw 'Warp settings backup was not created' }
 
   Remove-Item $fontSourceDirectory -Recurse -Force
