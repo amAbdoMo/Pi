@@ -206,6 +206,7 @@ const { renderWorkflowPanel, statusIcon } = await import(
 const { installWorkbenchShell } = await import(
   "../extensions/ui/workbenchShell.ts"
 );
+const { sessionPiHeader } = await import("../extensions/ui/piHeader.ts");
 const {
   clampSelectionPoint,
   highlightTerminalSelection,
@@ -243,6 +244,23 @@ const theme = {
   bg: (_role, text) => text,
   bold: (text) => text,
 };
+
+test("large Pi art appears only when Pi starts or creates a new session", () => {
+  const startupHeader = sessionPiHeader(theme, 200, "startup");
+
+  assert.equal(startupHeader.length, 23);
+  assert.equal(startupHeader[0], "");
+  assert.equal(startupHeader.at(-1), "");
+  assert.match(startupHeader.join("\n"), /\x1b\[38;2;/);
+  assert.doesNotMatch(startupHeader.join("\n"), /PI WORKBENCH|keyboard native/);
+  assert.deepEqual(sessionPiHeader(theme, 200, "new"), startupHeader);
+  assert.ok(sessionPiHeader(theme, 30, "startup").every((line) =>
+    visibleWidth(line) <= 30
+  ));
+  for (const reason of ["reload", "resume", "fork"]) {
+    assert.deepEqual(sessionPiHeader(theme, 200, reason), []);
+  }
+});
 
 function createPlanModeHarness(sessionEntries = [{
   type: "custom",
@@ -815,6 +833,48 @@ test("workbench shell routes mouse wheel to chat and preserves position while st
   assert.match(writes.join(""), /\x1b\[\?1002l/);
   assert.match(writes.join(""), /\x1b\[\?1049l/);
   assert.equal(input("\x1b[<64;10;4M"), undefined);
+});
+
+test("mouse wheel cancels an active drag selection before scrolling chat", () => {
+  const { tui, input } = createWorkbenchTui();
+  const copied = [];
+  const handle = installWorkbenchShell(tui, component([]), {
+    ...copyOptions,
+    copyText: async (text) => { copied.push(text); },
+  });
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;1;1M");
+    input("\x1b[<32;4;2M");
+    assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
+
+    assert.deepEqual(input("\x1b[<64;10;4M"), { consume: true });
+    assert.deepEqual(chatRows(tui), ["chat-14", "chat-15", "chat-16", "chat-17"]);
+    assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
+
+    input("\x1b[<32;8;3M");
+    input("\x1b[<0;8;3m");
+    assert.deepEqual(copied, []);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("session rebind restores application mouse tracking without clearing chat", () => {
+  const { tui, writes } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
+
+  try {
+    tui.render(80);
+    const writeCount = writes.length;
+    assert.equal(installWorkbenchShell(tui, component([]), copyOptions), handle);
+    assert.equal(writes.length, writeCount + 1);
+    assert.match(writes.at(-1), /\x1b\[\?1007l\x1b\[\?1006h\x1b\[\?1002h/);
+    assert.deepEqual(chatRows(tui), ["chat-17", "chat-18", "chat-19", "chat-20"]);
+  } finally {
+    handle.dispose();
+  }
 });
 
 test("workbench shell routes composer clicks and preserves drag selection", () => {

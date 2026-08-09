@@ -9,6 +9,7 @@ import {
   workbenchDimensions,
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
+  WORKBENCH_MOUSE_TRACKING_SEQUENCE,
 } from "../extensions/ui/workbenchShellLayout.ts";
 
 test("wide workbench reserves a fixed sidebar while narrow terminals collapse it", () => {
@@ -25,9 +26,10 @@ test("wide workbench reserves a fixed sidebar while narrow terminals collapse it
 
 test("workbench terminal modes enable SGR wheel reporting and restore terminal modes", () => {
   assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1049h/);
-  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1007l/);
-  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1006h/);
-  assert.match(WORKBENCH_ENTER_SEQUENCE, /\x1b\[\?1002h/);
+  assert.ok(WORKBENCH_ENTER_SEQUENCE.includes(WORKBENCH_MOUSE_TRACKING_SEQUENCE));
+  assert.match(WORKBENCH_MOUSE_TRACKING_SEQUENCE, /\x1b\[\?1007l/);
+  assert.match(WORKBENCH_MOUSE_TRACKING_SEQUENCE, /\x1b\[\?1006h/);
+  assert.match(WORKBENCH_MOUSE_TRACKING_SEQUENCE, /\x1b\[\?1002h/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1002l/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1006l/);
   assert.match(WORKBENCH_LEAVE_SEQUENCE, /\x1b\[\?1007h/);

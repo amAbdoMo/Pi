@@ -12,7 +12,8 @@ export interface WorkbenchDimensions {
 
 // Button-event tracking reports wheel and drag coordinates so the shell can provide
 // precise copy selection while streaming. Shift+drag remains the terminal-native fallback.
-export const WORKBENCH_ENTER_SEQUENCE = "\x1b[?1049h\x1b[?1007l\x1b[?1006h\x1b[?1002h\x1b[2J\x1b[H";
+export const WORKBENCH_MOUSE_TRACKING_SEQUENCE = "\x1b[?1007l\x1b[?1006h\x1b[?1002h";
+export const WORKBENCH_ENTER_SEQUENCE = `\x1b[?1049h${WORKBENCH_MOUSE_TRACKING_SEQUENCE}\x1b[2J\x1b[H`;
 export const WORKBENCH_LEAVE_SEQUENCE = "\x1b[?1002l\x1b[?1006l\x1b[?1007h\x1b[?1049l";
 
 export interface ViewportMetrics {

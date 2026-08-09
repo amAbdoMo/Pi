@@ -16,6 +16,7 @@ import {
   workbenchDimensions,
   WORKBENCH_ENTER_SEQUENCE,
   WORKBENCH_LEAVE_SEQUENCE,
+  WORKBENCH_MOUSE_TRACKING_SEQUENCE,
 } from "./workbenchShellLayout.ts";
 import {
   parseTerminalMouseInput,
@@ -140,6 +141,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.copyText = options.copyText ?? copyToClipboard;
     this.onCopyError = options.onCopyError;
     this.placeComposerCursor = options.placeComposerCursor;
+    this.tui.terminal.write(WORKBENCH_MOUSE_TRACKING_SEQUENCE);
     this.tui.requestRender(true);
   }
 

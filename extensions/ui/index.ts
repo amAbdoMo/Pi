@@ -15,7 +15,7 @@ import {
 } from "./chatgptUsage.ts";
 import { editors, notifyEditors } from "./editorRegistry.ts";
 import { updateBranch } from "./git.ts";
-import { workbenchHeader } from "./piHeader.ts";
+import { sessionPiHeader } from "./piHeader.ts";
 import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
 import { state, updateState } from "./state.ts";
 import { hasActiveSubagents, subscribeSubagents } from "./subagents.ts";
@@ -75,7 +75,11 @@ export default function uiExtension(pi: ExtensionAPI) {
     workbenchSidebar.dispose();
 
     ctx.ui.setHeader((_tui, theme) => ({
-      render: (width) => workbenchHeader(theme as unknown as UiTheme, width),
+      render: (width) => sessionPiHeader(
+        theme as unknown as UiTheme,
+        width,
+        event.reason,
+      ),
       invalidate: () => {},
     }));
 
