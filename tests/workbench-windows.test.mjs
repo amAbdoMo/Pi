@@ -208,6 +208,10 @@ const { installWorkbenchShell } = await import(
 );
 const { sessionPiHeader } = await import("../extensions/ui/piHeader.ts");
 const {
+  deriveSessionTitle,
+  ensureAutomaticSessionTitle,
+} = await import("../extensions/ui/sessionTitle.ts");
+const {
   clampSelectionPoint,
   highlightTerminalSelection,
   selectedTerminalText,
@@ -244,6 +248,108 @@ const theme = {
   bg: (_role, text) => text,
   bold: (text) => text,
 };
+
+test("automatic session titles summarize different first tasks", () => {
+  assert.equal(
+    deriveSessionTitle("Please add automatic session naming derived from each session's first task."),
+    "Dynamic session titles",
+  );
+  assert.equal(
+    deriveSessionTitle("Improve Pi's agent sidebar and restore the startup header."),
+    "Pi workspace improvements",
+  );
+  assert.equal(
+    deriveSessionTitle("Investigate FFmpeg installation failures on Windows."),
+    "FFmpeg installation failures investigation",
+  );
+  assert.equal(
+    deriveSessionTitle("Make transcript edge auto-scroll slightly faster."),
+    "Transcript edge auto-scroll slightly faster",
+  );
+  assert.equal(deriveSessionTitle("Update README"), "README update");
+  const longTitle = deriveSessionTitle(
+    "Fix extraordinarily-long-authentication-component extraordinarily-long-authorization-component",
+  );
+  assert.ok(longTitle);
+  assert.ok(longTitle.length <= 48);
+  assert.match(longTitle, /… fix$/);
+  assert.equal(
+    deriveSessionTitle("أصلح تخطيط سلة التسوق في الهاتف"),
+    "أصلح تخطيط سلة التسوق في الهاتف",
+  );
+  assert.equal(deriveSessionTitle("Hello!"), undefined);
+});
+
+test("automatic session titles ignore expanded skill instructions", () => {
+  const prompt = `<skill name="test-guard">
+Ignore this skill documentation when naming the session.
+</skill>
+Fix the checkout coupon layout.`;
+
+  assert.equal(deriveSessionTitle(prompt), "Checkout coupon layout fix");
+});
+
+test("automatic session titles persist once and preserve manual names", () => {
+  let sessionName;
+  const writes = [];
+  const pi = {
+    getSessionName: () => sessionName,
+    setSessionName: (name) => {
+      sessionName = name;
+      writes.push(name);
+    },
+  };
+  const ctx = { sessionManager: { getBranch: () => [] } };
+
+  assert.equal(
+    ensureAutomaticSessionTitle(pi, ctx, "Add automatic session naming."),
+    "Dynamic session titles",
+  );
+  assert.equal(
+    ensureAutomaticSessionTitle(pi, ctx, "Fix an unrelated checkout issue."),
+    undefined,
+  );
+  assert.deepEqual(writes, ["Dynamic session titles"]);
+
+  sessionName = "My manual session name";
+  assert.equal(
+    ensureAutomaticSessionTitle(pi, ctx, "Improve the agent sidebar."),
+    undefined,
+  );
+  assert.deepEqual(writes, ["Dynamic session titles"]);
+});
+
+test("resumed unnamed sessions use their first substantive task", () => {
+  let sessionName;
+  const pi = {
+    getSessionName: () => sessionName,
+    setSessionName: (name) => { sessionName = name; },
+  };
+  const ctx = {
+    sessionManager: {
+      getBranch: () => [
+        { type: "message", message: { role: "user", content: "Hello!" } },
+        { type: "message", message: { role: "assistant", content: [] } },
+        {
+          type: "message",
+          message: {
+            role: "user",
+            content: [
+              { type: "image", data: "ignored", mimeType: "image/png" },
+              { type: "text", text: "Investigate FFmpeg installation failures on Windows." },
+            ],
+          },
+        },
+      ],
+    },
+  };
+
+  assert.equal(
+    ensureAutomaticSessionTitle(pi, ctx),
+    "FFmpeg installation failures investigation",
+  );
+  assert.equal(sessionName, "FFmpeg installation failures investigation");
+});
 
 test("large Pi art appears only when Pi starts or creates a new session", () => {
   const startupHeader = sessionPiHeader(theme, 200, "startup");
@@ -412,9 +518,11 @@ test("sidebar rendering after reload does not read the stale session context", (
   }
 });
 
-test("session rename events update the live workbench state", async () => {
+test("automatic and manual session names update the live workbench state", async () => {
   const handlers = new Map();
   const eventListeners = new Map();
+  let sessionName;
+  let branch = [];
   const pi = {
     events: {
       emit(channel, data) {
@@ -430,9 +538,32 @@ test("session rename events update the live workbench state", async () => {
         );
       },
     },
+    getSessionName: () => sessionName,
+    setSessionName: (name) => { sessionName = name; },
+    getThinkingLevel: () => "off",
+    exec: async () => ({ stdout: "main\n", stderr: "", code: 0 }),
     registerCommand() {},
     registerShortcut() {},
     on(event, handler) { handlers.set(event, handler); },
+  };
+  const ctx = {
+    mode: "tui",
+    cwd: "C:\\project",
+    ui: {
+      theme,
+      setHeader() {},
+      setEditorComponent() {},
+      setFooter() {},
+      custom: async () => undefined,
+      notify() {},
+    },
+    model: { id: "test-model", provider: "anthropic", contextWindow: 100_000 },
+    sessionManager: {
+      getSessionId: () => "automatic-title-session",
+      getSessionName: () => sessionName,
+      getBranch: () => branch,
+    },
+    getContextUsage: () => ({ tokens: 1_000 }),
   };
   let renderRequests = 0;
   const editor = { requestRender: () => { renderRequests += 1; } };
@@ -441,13 +572,37 @@ test("session rename events update the live workbench state", async () => {
   uiExtension(pi);
   editors.add(editor);
   try {
+    branch = [{
+      type: "message",
+      message: { role: "user", content: "Update README" },
+    }];
+    await handlers.get("session_start")({ reason: "new" }, ctx);
+    assert.equal(sessionName, "README update");
+    assert.equal(workbenchState.sessionName, "README update");
+
+    sessionName = undefined;
+    branch = [];
+    await handlers.get("message_end")(
+      {
+        message: {
+          role: "user",
+          content: [{ type: "text", text: "Add automatic session naming." }],
+        },
+      },
+      ctx,
+    );
+    assert.equal(sessionName, "Dynamic session titles");
+    assert.equal(workbenchState.sessionName, "Dynamic session titles");
+
+    const rendersBeforeRename = renderRequests;
     await handlers.get("session_info_changed")(
       { name: "Renamed during reload" },
       { mode: "tui" },
     );
     assert.equal(workbenchState.sessionName, "Renamed during reload");
-    assert.equal(renderRequests, 1);
+    assert.ok(renderRequests > rendersBeforeRename);
   } finally {
+    await handlers.get("session_shutdown")({ reason: "quit" });
     editors.delete(editor);
     workbenchState.sessionName = previousSessionName;
   }

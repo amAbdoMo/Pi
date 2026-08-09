@@ -18,6 +18,7 @@ import { updateBranch } from "./git.ts";
 import { sessionPiHeader } from "./piHeader.ts";
 import { expandPastedTextMarkers, imagesForText } from "./imagePaste.ts";
 import { state, updateState } from "./state.ts";
+import { ensureAutomaticSessionTitle } from "./sessionTitle.ts";
 import { hasActiveSubagents, subscribeSubagents } from "./subagents.ts";
 import { TerminalEditor } from "./terminalEditor.ts";
 import {
@@ -53,6 +54,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     if (event.reason === "startup" || event.reason === "resume")
       clearTerminal();
 
+    ensureAutomaticSessionTitle(pi, ctx);
     updateState(ctx, pi);
     void updateBranch(pi);
     void refreshChatGptUsage(ctx, { force: true });
@@ -151,6 +153,9 @@ export default function uiExtension(pi: ExtensionAPI) {
 
   pi.on("message_end", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
+    if (event.message.role === "user") {
+      ensureAutomaticSessionTitle(pi, ctx, event.message.content);
+    }
     updateState(ctx, pi);
     if (event.message.role === "assistant") void refreshChatGptUsage(ctx);
     notifyEditors();

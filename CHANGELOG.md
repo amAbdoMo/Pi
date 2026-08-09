@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added stable automatic session titles derived from each session's first substantive task, with manual names preserved and unnamed resumed sessions backfilled.
 - Added a cross-platform `npx --yes github:amAbdoMo/Pi` setup command that runs revision-local installer assets and propagates native command failures.
 - Retired Hypa from default setup after an antivirus detection under its package and confirmation that the reviewed `@hypabolic/hypa-win32-x64@0.1.13` artifact is unsigned; repeat installs remove managed package files without weakening antivirus protection.
 - Added best-effort FFmpeg and FFprobe provisioning through trusted system package managers so fresh workspaces can inspect screen recordings without bundling media binaries.
