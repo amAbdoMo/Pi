@@ -28,10 +28,12 @@ import {
   highlightTerminalSelection,
   selectedTerminalText,
   type TextSelectionPoint,
+  type TextSelectionRange,
 } from "./textSelection.ts";
 
 const WORKBENCH_SHELL_KEY = Symbol.for("amabdomo.pi.workbench-shell.v1");
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
+const SELECTION_AUTO_SCROLL_INTERVAL_MS = 50;
 
 export interface WorkbenchShellHandle {
   rebind(component: Component, options: WorkbenchShellOptions): void;
@@ -56,10 +58,18 @@ interface ColumnRequest {
   height: number;
 }
 
+interface TranscriptViewport {
+  logicalStart: number;
+  visibleRows: number;
+  screenRows: number;
+}
+
 interface WorkbenchTextSelection {
   anchor: TextSelectionPoint;
   focus: TextSelectionPoint;
   lines: string[];
+  source: "transcript" | "viewport";
+  viewportStart: number;
   dragging: boolean;
   moved: boolean;
   showReleasedFrame: boolean;
@@ -110,11 +120,17 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private placeComposerCursor: (request: ComposerCursorRequest) => boolean;
   private sidebarVisible = true;
   private scrollOffset = 0;
+  private latestMaxScrollOffset = 0;
   private previousScrollLineCount: number | undefined;
   private alternateScreenActive = false;
   private latestMainLines: string[] = [];
+  private latestScrollLines: string[] = [];
   private latestMainWidth = 0;
+  private transcriptViewport?: TranscriptViewport;
   private textSelection?: WorkbenchTextSelection;
+  private selectionDragPointer?: { x: number; y: number };
+  private selectionAutoScrollDirection = 0;
+  private selectionAutoScrollTimer?: ReturnType<typeof setInterval>;
   private composerScreenRows?: { start: number; end: number; renderRowOffset: number };
   private composerClickCandidate?: { x: number; y: number };
 
@@ -141,18 +157,21 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.copyText = options.copyText ?? copyToClipboard;
     this.onCopyError = options.onCopyError;
     this.placeComposerCursor = options.placeComposerCursor;
+    this.clearTextSelection();
+    this.composerClickCandidate = undefined;
     this.tui.terminal.write(WORKBENCH_MOUSE_TRACKING_SEQUENCE);
     this.tui.requestRender(true);
   }
 
   setSidebarVisible(visible: boolean): void {
     if (this.sidebarVisible === visible) return;
+    this.clearTextSelection();
     this.sidebarVisible = visible;
     this.tui.requestRender(true);
   }
 
   dispose(): void {
-    this.textSelection = undefined;
+    this.clearTextSelection();
     this.composerClickCandidate = undefined;
     this.removeScrollListener();
     this.tui.render = this.originalRender;
@@ -170,6 +189,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.originalStart();
     };
     this.tui.stop = () => {
+      this.clearTextSelection();
       this.originalStop();
       this.leaveAlternateScreen();
     };
@@ -184,6 +204,9 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.tui.terminal.rows,
       this.sidebarVisible,
     );
+    if (this.latestMainWidth > 0 && this.latestMainWidth !== dimensions.mainWidth) {
+      this.clearTextSelection();
+    }
     const { scrollLines, dockLines, composerDockRows } = mainViewportParts(
       this.tui,
       this.originalRender,
@@ -201,12 +224,39 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       scrollLines.length,
       metrics.maxOffset,
     );
+    const visibleMetrics = viewportMetrics(
+      scrollLines,
+      dockLines,
+      dimensions.height,
+      this.scrollOffset,
+    );
+    this.latestMaxScrollOffset = visibleMetrics.maxOffset;
     this.composerScreenRows = visibleComposerRows(
       composerDockRows,
       dockLines.length,
-      metrics.scrollHeight,
-      metrics.dockHeight,
+      visibleMetrics.scrollHeight,
+      visibleMetrics.dockHeight,
     );
+    const transcriptSelection = this.textSelection?.source === "transcript"
+      ? this.textSelection
+      : undefined;
+    const transcriptLineCount = transcriptSelection?.lines.length ?? scrollLines.length;
+    const maxTranscriptStart = Math.max(
+      0,
+      transcriptLineCount - visibleMetrics.scrollHeight,
+    );
+    const logicalStart = transcriptSelection
+      ? Math.max(0, Math.min(maxTranscriptStart, transcriptSelection.viewportStart))
+      : visibleMetrics.start;
+    if (transcriptSelection) transcriptSelection.viewportStart = logicalStart;
+    this.transcriptViewport = {
+      logicalStart,
+      visibleRows: Math.min(
+        visibleMetrics.scrollHeight,
+        Math.max(0, transcriptLineCount - logicalStart),
+      ),
+      screenRows: visibleMetrics.scrollHeight,
+    };
     this.previousScrollLineCount = scrollLines.length;
     const liveMainLines = fixedViewport(
       scrollLines,
@@ -215,13 +265,12 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.scrollOffset,
     ).map((line) => clipLine(line, dimensions.mainWidth));
     this.latestMainLines = liveMainLines;
+    this.latestScrollLines = scrollLines;
     this.latestMainWidth = dimensions.mainWidth;
 
-    this.reconcileTextSelection(liveMainLines);
-    const selectionLines = this.textSelection?.lines ?? liveMainLines;
-    const mainLines = this.textSelection
-      ? highlightTerminalSelection(selectionLines, this.textSelection)
-      : selectionLines;
+    this.refreshAutoScrollFocus();
+    this.reconcileTextSelection(liveMainLines, scrollLines);
+    const mainLines = this.highlightSelection(liveMainLines);
     if (!dimensions.showSidebar) return mainLines;
     return combineColumns({
       mainLines,
@@ -276,11 +325,14 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private applyMouseSelection(events: readonly TerminalMouseEvent[]): void {
     for (const event of events) {
       if (event.kind === "press" && event.button === 0) {
+        this.stopSelectionAutoScroll();
         if (!this.beginComposerClick(event)) this.beginTextSelection(event);
       } else if (event.kind === "drag" && event.button === 0) {
         this.promoteMovedComposerClickToSelection(event);
         this.extendTextSelection(event);
+        this.updateSelectionAutoScroll(event);
       } else if (event.kind === "release") {
+        this.stopSelectionAutoScroll();
         if (!this.releaseComposerClick(event)) this.releaseTextSelection(event);
       }
     }
@@ -321,7 +373,16 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private beginTextSelection(event: TerminalMouseEvent): void {
-    const point = this.selectionPoint(event, this.latestMainLines);
+    const transcriptPoint = this.transcriptSelectionPoint(
+      event,
+      this.latestScrollLines,
+      false,
+    );
+    const source = transcriptPoint ? "transcript" : "viewport";
+    const lines = source === "transcript"
+      ? this.latestScrollLines
+      : this.latestMainLines;
+    const point = transcriptPoint ?? this.viewportSelectionPoint(event, lines);
     if (!point) {
       this.clearTextSelection();
       return;
@@ -329,7 +390,11 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.textSelection = {
       anchor: point,
       focus: point,
-      lines: [...this.latestMainLines],
+      lines,
+      source,
+      viewportStart: source === "transcript"
+        ? (this.transcriptViewport?.logicalStart ?? 0)
+        : 0,
       dragging: true,
       moved: false,
       showReleasedFrame: false,
@@ -338,48 +403,78 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private extendTextSelection(event: TerminalMouseEvent): void {
-    if (!this.textSelection?.dragging) return;
-    const point = this.selectionPoint(event, this.textSelection.lines);
+    const selection = this.textSelection;
+    if (!selection?.dragging) return;
+    const point = selection.source === "transcript"
+      ? this.transcriptSelectionPoint(event, selection.lines, true)
+      : this.viewportSelectionPoint(event, selection.lines);
     if (!point) return;
-    this.textSelection.focus = point;
-    this.textSelection.moved = true;
+    selection.focus = point;
+    selection.moved = true;
     this.tui.requestRender();
   }
 
   private releaseTextSelection(event: TerminalMouseEvent): void {
-    if (!this.textSelection?.dragging) return;
-    const point = this.selectionPoint(event, this.textSelection.lines);
+    const selection = this.textSelection;
+    if (!selection?.dragging) return;
+    const point = selection.source === "transcript"
+      ? this.transcriptSelectionPoint(event, selection.lines, true)
+      : this.viewportSelectionPoint(event, selection.lines);
     if (point) {
-      this.textSelection.focus = point;
-      this.textSelection.moved ||= !samePoint(point, this.textSelection.anchor);
+      selection.focus = point;
+      selection.moved ||= !samePoint(point, selection.anchor);
     }
-    if (!this.textSelection.moved) {
+    if (!selection.moved) {
       this.clearTextSelection();
       this.tui.requestRender();
       return;
     }
-    this.textSelection.dragging = false;
-    this.textSelection.showReleasedFrame = true;
+    selection.dragging = false;
+    selection.showReleasedFrame = true;
     this.copyCurrentSelection();
     this.tui.requestRender();
   }
 
-  private selectionPoint(
-    event: TerminalMouseEvent,
+  private transcriptSelectionPoint(
+    event: Pick<TerminalMouseEvent, "x" | "y">,
+    lines: readonly string[],
+    clampToViewport: boolean,
+  ): TextSelectionPoint | undefined {
+    const viewport = this.transcriptViewport;
+    if (!viewport || viewport.visibleRows === 0) return undefined;
+    if (event.x < 1 || event.x > this.latestMainWidth || event.y < 1) return undefined;
+    const screenRow = event.y - 1;
+    if (!clampToViewport && screenRow >= viewport.visibleRows) return undefined;
+    const visibleRow = Math.max(0, Math.min(viewport.visibleRows - 1, screenRow));
+    return clampSelectionPoint(
+      lines,
+      viewport.logicalStart + visibleRow,
+      event.x - 1,
+    );
+  }
+
+  private viewportSelectionPoint(
+    event: Pick<TerminalMouseEvent, "x" | "y">,
     lines: readonly string[],
   ): TextSelectionPoint | undefined {
     if (event.x < 1 || event.x > this.latestMainWidth || event.y < 1) return undefined;
     return clampSelectionPoint(lines, event.y - 1, event.x - 1);
   }
 
-  private reconcileTextSelection(liveMainLines: string[]): void {
+  private reconcileTextSelection(
+    liveMainLines: string[],
+    liveScrollLines: string[],
+  ): void {
     const selection = this.textSelection;
     if (!selection || selection.dragging) return;
     if (selection.showReleasedFrame) {
       selection.showReleasedFrame = false;
       return;
     }
-    if (!sameLines(liveMainLines, selection.lines)) this.textSelection = undefined;
+    const liveLines = selection.source === "transcript"
+      ? liveScrollLines
+      : liveMainLines;
+    if (!sameLines(liveLines, selection.lines)) this.clearTextSelection();
   }
 
   private copyCurrentSelection(): void {
@@ -392,7 +487,110 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   }
 
   private clearTextSelection(): void {
+    this.stopSelectionAutoScroll();
     this.textSelection = undefined;
+  }
+
+  private highlightSelection(liveMainLines: string[]): string[] {
+    const selection = this.textSelection;
+    if (!selection) return liveMainLines;
+    if (selection.source === "viewport") {
+      return highlightTerminalSelection(selection.lines, selection);
+    }
+    const viewport = this.transcriptViewport;
+    if (!viewport) return liveMainLines;
+    const transcriptLines = selection.lines.slice(
+      viewport.logicalStart,
+      viewport.logicalStart + viewport.visibleRows,
+    ).map((line) => clipLine(line, this.latestMainWidth));
+    while (transcriptLines.length < viewport.screenRows) transcriptLines.push("");
+    const screenRange = offsetSelectionRows(selection, -viewport.logicalStart);
+    return [
+      ...highlightTerminalSelection(transcriptLines, screenRange),
+      ...liveMainLines.slice(viewport.screenRows),
+    ];
+  }
+
+  private refreshAutoScrollFocus(): void {
+    const selection = this.textSelection;
+    const pointer = this.selectionDragPointer;
+    if (!selection?.dragging || selection.source !== "transcript" || !pointer) return;
+    const point = this.transcriptSelectionPoint(pointer, selection.lines, true);
+    if (!point) return;
+    selection.focus = point;
+    selection.moved ||= !samePoint(point, selection.anchor);
+  }
+
+  private updateSelectionAutoScroll(event: TerminalMouseEvent): void {
+    const selection = this.textSelection;
+    const viewport = this.transcriptViewport;
+    if (!selection?.dragging || selection.source !== "transcript" || !viewport) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    if (event.x < 1 || event.x > this.latestMainWidth || viewport.screenRows === 0) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    const screenRow = event.y - 1;
+    this.selectionDragPointer = { x: event.x, y: event.y };
+    this.selectionAutoScrollDirection = screenRow <= 0
+      ? 1
+      : screenRow >= viewport.screenRows - 1
+        ? -1
+        : 0;
+    if (this.selectionAutoScrollDirection === 0) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    if (this.selectionAutoScrollTimer) return;
+    this.selectionAutoScrollTimer = setInterval(
+      () => this.autoScrollSelection(),
+      SELECTION_AUTO_SCROLL_INTERVAL_MS,
+    );
+    this.selectionAutoScrollTimer.unref?.();
+  }
+
+  private autoScrollSelection(): void {
+    const direction = this.selectionAutoScrollDirection;
+    const selection = this.textSelection;
+    if (!selection?.dragging || selection.source !== "transcript" || direction === 0) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    const viewport = this.transcriptViewport;
+    if (!viewport) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    const nextOffset = clampScrollOffset(
+      this.scrollOffset + direction,
+      this.latestMaxScrollOffset,
+    );
+    const maxViewportStart = Math.max(0, selection.lines.length - viewport.screenRows);
+    const nextViewportStart = Math.max(
+      0,
+      Math.min(maxViewportStart, selection.viewportStart - direction),
+    );
+    if (
+      nextOffset === this.scrollOffset ||
+      nextViewportStart === selection.viewportStart
+    ) {
+      this.stopSelectionAutoScroll();
+      return;
+    }
+    this.scrollOffset = nextOffset;
+    selection.viewportStart = nextViewportStart;
+    this.tui.requestRender();
+  }
+
+  private stopSelectionAutoScroll(): void {
+    if (this.selectionAutoScrollTimer) {
+      clearInterval(this.selectionAutoScrollTimer);
+      this.selectionAutoScrollTimer = undefined;
+    }
+    this.selectionAutoScrollDirection = 0;
+    this.selectionDragPointer = undefined;
   }
 
   private applyPageScroll(input: string): { consume: true } | undefined {
@@ -503,6 +701,16 @@ function clipLine(line: string, width: number): string {
 
 function fitLine(line: string, width: number): string {
   return truncateToWidth(line, Math.max(0, width), "", true);
+}
+
+function offsetSelectionRows(
+  range: TextSelectionRange,
+  rowOffset: number,
+): TextSelectionRange {
+  return {
+    anchor: { ...range.anchor, row: range.anchor.row + rowOffset },
+    focus: { ...range.focus, row: range.focus.row + rowOffset },
+  };
 }
 
 function sameLines(left: readonly string[], right: readonly string[]): boolean {

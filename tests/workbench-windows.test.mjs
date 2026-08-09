@@ -729,6 +729,12 @@ function chatRows(tui) {
   return tui.render(80).slice(0, 4).map((line) => line.trimEnd());
 }
 
+function plainChatRows(tui) {
+  return chatRows(tui).map((line) =>
+    line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+  );
+}
+
 const copyOptions = {
   onCopyError: (error) => assert.fail(error),
   placeComposerCursor: () => false,
@@ -935,6 +941,103 @@ test("workbench shell drag-selects only text cells and copies the exact range", 
     assert.deepEqual(input("ctrl+c"), { consume: true });
     assert.deepEqual(copied, ["17\ncha", "17\ncha"]);
     assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("dragging at either transcript edge auto-scrolls into off-screen rows", async () => {
+  const scenarios = [
+    {
+      name: "top edge",
+      prepare: () => {},
+      initialFirstRow: "chat-17",
+      press: "\x1b[<0;6;3M",
+      drag: "\x1b[<32;1;1M",
+      release: "\x1b[<0;1;1m",
+      moved: (rowNumber) => rowNumber < 17,
+    },
+    {
+      name: "bottom edge",
+      prepare: (input) => input("\x1b[<64;10;4M"),
+      initialFirstRow: "chat-14",
+      press: "\x1b[<0;1;2M",
+      drag: "\x1b[<32;7;4M",
+      release: "\x1b[<0;7;4m",
+      moved: (rowNumber) => rowNumber > 14,
+    },
+  ];
+
+  for (const scenario of scenarios) {
+    const { tui, input } = createWorkbenchTui();
+    const copied = [];
+    const handle = installWorkbenchShell(tui, component([]), {
+      ...copyOptions,
+      copyText: async (text) => { copied.push(text); },
+    });
+
+    try {
+      tui.render(80);
+      scenario.prepare(input);
+      assert.equal(plainChatRows(tui)[0], scenario.initialFirstRow, scenario.name);
+      input(scenario.press);
+      input(scenario.drag);
+
+      let visibleRows = plainChatRows(tui);
+      for (
+        let attempt = 0;
+        attempt < 10 && visibleRows[0] === scenario.initialFirstRow;
+        attempt++
+      ) {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        visibleRows = plainChatRows(tui);
+      }
+
+      const firstRowNumber = Number(visibleRows[0].slice("chat-".length));
+      assert.ok(scenario.moved(firstRowNumber), scenario.name);
+      assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
+      input(scenario.release);
+      assert.equal(copied.length, 1, scenario.name);
+      assert.ok(copied[0].split("\n").length >= 4, scenario.name);
+
+      const rowsAfterRelease = plainChatRows(tui);
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      assert.deepEqual(plainChatRows(tui), rowsAfterRelease, scenario.name);
+    } finally {
+      handle.dispose();
+    }
+  }
+});
+
+test("stopping the TUI cancels an active edge-scroll timer", async () => {
+  const { tui, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;6;3M");
+    input("\x1b[<32;1;1M");
+    const rowsBeforeStop = plainChatRows(tui);
+    tui.stop();
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.deepEqual(plainChatRows(tui), rowsBeforeStop);
+    assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
+  } finally {
+    handle.dispose();
+  }
+});
+
+test("changing the main viewport width clears its logical selection snapshot", () => {
+  const { tui, input } = createWorkbenchTui();
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
+
+  try {
+    tui.render(80);
+    input("\x1b[<0;1;1M");
+    input("\x1b[<32;4;2M");
+    assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
+    assert.doesNotMatch(tui.render(60).join("\n"), /\x1b\[7m/);
   } finally {
     handle.dispose();
   }

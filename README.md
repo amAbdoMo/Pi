@@ -113,7 +113,7 @@ Select `hypr-waves` from Pi settings if it is not already active.
 | `Tab` | Complete active or slash-command autocomplete; otherwise switch between plan and build modes |
 | `Shift+Tab` | Change thinking level |
 | Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport during and after agent activity; scrolling up holds position while output continues |
-| Mouse drag | Select only the exact Workbench text range and copy it on release; `Ctrl+C` copies and clears an active selection |
+| Mouse drag | Select the exact Workbench text range and copy it on release; holding at the chat edge auto-scrolls into off-screen rows, and `Ctrl+C` copies and clears the selection |
 | Mouse click in composer | Place the typing cursor at the clicked character, including wrapped and RTL text |
 | `Shift+drag` | Use the terminal's native selection instead of Workbench selection |
 | `/sidebar` | Toggle the workbench sidebar |
