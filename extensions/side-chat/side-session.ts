@@ -1,60 +1,63 @@
 import {
   createAgentSession,
-  createExtensionRuntime,
+  DefaultResourceLoader,
   getAgentDir,
   SessionManager,
+  SettingsManager,
   type AgentSession,
-  type ResourceLoader,
 } from "@earendil-works/pi-coding-agent";
 
-import { SIDE_TOOLS } from "./constants.ts";
 import type { SideChatSnapshot } from "./types.ts";
 
 export async function createSideSession(
   snapshot: SideChatSnapshot,
 ): Promise<AgentSession> {
+  const { agentDir, resourceLoader, settingsManager } = await loadSideResources(snapshot);
   const { session } = await createAgentSession({
     cwd: snapshot.cwd,
-    agentDir: getAgentDir(),
+    agentDir,
     model: snapshot.model,
     thinkingLevel: snapshot.thinkingLevel,
-    modelRegistry: snapshot.modelRegistry,
-    resourceLoader: createStaticResourceLoader(
-      createSideSystemPrompt(snapshot.systemPrompt),
-    ),
+    resourceLoader,
     sessionManager: SessionManager.inMemory(snapshot.cwd),
-    tools: SIDE_TOOLS,
+    settingsManager,
+    tools: snapshot.activeTools,
   });
 
-  session.state.messages = [...snapshot.inheritedMessages];
+  session.state.messages = structuredClone(snapshot.inheritedMessages);
   return session;
+}
+
+async function loadSideResources(snapshot: SideChatSnapshot) {
+  const agentDir = getAgentDir();
+  const settingsManager = SettingsManager.create(snapshot.cwd, agentDir);
+  const resourceLoader = new DefaultResourceLoader({
+    cwd: snapshot.cwd,
+    agentDir,
+    settingsManager,
+    systemPrompt: createSideSystemPrompt(snapshot.systemPrompt),
+    appendSystemPrompt: [],
+    noContextFiles: true,
+    noSkills: true,
+  });
+  await resourceLoader.reload({
+    resolveProjectTrust: async () => snapshot.projectTrusted,
+  });
+  return { agentDir, resourceLoader, settingsManager };
 }
 
 function createSideSystemPrompt(baseSystemPrompt: string): string {
   return [
     "You are Pi's /btw side-chat agent.",
     "This temporary side conversation is not saved to or injected into the main conversation history.",
-    "Answer clearly and concisely from the inherited main conversation context.",
-    "Use only read-only inspection tools. Never modify files or steer the main session.",
-    "If the inherited context is insufficient, say what is missing instead of guessing.",
+    "Use the inherited main-conversation context and the available tools to complete requested tasks, just like the main chat.",
+    "You may inspect and modify files, run commands, and use extension tools when the task requires them.",
+    "Tool side effects are real and shared with the main session; only this side conversation's messages remain isolated.",
+    "Never alter, steer, or append to the main session's conversation history.",
+    "If the inherited context is insufficient, inspect the project or explain what is missing instead of guessing.",
     "",
     "<main_system_prompt>",
     baseSystemPrompt,
     "</main_system_prompt>",
   ].join("\n");
-}
-
-function createStaticResourceLoader(systemPrompt: string): ResourceLoader {
-  const runtime = createExtensionRuntime();
-  return {
-    getExtensions: () => ({ extensions: [], errors: [], runtime }),
-    getSkills: () => ({ skills: [], diagnostics: [] }),
-    getPrompts: () => ({ prompts: [], diagnostics: [] }),
-    getThemes: () => ({ themes: [], diagnostics: [] }),
-    getAgentsFiles: () => ({ agentsFiles: [] }),
-    getSystemPrompt: () => systemPrompt,
-    getAppendSystemPrompt: () => [],
-    extendResources: () => {},
-    reload: async () => {},
-  };
 }

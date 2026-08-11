@@ -87,9 +87,34 @@ const codingAgentStub = String.raw`
   export const CONFIG_DIR_NAME = ".pi";
   export const DEFAULT_MAX_BYTES = 50 * 1024;
   export const DEFAULT_MAX_LINES = 2000;
+  export const agentSessionCalls = [];
+  export function resetAgentSessionCalls() { agentSessionCalls.length = 0; }
   export function getAgentDir() { return process.cwd(); }
   export function getMarkdownTheme() { return {}; }
+  export function buildSessionContext(entries) { return { messages: entries }; }
   export async function copyToClipboard() {}
+  export class SettingsManager {
+    static create(cwd, agentDir) { return { cwd, agentDir }; }
+  }
+  export class DefaultResourceLoader {
+    constructor(options) { this.options = options; this.reloaded = false; this.projectTrusted = false; }
+    async reload(options) {
+      this.reloaded = true;
+      this.projectTrusted = await options?.resolveProjectTrust?.({ extensionsResult: {} }) ?? false;
+    }
+  }
+  export class SessionManager {
+    static inMemory(cwd) { return { cwd, inMemory: true }; }
+  }
+  export async function createAgentSession(options) {
+    const session = {
+      state: { messages: [] },
+      dispose() {},
+      subscribe() { return () => {}; },
+    };
+    agentSessionCalls.push({ options, session });
+    return { session, extensionsResult: {} };
+  }
   export function truncateHead(text, options) {
     const lines = String(text).split("\n");
     let selected = lines.slice(0, options.maxLines);
@@ -182,6 +207,9 @@ registerHooks({
 });
 
 const { visibleWidth } = await import("@earendil-works/pi-tui");
+const { agentSessionCalls, resetAgentSessionCalls } = await import(
+  "@earendil-works/pi-coding-agent"
+);
 const { framedPanel: framedSubagentPanel, statusText } = await import(
   "../extensions/subagents/render/common.ts"
 );
@@ -199,6 +227,12 @@ const { renderTranscript } = await import(
 );
 const { SideChatOverlay } = await import(
   "../extensions/side-chat/overlay.ts"
+);
+const { createSnapshot } = await import(
+  "../extensions/side-chat/snapshot.ts"
+);
+const { createSideSession } = await import(
+  "../extensions/side-chat/side-session.ts"
 );
 const { renderWorkflowPanel, statusIcon } = await import(
   "../extensions/workflow/index.ts"
@@ -661,6 +695,50 @@ test("completed plan transcript recovery is idempotent across resume", async () 
   assert.equal(persistedAnnouncement.timeline.filter((event) => event.type === "entry" && event.customType === "plan-complete").length, 0);
 });
 
+test("side chat inherits active tools while isolating conversation messages", async () => {
+  const parentMessages = [{
+    role: "user",
+    content: [{ type: "text", text: "Main-session context" }],
+    timestamp: 1,
+  }];
+  const ctx = {
+    cwd: "C:/workspace",
+    model: { provider: "test", id: "task-model" },
+    sessionManager: { getBranch: () => parentMessages },
+    getSystemPrompt: () => "Main system prompt",
+    isProjectTrusted: () => true,
+    isIdle: () => true,
+  };
+  const pi = {
+    getThinkingLevel: () => "high",
+    getActiveTools: () => ["read", "bash", "edit", "write", "mcp"],
+  };
+
+  const snapshot = createSnapshot(ctx, pi);
+  snapshot.inheritedMessages[0].content[0].text = "Detached copy";
+  assert.equal(parentMessages[0].content[0].text, "Main-session context");
+  snapshot.inheritedMessages[0].content[0].text = "Main-session context";
+
+  resetAgentSessionCalls();
+  const session = await createSideSession(snapshot);
+  const call = agentSessionCalls.at(-1);
+
+  assert.deepEqual(snapshot.activeTools, ["read", "bash", "edit", "write", "mcp"]);
+  assert.deepEqual(call.options.tools, snapshot.activeTools);
+  assert.equal(call.options.sessionManager.inMemory, true);
+  assert.equal(call.options.resourceLoader.reloaded, true);
+  assert.equal(call.options.resourceLoader.projectTrusted, true);
+  assert.equal(call.options.resourceLoader.options.noContextFiles, true);
+  assert.equal(call.options.resourceLoader.options.noSkills, true);
+  assert.equal(call.options.resourceLoader.options.noExtensions, undefined);
+  assert.deepEqual(call.options.resourceLoader.options.appendSystemPrompt, []);
+  assert.match(call.options.resourceLoader.options.systemPrompt, /Main system prompt/);
+  assert.notStrictEqual(session.state.messages, snapshot.inheritedMessages);
+  assert.notStrictEqual(session.state.messages[0], snapshot.inheritedMessages[0]);
+  session.state.messages[0].content[0].text = "Side-session mutation";
+  assert.equal(snapshot.inheritedMessages[0].content[0].text, "Main-session context");
+});
+
 test("workbench frames remain width-safe without heavy borders", () => {
   for (const width of [8, 12, 24, 52]) {
     const subagent = framedSubagentPanel(theme, {
@@ -669,12 +747,11 @@ test("workbench frames remain width-safe without heavy borders", () => {
       width,
       minBodyRows: 3,
     });
-    const sideChat = framedSideChatPanel(
-      theme,
-      "Side chat with a title that exceeds narrow terminals",
-      ["A deliberately long transcript line that must be fitted."],
+    const sideChat = framedSideChatPanel(theme, {
+      title: "Side chat with a title that exceeds narrow terminals",
+      body: ["A deliberately long transcript line that must be fitted."],
       width,
-    );
+    });
 
     assertWidthSafe(subagent, width);
     assertWidthSafe(sideChat, width);
@@ -685,8 +762,15 @@ test("workbench frames remain width-safe without heavy borders", () => {
     assert.ok(subagent.slice(1, -1).every((line) =>
       line.startsWith("│") && line.endsWith("│")
     ));
-    assert.ok(sideChat[0].startsWith("┌"));
+    assert.ok(sideChat[0].startsWith("┌─"));
+    assert.ok(sideChat[0].endsWith("┐"));
+    assert.ok(sideChat.at(-1).startsWith("└"));
+    assert.ok(sideChat.at(-1).endsWith("┘"));
+    assert.ok(sideChat.slice(1, -1).every((line) =>
+      line.startsWith("│") && line.endsWith("│")
+    ));
     assert.doesNotMatch(subagent.join("\n"), /[┏┓┗┛━┃]/u);
+    assert.doesNotMatch(sideChat.join("\n"), /[┏┓┗┛━┃]/u);
   }
 });
 

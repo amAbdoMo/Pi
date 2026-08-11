@@ -10,7 +10,7 @@ import {
 } from "@earendil-works/pi-tui";
 
 import type { SideChatController } from "./controller.ts";
-import { framedPanel } from "./frame.ts";
+import { framedPanel, framedPanelContentWidth } from "./frame.ts";
 import { renderTranscript } from "./transcript.ts";
 
 interface VisibleTranscript {
@@ -58,13 +58,17 @@ export class SideChatOverlay implements Component, Focusable {
     if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
 
     const panelWidth = Math.max(4, width);
-    const contentWidth = Math.max(1, panelWidth - 4);
+    const contentWidth = framedPanelContentWidth(panelWidth);
     const rows = Math.max(10, this.getBodyRows());
     const transcript = renderTranscript(this.theme, this.controller.items, contentWidth);
     const visible = this.visibleTranscript(transcript, Math.max(2, rows - 7));
     const body = this.renderBody(contentWidth, rows, visible);
 
-    this.cachedLines = framedPanel(this.theme, "Side chat", body, panelWidth);
+    this.cachedLines = framedPanel(this.theme, {
+      title: "Side chat",
+      body,
+      width: panelWidth,
+    });
     this.cachedWidth = width;
     return this.cachedLines;
   }
@@ -99,7 +103,7 @@ export class SideChatOverlay implements Component, Focusable {
 
   private renderBody(width: number, rows: number, visible: VisibleTranscript): string[] {
     const body = [
-      this.theme.fg("warning", "Unsaved side thread · main history is unchanged"),
+      this.theme.fg("warning", "Side thread unsaved · tool changes are real"),
       this.theme.fg("dim", this.modelLine()),
       this.statusLine(),
       visible.hiddenBefore > 0

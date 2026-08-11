@@ -16,10 +16,11 @@ export function createSnapshot(
   return {
     cwd: ctx.cwd,
     model: ctx.model,
-    modelRegistry: ctx.modelRegistry,
     thinkingLevel: pi.getThinkingLevel(),
-    inheritedMessages: sessionContext.messages,
+    activeTools: pi.getActiveTools(),
+    inheritedMessages: structuredClone(sessionContext.messages),
     systemPrompt: ctx.getSystemPrompt(),
+    projectTrusted: ctx.isProjectTrusted(),
     inheritedWhileMainRunning: !ctx.isIdle(),
   };
 }

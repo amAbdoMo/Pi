@@ -12,7 +12,7 @@ export default function sideChat(pi: ExtensionAPI) {
   };
 
   pi.registerCommand(COMMAND, {
-    description: "Ask a temporary side question without adding it to main context/history",
+    description: "Run a temporary side task with the main chat's context and tools",
     handler,
   });
 

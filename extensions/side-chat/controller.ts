@@ -21,7 +21,7 @@ export class SideChatController {
     this.events.addStatus(
       "info",
       `Side chat opened with ${count} inherited context message${plural}. ` +
-        "Main history will not receive this chat.",
+        "Its messages stay private, but tool changes are real.",
     );
     if (snapshot.inheritedWhileMainRunning) {
       this.events.addStatus(

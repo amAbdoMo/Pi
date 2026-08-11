@@ -1,9 +1,6 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ModelRegistry,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export type ChatItem =
   | { kind: "user"; text: string }
@@ -17,9 +14,10 @@ export type ToolItem = Extract<ChatItem, { kind: "tool" }>;
 export interface SideChatSnapshot {
   cwd: string;
   model: Model<any>;
-  modelRegistry: ModelRegistry;
   thinkingLevel: ReturnType<ExtensionAPI["getThinkingLevel"]>;
+  activeTools: string[];
   inheritedMessages: AgentMessage[];
   systemPrompt: string;
+  projectTrusted: boolean;
   inheritedWhileMainRunning: boolean;
 }
