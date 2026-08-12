@@ -13,7 +13,6 @@ export function playwrightMcpArgsWithTemporaryOutput(
 
 	const nextArgs = [...args];
 	if (!hasOption(nextArgs, "--output-dir")) nextArgs.push("--output-dir", outputDirectory);
-	if (!hasOption(nextArgs, "--output-mode")) nextArgs.push("--output-mode", "stdout");
 	return nextArgs;
 }
 

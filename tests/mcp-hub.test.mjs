@@ -148,7 +148,7 @@ test("MCP config accepts JSONC and OpenCode-style server entries", async (t) => 
   assert.deepEqual(configuration.loadedSources, [sourcePath]);
 });
 
-test("Playwright MCP output defaults to temporary stdout artifacts", () => {
+test("Playwright MCP output defaults to a temporary artifact directory", () => {
   const outputDirectory = join(tmpdir(), "pi-playwright-policy-test");
   assert.deepEqual(
     playwrightMcpArgsWithTemporaryOutput(
@@ -163,8 +163,6 @@ test("Playwright MCP output defaults to temporary stdout artifacts", () => {
       "msedge",
       "--output-dir",
       outputDirectory,
-      "--output-mode",
-      "stdout",
     ],
   );
   assert.deepEqual(
@@ -178,8 +176,6 @@ test("Playwright MCP output defaults to temporary stdout artifacts", () => {
       "msedge",
       "--output-dir",
       outputDirectory,
-      "--output-mode",
-      "stdout",
     ],
   );
   assert.deepEqual(
