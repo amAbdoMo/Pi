@@ -83,6 +83,21 @@ const tuiStub = String.raw`
   }
 `;
 
+const terminalImageStub = String.raw`
+  export function getKittyImageMetadata(line) {
+    const controls = /\x1b_G([^;]*);/.exec(line)?.[1];
+    const rows = /(?:^|,)r=(\d+)(?:,|$)/.exec(controls ?? "")?.[1];
+    return rows ? { rows: Number.parseInt(rows, 10) } : undefined;
+  }
+  export function cropKittyImageLine(line, hiddenRows, visibleRows) {
+    const match = /\x1b_G([^;]*);/.exec(line);
+    if (!match) return line;
+    const controls = match[1].split(",").filter((control) => !/^[yhr]=/.test(control));
+    controls.push("y=" + hiddenRows, "h=" + visibleRows, "r=" + visibleRows);
+    return line.slice(0, match.index) + "\x1b_G" + controls.join(",") + ";" + line.slice(match.index + match[0].length);
+  }
+`;
+
 const codingAgentStub = String.raw`
   export const CONFIG_DIR_NAME = ".pi";
   export const DEFAULT_MAX_BYTES = 50 * 1024;
@@ -171,6 +186,7 @@ const codingAgentStub = String.raw`
 
 const moduleStubs = new Map([
   ["@earendil-works/pi-tui", tuiStub],
+  ["@earendil-works/pi-tui/dist/terminal-image.js", terminalImageStub],
   ["@earendil-works/pi-coding-agent", codingAgentStub],
   ["@earendil-works/pi-ai", "export function StringEnum() { return {}; }"],
   ["typebox", "export const Type = new Proxy({}, { get: () => () => ({}) });"],
@@ -984,10 +1000,12 @@ const copyOptions = {
   placeComposerCursor: () => false,
 };
 
-function createWorkbenchTui() {
+function createWorkbenchTui(options = {}) {
   let listener;
   const writes = [];
-  const chatLines = Array.from({ length: 20 }, (_, index) => `chat-${index + 1}`);
+  const chatLines = options.chatLines
+    ? [...options.chatLines]
+    : Array.from({ length: 20 }, (_, index) => `chat-${index + 1}`);
   const tui = {
     terminal: {
       columns: 80,
@@ -1090,6 +1108,45 @@ test("workbench columns preserve inline image commands and reserved rows", () =>
   );
 });
 
+test("workbench shell keeps clipped Kitty images visible and above the dock while scrolling", () => {
+  const kittyImage = "\x1b_Ga=T,f=100,q=2,C=1,c=12,r=6,i=7;AAAA\x1b\\";
+  const { tui, input } = createWorkbenchTui({
+    chatLines: [kittyImage, "", "", "", "", "", "after"],
+  });
+  const handle = installWorkbenchShell(tui, component([]), copyOptions);
+
+  try {
+    const bottomFrame = tui.render(80);
+    assert.match(bottomFrame[0], /y=3,h=3,r=3/);
+    assert.equal(bottomFrame[3].trimEnd(), "after");
+    assert.deepEqual(bottomFrame.slice(4).map((line) => line.trimEnd()), [
+      "dock-1",
+      "dock-2",
+      "dock-3",
+      "dock-4",
+    ]);
+
+    input("\x1b[<0;1;4M");
+    input("\x1b[<32;5;4M");
+    input("\x1b[<0;5;4m");
+    const selectedFrame = tui.render(80);
+    assert.match(selectedFrame[0], /y=3,h=3,r=3/);
+    assert.match(selectedFrame[3], /\x1b\[7mafter\x1b\[27m/);
+
+    input("\x1b[<64;10;2M");
+    const scrolledFrame = tui.render(80);
+    assert.match(scrolledFrame[0], /y=0,h=4,r=4/);
+    assert.deepEqual(scrolledFrame.slice(4).map((line) => line.trimEnd()), [
+      "dock-1",
+      "dock-2",
+      "dock-3",
+      "dock-4",
+    ]);
+  } finally {
+    handle.dispose();
+  }
+});
+
 test("workbench shell routes mouse wheel to chat and preserves position while streaming", () => {
   const { tui, writes, input, appendChat } = createWorkbenchTui();
   const handle = installWorkbenchShell(tui, component([]), copyOptions);
@@ -1181,6 +1238,9 @@ test("workbench shell routes composer clicks and preserves drag selection", () =
     input("\x1b[<32;4;6M");
     input("\x1b[<0;4;6m");
     assert.deepEqual(cursorRequests.length, 1);
+    assert.deepEqual(copied, []);
+    assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
+    assert.deepEqual(input("ctrl+c"), { consume: true });
     assert.deepEqual(copied, ["dock"]);
   } finally {
     handle.dispose();
@@ -1206,14 +1266,14 @@ test("workbench shell drag-selects only text cells and copies the exact range", 
     assert.deepEqual(input("\x1b[<32;3;2M"), { consume: true });
     assert.deepEqual(input("\x1b[<0;3;2m"), { consume: true });
 
-    assert.deepEqual(copied, ["17\ncha"]);
+    assert.deepEqual(copied, []);
     const selectedRows = tui.render(80).slice(0, 2);
     assert.match(selectedRows[0], /chat-\x1b\[7m17\x1b\[27m/);
     assert.match(selectedRows[1], /\x1b\[7mcha\x1b\[27m/);
     assert.ok(selectedRows.every((line) => visibleWidth(line) < 80));
 
     assert.deepEqual(input("ctrl+c"), { consume: true });
-    assert.deepEqual(copied, ["17\ncha", "17\ncha"]);
+    assert.deepEqual(copied, ["17\ncha"]);
     assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
   } finally {
     handle.dispose();
@@ -1271,6 +1331,9 @@ test("dragging at either transcript edge auto-scrolls into off-screen rows", asy
       assert.ok(scenario.moved(firstRowNumber), scenario.name);
       assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
       input(scenario.release);
+      assert.equal(copied.length, 0, scenario.name);
+      assert.match(tui.render(80).join("\n"), /\x1b\[7m/);
+      assert.deepEqual(input("ctrl+c"), { consume: true }, scenario.name);
       assert.equal(copied.length, 1, scenario.name);
       assert.ok(copied[0].split("\n").length >= 4, scenario.name);
 
@@ -1331,6 +1394,7 @@ test("workbench shell reports clipboard failures", async () => {
     input("\x1b[<0;1;1M");
     input("\x1b[<32;2;1M");
     input("\x1b[<0;2;1m");
+    input("ctrl+c");
     await new Promise((resolve) => setImmediate(resolve));
     assert.deepEqual(copyErrors, ["clipboard unavailable"]);
   } finally {
@@ -1355,7 +1419,7 @@ test("workbench shell preserves a selection while streaming and releases it on f
 
     input("\x1b[<32;2;1M");
     input("\x1b[<0;2;1m");
-    assert.deepEqual(copied, ["ch"]);
+    assert.deepEqual(copied, []);
     assert.match(tui.render(80)[0], /\x1b\[7mch\x1b\[27mat-17/);
 
     appendChat("chat-23");

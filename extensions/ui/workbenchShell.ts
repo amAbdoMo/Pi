@@ -5,6 +5,12 @@ import {
   type Component,
   type TUI,
 } from "@earendil-works/pi-tui";
+// Pi TUI uses these helpers for its native fullscreen viewport but does not yet
+// re-export them from the package root.
+import {
+  cropKittyImageLine,
+  getKittyImageMetadata,
+} from "@earendil-works/pi-tui/dist/terminal-image.js";
 
 import { isWorkbenchModalActive } from "./modalState.ts";
 import {
@@ -36,6 +42,10 @@ const KITTY_IMAGE_PREFIX = "\x1b_G";
 const ITERM_IMAGE_PREFIX = "\x1b]1337;File=";
 const MOUSE_WHEEL_SCROLL_ROWS = 3;
 const SELECTION_AUTO_SCROLL_INTERVAL_MS = 40;
+const KITTY_IMAGE_VIEWPORT = {
+  getMetadata: getKittyImageMetadata,
+  cropLine: cropKittyImageLine,
+};
 
 export interface WorkbenchShellHandle {
   rebind(component: Component, options: WorkbenchShellOptions): void;
@@ -265,6 +275,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       dockLines,
       dimensions.height,
       this.scrollOffset,
+      KITTY_IMAGE_VIEWPORT,
     ).map((line) => clipLine(line, dimensions.mainWidth));
     this.latestMainLines = liveMainLines;
     this.latestScrollLines = scrollLines;
@@ -433,7 +444,6 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     }
     selection.dragging = false;
     selection.showReleasedFrame = true;
-    this.copyCurrentSelection();
     this.tui.requestRender();
   }
 
@@ -501,11 +511,17 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     }
     const viewport = this.transcriptViewport;
     if (!viewport) return liveMainLines;
-    const transcriptLines = selection.lines.slice(
-      viewport.logicalStart,
-      viewport.logicalStart + viewport.visibleRows,
+    const selectionScrollOffset = Math.max(
+      0,
+      selection.lines.length - viewport.screenRows - viewport.logicalStart,
+    );
+    const transcriptLines = fixedViewport(
+      selection.lines,
+      [],
+      viewport.screenRows,
+      selectionScrollOffset,
+      KITTY_IMAGE_VIEWPORT,
     ).map((line) => clipLine(line, this.latestMainWidth));
-    while (transcriptLines.length < viewport.screenRows) transcriptLines.push("");
     const screenRange = offsetSelectionRows(selection, -viewport.logicalStart);
     return [
       ...highlightTerminalSelection(transcriptLines, screenRange),

@@ -86,6 +86,33 @@ test("chat viewport keeps recent lines and supports paging into older output", (
   assert.deepEqual(fixedViewport(chat, dock, 4, 2), ["2", "3", "4", "composer"]);
 });
 
+test("chat viewport crops Kitty images before they can overlap the dock", () => {
+  const image = "kitty:r=5";
+  const images = {
+    getMetadata: (line) => line.startsWith("kitty:") ? { rows: 5 } : undefined,
+    cropLine: (line, hiddenRows, visibleRows) => `${line}:crop=${hiddenRows},${visibleRows}`,
+  };
+
+  assert.deepEqual(
+    fixedViewport([image], ["composer"], 3, 0, images),
+    [`${image}:crop=0,2`, "", "composer"],
+  );
+});
+
+test("chat viewport replays a cropped Kitty image when scrolling starts inside it", () => {
+  const image = "kitty:r=5";
+  const images = {
+    getMetadata: (line) => line.startsWith("kitty:") ? { rows: 5 } : undefined,
+    cropLine: (line, hiddenRows, visibleRows) => `${line}:crop=${hiddenRows},${visibleRows}`,
+  };
+  const chat = [image, "", "", "", "", "after"];
+
+  assert.deepEqual(
+    fixedViewport(chat, ["composer"], 4, 0, images),
+    [`${image}:crop=3,2`, "", "after", "composer"],
+  );
+});
+
 test("scroll anchor remains on the same chat rows while streaming appends output", () => {
   assert.equal(preserveScrollAnchor(0, 20, 24, 20), 0);
   assert.equal(preserveScrollAnchor(3, 20, 24, 20), 7);

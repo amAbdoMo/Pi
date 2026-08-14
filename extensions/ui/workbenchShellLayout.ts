@@ -31,6 +31,19 @@ export interface WorkbenchChildGroups<T> {
   dockChildren: T[];
 }
 
+export interface KittyImageViewportAdapter {
+  getMetadata(line: string): { rows: number } | undefined;
+  cropLine(line: string, hiddenRows: number, visibleRows: number): string;
+}
+
+interface KittyImageViewportRequest {
+  scrollLines: readonly string[];
+  start: number;
+  end: number;
+  height: number;
+  images: KittyImageViewportAdapter;
+}
+
 export function workbenchDimensions(
   terminalWidth: number,
   terminalHeight: number,
@@ -80,15 +93,59 @@ export function fixedViewport(
   dockLines: readonly string[],
   height: number,
   scrollOffset = 0,
+  kittyImages?: KittyImageViewportAdapter,
 ): string[] {
   const metrics = viewportMetrics(scrollLines, dockLines, height, scrollOffset);
-  const visibleScroll = scrollLines.slice(metrics.start, metrics.end);
+  const visibleScroll = kittyImages && metrics.scrollHeight > 0
+    ? cropVisibleKittyImages({
+        scrollLines,
+        start: metrics.start,
+        end: metrics.end,
+        height: metrics.scrollHeight,
+        images: kittyImages,
+      })
+    : scrollLines.slice(metrics.start, metrics.end);
   const spacerCount = Math.max(0, metrics.scrollHeight - visibleScroll.length);
   return [
     ...visibleScroll,
     ...Array.from({ length: spacerCount }, () => ""),
     ...dockLines.slice(-metrics.dockHeight),
   ];
+}
+
+function cropVisibleKittyImages(request: KittyImageViewportRequest): string[] {
+  const visibleLines = request.scrollLines.slice(request.start, request.end).map((line, row) => {
+    const metadata = request.images.getMetadata(line);
+    if (!metadata) return line;
+    const visibleRows = Math.min(metadata.rows, request.height - row);
+    return visibleRows < metadata.rows
+      ? request.images.cropLine(line, 0, visibleRows)
+      : line;
+  });
+  const replayedImage = croppedKittyImageAtViewportStart(request);
+  return replayedImage === undefined
+    ? visibleLines
+    : [replayedImage, ...visibleLines.slice(1)];
+}
+
+function croppedKittyImageAtViewportStart(
+  request: KittyImageViewportRequest,
+): string | undefined {
+  if (request.start === 0 || request.start === request.end) return undefined;
+  for (let imageRow = request.start - 1; imageRow >= 0; imageRow--) {
+    const line = request.scrollLines[imageRow] ?? "";
+    if (line === "") continue;
+    const metadata = request.images.getMetadata(line);
+    if (!metadata) return undefined;
+    const hiddenRows = request.start - imageRow;
+    if (hiddenRows >= metadata.rows) return undefined;
+    return request.images.cropLine(
+      line,
+      hiddenRows,
+      Math.min(request.height, metadata.rows - hiddenRows),
+    );
+  }
+  return undefined;
 }
 
 export function viewportMetrics(
