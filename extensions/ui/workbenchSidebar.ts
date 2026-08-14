@@ -81,7 +81,7 @@ export class WorkbenchSidebarController {
     this.handle = undefined;
     this.component?.dispose();
     this.tui = tui;
-    this.desiredVisible = true;
+    this.desiredVisible = tui.mode !== "fullscreen";
     this.component = new WorkbenchSidebar(
       theme,
       () => this.hide(),

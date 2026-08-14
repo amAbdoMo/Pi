@@ -13,6 +13,9 @@ const tuiStub = String.raw`
     ctrl: (key) => "ctrl+" + key,
     ctrlAlt: (key) => "ctrl+alt+" + key,
   };
+  let capabilities = { images: "kitty", trueColor: true, hyperlinks: true };
+  export function getCapabilities() { return capabilities; }
+  export function setCapabilities(next) { capabilities = next; }
   export function matchesKey(data, key) { return data === key; }
   export function isKeyRelease() { return false; }
   function cellWidth(character) {
@@ -222,7 +225,7 @@ registerHooks({
   },
 });
 
-const { visibleWidth } = await import("@earendil-works/pi-tui");
+const { getCapabilities, setCapabilities, visibleWidth } = await import("@earendil-works/pi-tui");
 const { agentSessionCalls, resetAgentSessionCalls } = await import(
   "@earendil-works/pi-coding-agent"
 );
@@ -1106,6 +1109,88 @@ test("workbench columns preserve inline image commands and reserved rows", () =>
     }),
     [`${itermImage}\x1b[8Cok  `],
   );
+});
+
+test("native fullscreen keeps renderer ownership and copies selection only on Ctrl+C", () => {
+  const copied = [];
+  const overlays = [];
+  let inputListener;
+  const fullscreenPrototype = {
+    copySelectionToClipboard() { copied.push("selected text"); },
+    getSelectionBounds() {
+      return this.selectionAnchor && this.selectionFocus ? { start: {}, end: {} } : undefined;
+    },
+  };
+  const tui = Object.assign(Object.create(fullscreenPrototype), {
+    mode: "fullscreen",
+    terminal: { columns: 160, rows: 40, write() {} },
+    selectionAnchor: {},
+    selectionFocus: {},
+    render: () => ["native"],
+    start() {},
+    stop() {},
+    invalidate() {},
+    requestRender() {},
+    addInputListener(listener) {
+      inputListener = listener;
+      return () => { inputListener = undefined; };
+    },
+    showOverlay(_component, options) {
+      const overlay = {
+        options,
+        hidden: false,
+        hide() { this.hidden = true; },
+        setHidden(hidden) { this.hidden = hidden; },
+        isHidden() { return this.hidden; },
+        focus() {},
+        unfocus() {},
+        isFocused() { return false; },
+      };
+      overlays.push(overlay);
+      return overlay;
+    },
+  });
+  const originalRender = tui.render;
+  const originalStart = tui.start;
+  const originalStop = tui.stop;
+  const previousTermProgram = process.env.TERM_PROGRAM;
+  const previousCapabilities = getCapabilities();
+  process.env.TERM_PROGRAM = "WarpTerminal";
+  setCapabilities({ images: null, trueColor: true, hyperlinks: true });
+
+  const handle = installWorkbenchShell(tui, component(["sidebar"]), copyOptions);
+  try {
+    assert.equal(getCapabilities().images, "kitty");
+    assert.equal(tui.render, originalRender);
+    assert.equal(tui.start, originalStart);
+    assert.equal(tui.stop, originalStop);
+    assert.equal(overlays.length, 0);
+
+    tui.copySelectionToClipboard();
+    assert.deepEqual(copied, []);
+    assert.deepEqual(inputListener("ctrl+c"), { consume: true });
+    assert.deepEqual(copied, ["selected text"]);
+    assert.equal(tui.selectionAnchor, undefined);
+    assert.equal(tui.selectionFocus, undefined);
+    assert.equal(inputListener("ctrl+c"), undefined);
+
+    handle.setSidebarVisible(true);
+    assert.equal(overlays.length, 1);
+    assert.equal(overlays[0].options.nonCapturing, true);
+    handle.setSidebarVisible(false);
+    assert.equal(overlays[0].hidden, true);
+  } finally {
+    handle.dispose();
+    setCapabilities(previousCapabilities);
+    if (previousTermProgram === undefined) delete process.env.TERM_PROGRAM;
+    else process.env.TERM_PROGRAM = previousTermProgram;
+  }
+
+  tui.selectionAnchor = {};
+  tui.selectionFocus = {};
+  tui.copySelectionToClipboard();
+  assert.deepEqual(copied, ["selected text", "selected text"]);
+  assert.equal(inputListener, undefined);
 });
 
 test("workbench shell keeps clipped Kitty images visible and above the dock while scrolling", () => {

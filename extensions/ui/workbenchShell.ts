@@ -1,16 +1,27 @@
+import { createRequire } from "node:module";
+
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import {
+  getCapabilities,
   matchesKey,
+  setCapabilities,
   truncateToWidth,
   type Component,
+  type OverlayHandle,
   type TUI,
 } from "@earendil-works/pi-tui";
-// Pi TUI uses these helpers for its native fullscreen viewport but does not yet
-// re-export them from the package root.
-import {
+
+// Pi aliases public TUI imports to its host module, but that alias mangles private
+// subpaths. Resolve these helpers from Pi's entry point to share its image registry.
+const {
   cropKittyImageLine,
   getKittyImageMetadata,
-} from "@earendil-works/pi-tui/dist/terminal-image.js";
+} = createRequire(process.argv[1])(
+  "@earendil-works/pi-tui/dist/terminal-image.js",
+) as {
+  cropKittyImageLine(line: string, hiddenRows: number, visibleRows: number): string;
+  getKittyImageMetadata(line: string): { rows: number } | undefined;
+};
 
 import { isWorkbenchModalActive } from "./modalState.ts";
 import {
@@ -87,6 +98,13 @@ interface WorkbenchTextSelection {
   showReleasedFrame: boolean;
 }
 
+interface NativeFullscreenTui extends TUI {
+  copySelectionToClipboard?: () => void;
+  getSelectionBounds?: () => unknown;
+  selectionAnchor?: unknown;
+  selectionFocus?: unknown;
+}
+
 export interface ComposerCursorRequest {
   renderRow: number;
   screenColumn: number;
@@ -104,21 +122,113 @@ export function installWorkbenchShell(
   sidebar: Component,
   options: WorkbenchShellOptions,
 ): WorkbenchShellHandle {
+  ensureWarpKittyImages(tui);
   const shellTui = tui as ShellTui;
   const existing = shellTui[WORKBENCH_SHELL_KEY];
   if (existing) {
     existing.rebind(sidebar, options);
     return existing;
   }
-  const installation = new WorkbenchShellInstallation(
-    tui,
-    sidebar,
-    options.copyText ?? copyToClipboard,
-    options.onCopyError,
-    options.placeComposerCursor,
-  );
+  const installation = tui.mode === "fullscreen"
+    ? new NativeFullscreenWorkbenchInstallation(tui, sidebar, options.onCopyError)
+    : new WorkbenchShellInstallation(
+        tui,
+        sidebar,
+        options.copyText ?? copyToClipboard,
+        options.onCopyError,
+        options.placeComposerCursor,
+      );
   shellTui[WORKBENCH_SHELL_KEY] = installation;
   return installation;
+}
+
+function ensureWarpKittyImages(tui: TUI): void {
+  if (process.env.TERM_PROGRAM !== "WarpTerminal") return;
+  const capabilities = getCapabilities();
+  if (capabilities.images === "kitty") return;
+  setCapabilities({ ...capabilities, images: "kitty" });
+  tui.invalidate();
+}
+
+class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
+  private readonly tui: NativeFullscreenTui;
+  private readonly nativeCopySelection?: () => void;
+  private readonly nativeSelectionBounds?: () => unknown;
+  private readonly suppressNativeCopy = () => {};
+  private readonly removeInputListener: () => void;
+  private sidebar: Component;
+  private sidebarVisible = false;
+  private overlay?: OverlayHandle;
+
+  constructor(tui: TUI, sidebar: Component, onCopyError: (error: Error) => void) {
+    this.tui = tui as NativeFullscreenTui;
+    this.nativeCopySelection = typeof this.tui.copySelectionToClipboard === "function"
+      ? this.tui.copySelectionToClipboard
+      : undefined;
+    this.nativeSelectionBounds = typeof this.tui.getSelectionBounds === "function"
+      ? this.tui.getSelectionBounds
+      : undefined;
+    if (this.nativeCopySelection && this.nativeSelectionBounds) {
+      this.tui.copySelectionToClipboard = this.suppressNativeCopy;
+    } else {
+      onCopyError(new Error("Fullscreen selection controls are unavailable in this Pi version."));
+    }
+    this.sidebar = sidebar;
+    this.removeInputListener = tui.addInputListener((input) => this.applySelectionKey(input));
+  }
+
+  rebind(sidebar: Component, _options: WorkbenchShellOptions): void {
+    const wasVisible = this.sidebarVisible;
+    this.hideOverlay();
+    this.sidebar = sidebar;
+    if (wasVisible) this.showOverlay();
+  }
+
+  setSidebarVisible(visible: boolean): void {
+    this.sidebarVisible = visible;
+    if (visible) this.showOverlay();
+    else this.hideOverlay();
+  }
+
+  dispose(): void {
+    this.hideOverlay();
+    this.removeInputListener();
+    if (this.nativeCopySelection) this.tui.copySelectionToClipboard = this.nativeCopySelection;
+    (this.tui as ShellTui)[WORKBENCH_SHELL_KEY] = undefined;
+    this.tui.requestRender(true);
+  }
+
+  private applySelectionKey(input: string): { consume: true } | undefined {
+    const copySelection = this.nativeCopySelection;
+    if (!matchesKey(input, "ctrl+c") || !copySelection || !this.hasSelection()) return undefined;
+    Reflect.apply(copySelection, this.tui, []);
+    this.tui.selectionAnchor = undefined;
+    this.tui.selectionFocus = undefined;
+    this.tui.requestRender();
+    return { consume: true };
+  }
+
+  private hasSelection(): boolean {
+    return Boolean(
+      this.nativeSelectionBounds && Reflect.apply(this.nativeSelectionBounds, this.tui, []),
+    );
+  }
+
+  private showOverlay(): void {
+    if (this.overlay) return;
+    this.overlay = this.tui.showOverlay(this.sidebar, {
+      anchor: "top-right",
+      width: 40,
+      maxHeight: "100%",
+      margin: 0,
+      nonCapturing: true,
+    });
+  }
+
+  private hideOverlay(): void {
+    this.overlay?.hide();
+    this.overlay = undefined;
+  }
 }
 
 class WorkbenchShellInstallation implements WorkbenchShellHandle {
@@ -189,7 +299,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.tui.render = this.originalRender;
     this.tui.start = this.originalStart;
     this.tui.stop = this.originalStop;
-    delete (this.tui as ShellTui)[WORKBENCH_SHELL_KEY];
+    (this.tui as ShellTui)[WORKBENCH_SHELL_KEY] = undefined;
     this.leaveAlternateScreen();
     this.tui.requestRender(true);
   }
