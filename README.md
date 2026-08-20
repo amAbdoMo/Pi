@@ -201,7 +201,7 @@ Personal servers live in `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc` on
 }
 ```
 
-Open `/mcp` and press `R` after changing configuration. Enabled servers remain idle until connected or called; the sidebar reports Connected, Connecting, Disconnected, Disabled, or Error for each server. Global discovery uses cached metadata and does not wake every idle server.
+Open `/mcp` and press `R` after changing configuration. Enabled servers remain idle until connected or called; the sidebar reports Connected, Connecting, Disconnected, Disabled, or Error for each server. Global discovery uses cached metadata for up to 24 hours and does not wake every idle server.
 
 <details>
 <summary>Configuration locations and compatibility</summary>
@@ -215,7 +215,7 @@ Later files override servers with the same name:
 
 The OpenCode-style top-level `mcp` object is recommended. Existing `mcpServers` and `servers` containers are also supported, along with `command` plus `args`, `env`, `disabled`, and `stdio` or `streamable-http` transport names.
 
-OAuth configuration is detected but not yet supported. Keep credentials out of this repository. Prefer inherited environment variables for local servers; remote header values are currently literal configuration values.
+OAuth configuration is detected but not yet supported. Keep credentials out of this repository. Prefer inherited environment variables for local servers; remote header values are literal configuration values and credential-bearing headers require HTTPS except for loopback servers.
 
 </details>
 

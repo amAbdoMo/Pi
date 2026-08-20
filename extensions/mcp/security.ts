@@ -2,19 +2,19 @@ import type { McpServerDefinition, McpToolMetadata } from "./types.ts";
 
 const REDACTED = "[redacted]";
 const OAUTH_UNSUPPORTED = "Server requires OAuth, which Pi MCP Hub does not support yet.";
+const MIN_REDACTABLE_SECRET_LENGTH = 8;
+const MIN_DISTINCTIVE_VALUE_LENGTH = 12;
 
 export function configuredSecretValues(definition: McpServerDefinition): string[] {
 	const secrets = new Set<string>();
 	if (definition.config.transport === "stdio") {
 		for (const [envName, envValue] of Object.entries(definition.config.env ?? {})) {
-			addSecret(secrets, envValue);
-			if (isSensitiveName(envName)) addSecret(secrets, envValue.replace(/^\S+\s+/, ""));
+			addConfiguredValue(secrets, envName, envValue);
 		}
 		addSensitiveArguments(secrets, definition.config.args);
 	} else {
 		for (const [headerName, headerValue] of Object.entries(definition.config.headers ?? {})) {
-			addSecret(secrets, headerValue);
-			if (isSensitiveName(headerName)) addSecret(secrets, headerValue.replace(/^\S+\s+/, ""));
+			addConfiguredValue(secrets, headerName, headerValue);
 		}
 		addUrlSecrets(secrets, definition.config.url);
 	}
@@ -42,8 +42,12 @@ export function redactedToolMetadata(rawTool: unknown, definition: McpServerDefi
 	if (!isRecord(rawTool) || typeof rawTool.name !== "string" || !isRecord(rawTool.inputSchema)) return undefined;
 	const description = typeof rawTool.description === "string" ? redactServerSecrets(rawTool.description, definition) : undefined;
 	const inputSchema = redactUnknown(rawTool.inputSchema, definition) as Record<string, unknown>;
+	const outputSchema = isRecord(rawTool.outputSchema)
+		? redactUnknown(rawTool.outputSchema, definition) as Record<string, unknown>
+		: undefined;
 	const annotations = redactedAnnotations(rawTool.annotations, definition);
-	return { name: rawTool.name, description, inputSchema, annotations };
+	const execution = redactedExecution(rawTool.execution);
+	return { name: rawTool.name, description, inputSchema, outputSchema, annotations, execution };
 }
 
 function redactedAnnotations(rawAnnotations: unknown, definition: McpServerDefinition): McpToolMetadata["annotations"] {
@@ -56,6 +60,13 @@ function redactedAnnotations(rawAnnotations: unknown, definition: McpServerDefin
 		if (typeof rawAnnotations[field] === "boolean") annotations[field] = rawAnnotations[field];
 	}
 	return Object.keys(annotations).length > 0 ? annotations : undefined;
+}
+
+function redactedExecution(rawExecution: unknown): McpToolMetadata["execution"] {
+	if (!isRecord(rawExecution)) return undefined;
+	const taskSupport = rawExecution.taskSupport;
+	if (taskSupport !== "optional" && taskSupport !== "required" && taskSupport !== "forbidden") return undefined;
+	return { taskSupport };
 }
 
 function redactUnknown(candidate: unknown, definition: McpServerDefinition): unknown {
@@ -90,8 +101,20 @@ function addUrlSecrets(secrets: Set<string>, rawUrl: string): void {
 	}
 }
 
+function addConfiguredValue(secrets: Set<string>, fieldName: string, fieldValue: string): void {
+	if (!isSensitiveName(fieldName) && fieldValue.length < MIN_DISTINCTIVE_VALUE_LENGTH) return;
+	addSecret(secrets, fieldValue);
+	if (isSensitiveName(fieldName)) addSecret(secrets, fieldValue.replace(/^\S+\s+/, ""));
+}
+
 function addSecret(secrets: Set<string>, secret: string): void {
-	if (secret) secrets.add(secret);
+	if (secret.length < MIN_REDACTABLE_SECRET_LENGTH) return;
+	secrets.add(secret);
+	const encoded = encodeURIComponent(secret);
+	if (encoded === secret) return;
+	secrets.add(encoded);
+	secrets.add(encoded.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toLowerCase()));
+	secrets.add(encoded.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toUpperCase()));
 }
 
 function addSensitivePathSegments(secrets: Set<string>, pathname: string): void {

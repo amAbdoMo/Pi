@@ -6,6 +6,7 @@ import type { McpToolMetadata } from "./types.ts";
 
 const CACHE_VERSION = 1;
 const CACHE_FILENAME = "mcp-metadata-cache.json";
+const MAX_CACHE_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export interface CachedServerMetadata {
 	fingerprint: string;
@@ -24,6 +25,11 @@ export function emptyMetadataCache(): McpMetadataCache {
 
 export function metadataCachePath(agentDirectory: string): string {
 	return join(agentDirectory, CACHE_FILENAME);
+}
+
+export function isCachedMetadataFresh(metadata: CachedServerMetadata, now = Date.now()): boolean {
+	const updatedAt = Date.parse(metadata.updatedAt);
+	return Number.isFinite(updatedAt) && updatedAt <= now && now - updatedAt <= MAX_CACHE_AGE_MS;
 }
 
 export async function loadMetadataCache(agentDirectory: string): Promise<McpMetadataCache> {
@@ -78,8 +84,10 @@ function normalizedServerMetadata(rawMetadata: unknown): CachedServerMetadata | 
 function normalizedTool(rawTool: unknown): McpToolMetadata | undefined {
 	if (!isRecord(rawTool) || typeof rawTool.name !== "string" || !isRecord(rawTool.inputSchema)) return undefined;
 	const description = typeof rawTool.description === "string" ? rawTool.description : undefined;
+	const outputSchema = isRecord(rawTool.outputSchema) ? rawTool.outputSchema : undefined;
 	const annotations = normalizedAnnotations(rawTool.annotations);
-	return { name: rawTool.name, description, inputSchema: rawTool.inputSchema, annotations };
+	const execution = normalizedExecution(rawTool.execution);
+	return { name: rawTool.name, description, inputSchema: rawTool.inputSchema, outputSchema, annotations, execution };
 }
 
 function normalizedAnnotations(rawAnnotations: unknown): McpToolMetadata["annotations"] {
@@ -90,6 +98,13 @@ function normalizedAnnotations(rawAnnotations: unknown): McpToolMetadata["annota
 		if (typeof rawAnnotations[field] === "boolean") annotations[field] = rawAnnotations[field];
 	}
 	return Object.keys(annotations).length > 0 ? annotations : undefined;
+}
+
+function normalizedExecution(rawExecution: unknown): McpToolMetadata["execution"] {
+	if (!isRecord(rawExecution)) return undefined;
+	const taskSupport = rawExecution.taskSupport;
+	if (taskSupport !== "optional" && taskSupport !== "required" && taskSupport !== "forbidden") return undefined;
+	return { taskSupport };
 }
 
 function errorCode(error: unknown): string | undefined {

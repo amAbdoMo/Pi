@@ -4,18 +4,21 @@ import { join } from "node:path";
 
 const DEFAULT_MAX_BYTES = 24 * 1024;
 const DEFAULT_MAX_LINES = 500;
+const DEFAULT_MAX_SPILL_BYTES = 10 * 1024 * 1024;
 
 export interface McpOutputGuardOptions {
 	outputDirectory: string;
 	label: string;
 	maxBytes?: number;
 	maxLines?: number;
+	maxSpillBytes?: number;
 }
 
 export interface GuardedMcpOutput {
 	text: string;
 	truncated: boolean;
 	fullOutputPath?: string;
+	spillTruncated: boolean;
 	totalBytes: number;
 	totalLines: number;
 	outputBytes: number;
@@ -25,6 +28,7 @@ export interface GuardedMcpOutput {
 export async function guardMcpOutput(text: string, options: McpOutputGuardOptions): Promise<GuardedMcpOutput> {
 	const maxBytes = positiveLimit(options.maxBytes, DEFAULT_MAX_BYTES);
 	const maxLines = positiveLimit(options.maxLines, DEFAULT_MAX_LINES);
+	const maxSpillBytes = positiveLimit(options.maxSpillBytes, DEFAULT_MAX_SPILL_BYTES);
 	const totalBytes = Buffer.byteLength(text, "utf8");
 	const totalLines = lineCount(text);
 	const lineLimited = text.split("\n").slice(0, maxLines).join("\n");
@@ -34,15 +38,19 @@ export async function guardMcpOutput(text: string, options: McpOutputGuardOption
 	const truncated = totalBytes > outputBytes || totalLines > outputLines;
 
 	if (!truncated) {
-		return { text, truncated, totalBytes, totalLines, outputBytes, outputLines };
+		return { text, truncated, spillTruncated: false, totalBytes, totalLines, outputBytes, outputLines };
 	}
 
-	const fullOutputPath = await spillOutput(text, options.outputDirectory, options.label);
-	const notice = `\n\n[Output truncated: showing ${outputLines}/${totalLines} lines and ${outputBytes}/${totalBytes} bytes. Full output: ${fullOutputPath}]`;
+	const spillPrefix = utf8Prefix(text, maxSpillBytes);
+	const spillTruncated = Buffer.byteLength(spillPrefix, "utf8") < totalBytes;
+	const fullOutputPath = await spillOutput(spillPrefix, options.outputDirectory, options.label);
+	const savedLabel = spillTruncated ? "Saved output prefix" : "Full output";
+	const notice = `\n\n[Output truncated: showing ${outputLines}/${totalLines} lines and ${outputBytes}/${totalBytes} bytes. ${savedLabel}: ${fullOutputPath}]`;
 	return {
 		text: `${outputPrefix}${notice}`,
 		truncated,
 		fullOutputPath,
+		spillTruncated,
 		totalBytes,
 		totalLines,
 		outputBytes,

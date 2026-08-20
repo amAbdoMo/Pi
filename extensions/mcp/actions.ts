@@ -105,8 +105,10 @@ async function describeResponse(
 		`${server}/${tool.name}`,
 		tool.description?.trim() || "(no description)",
 		annotationLine(tool),
+		tool.execution?.taskSupport ? `Task support: ${tool.execution.taskSupport}` : "",
 		"Input schema:",
 		JSON.stringify(tool.inputSchema, null, 2),
+		...(tool.outputSchema ? ["Output schema:", JSON.stringify(tool.outputSchema, null, 2)] : []),
 	].filter(Boolean);
 	return { text: lines.join("\n"), summary: `Described ${server}/${tool.name}`, server, tool: tool.name };
 }

@@ -3,11 +3,14 @@ import { resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/sdk/validation/ajv";
+import type { JsonSchemaType } from "@modelcontextprotocol/sdk/validation";
 
 import { loadMcpConfiguration } from "./config.ts";
 import { findMcpTool, searchMcpTools, type McpToolMatch } from "./discovery.ts";
 import {
 	emptyMetadataCache,
+	isCachedMetadataFresh,
 	loadMetadataCache,
 	saveMetadataCache,
 	type McpMetadataCache,
@@ -33,6 +36,8 @@ interface McpServerRuntime {
 	error?: string;
 	connectPromise?: Promise<McpToolMetadata[]>;
 	connectAbort?: AbortController;
+	refreshPromise?: Promise<void>;
+	refreshAbort?: AbortController;
 	activeCalls: Set<Promise<unknown>>;
 	callAborts: Set<AbortController>;
 }
@@ -55,7 +60,9 @@ export class McpHub {
 	private configDiagnostics: McpConfigDiagnostic[] = [];
 	private metadataCache: McpMetadataCache = emptyMetadataCache();
 	private cacheWriteTail: Promise<void> = Promise.resolve();
+	private reloadTail: Promise<void> = Promise.resolve();
 	private reloadPromise?: Promise<McpHubReloadSummary>;
+	private readonly outputSchemaValidator = new AjvJsonSchemaValidator();
 	private readonly listeners = new Set<() => void>();
 
 	constructor(agentDirectory: string) {
@@ -70,18 +77,12 @@ export class McpHub {
 	async startSession(cwd: string, includeProject: boolean): Promise<McpHubReloadSummary> {
 		this.cwd = cwd;
 		this.includeProject = includeProject;
-		return this.reload();
+		return this.enqueueReload(cwd, includeProject);
 	}
 
 	reload(): Promise<McpHubReloadSummary> {
 		if (!this.cwd) return Promise.reject(new Error("MCP Hub has not started a session"));
-		if (this.reloadPromise) return this.reloadPromise;
-		const pendingReload = this.reloadConfiguration();
-		const trackedReload = pendingReload.finally(() => {
-			if (this.reloadPromise === trackedReload) this.reloadPromise = undefined;
-		});
-		this.reloadPromise = trackedReload;
-		return trackedReload;
+		return this.enqueueReload(this.cwd, this.includeProject);
 	}
 
 	serverSummaries(): McpServerSummary[] {
@@ -111,15 +112,14 @@ export class McpHub {
 		if (runtime.state === "connected") return runtime.tools.map(cloneTool);
 		if (runtime.connectPromise) return abortablePromise(runtime.connectPromise, signal);
 		const connectAbort = new AbortController();
-		const connectSignal = signal ? AbortSignal.any([signal, connectAbort.signal]) : connectAbort.signal;
-		const pendingConnection = this.openConnection(runtime, connectSignal);
+		const pendingConnection = this.openConnection(runtime, connectAbort.signal);
 		const trackedConnection = pendingConnection.finally(() => {
 			if (runtime.connectPromise === trackedConnection) runtime.connectPromise = undefined;
 			if (runtime.connectAbort === connectAbort) runtime.connectAbort = undefined;
 		});
 		runtime.connectAbort = connectAbort;
 		runtime.connectPromise = trackedConnection;
-		return trackedConnection;
+		return abortablePromise(trackedConnection, signal);
 	}
 
 	async disconnectServer(serverName: string): Promise<void> {
@@ -170,8 +170,10 @@ export class McpHub {
 	): Promise<McpToolCallOutcome> {
 		await this.connectServer(serverName, signal);
 		const runtime = this.requiredServer(serverName);
-		if (!findMcpTool([{ server: serverName, tools: runtime.tools }], serverName, toolName)) {
-			throw new Error(`Unknown MCP tool: ${serverName}/${toolName}`);
+		const tool = findMcpTool([{ server: serverName, tools: runtime.tools }], serverName, toolName);
+		if (!tool) throw new Error(`Unknown MCP tool: ${serverName}/${toolName}`);
+		if (tool.execution?.taskSupport === "required") {
+			throw new Error(`MCP tool requires task-based execution, which Pi MCP Hub does not support: ${serverName}/${toolName}`);
 		}
 		const client = runtime.client;
 		if (!client) throw new Error(`MCP server disconnected before call: ${serverName}`);
@@ -187,6 +189,7 @@ export class McpHub {
 			);
 			runtime.activeCalls.add(pendingCall);
 			const response = await pendingCall;
+			this.validateToolOutput(tool, response);
 			const text = redactServerSecrets(mcpToolResultText(response), runtime.definition);
 			return { text, isError: isRecord(response) && response.isError === true };
 		} catch (error) {
@@ -209,12 +212,22 @@ export class McpHub {
 		return safeRuntimeError(error, definition);
 	}
 
-	private async reloadConfiguration(): Promise<McpHubReloadSummary> {
+	private enqueueReload(cwd: string, includeProject: boolean): Promise<McpHubReloadSummary> {
+		const pendingReload = this.reloadTail.then(() => this.reloadConfiguration(cwd, includeProject));
+		const trackedReload = pendingReload.finally(() => {
+			if (this.reloadPromise === trackedReload) this.reloadPromise = undefined;
+		});
+		this.reloadTail = trackedReload.then(() => undefined, () => undefined);
+		this.reloadPromise = trackedReload;
+		return trackedReload;
+	}
+
+	private async reloadConfiguration(cwd: string, includeProject: boolean): Promise<McpHubReloadSummary> {
 		await this.closeEveryConnection();
 		const configuration = await loadMcpConfiguration({
-			cwd: this.cwd!,
+			cwd,
 			agentDirectory: this.agentDirectory,
-			includeProject: this.includeProject,
+			includeProject,
 		});
 		this.configDiagnostics = [...configuration.diagnostics];
 		this.metadataCache = await this.readCache();
@@ -227,7 +240,7 @@ export class McpHub {
 
 	private runtimeFromDefinition(definition: McpServerDefinition): McpServerRuntime {
 		const cached = this.metadataCache.servers[definition.name];
-		const cacheMatches = cached?.fingerprint === definition.fingerprint;
+		const cacheMatches = cached?.fingerprint === definition.fingerprint && isCachedMetadataFresh(cached);
 		return {
 			definition,
 			state: definition.config.disabled ? "disabled" : "disconnected",
@@ -261,12 +274,30 @@ export class McpHub {
 		runtime.state = "connecting";
 		runtime.error = undefined;
 		this.emitChange();
-		const client = new Client({ name: "pi-mcp-hub", version: "0.1.0" }, { capabilities: {} });
+		const client = new Client(
+			{ name: "pi-mcp-hub", version: "0.1.0" },
+			{
+				capabilities: {},
+				listChanged: {
+					tools: {
+						autoRefresh: false,
+						onChanged: () => void this.refreshConnectedTools(runtime, client),
+					},
+				},
+			},
+		);
 		client.onclose = () => this.connectionClosed(runtime, client);
+		const transport = this.transportFor(runtime.definition);
+		let stderrOutput = "";
+		if (transport instanceof StdioClientTransport) {
+			transport.stderr?.on("data", (chunk: Buffer | string) => {
+				stderrOutput = boundedStderr(`${stderrOutput}${chunk.toString()}`);
+			});
+		}
+		runtime.client = client;
 		try {
-			await client.connect(this.transportFor(runtime.definition), { signal });
+			await client.connect(transport, { signal });
 			const tools = await this.fetchTools(client, runtime.definition, signal);
-			runtime.client = client;
 			runtime.tools = tools;
 			runtime.metadataKnown = true;
 			runtime.state = "connected";
@@ -274,6 +305,7 @@ export class McpHub {
 			await this.cacheTools(runtime);
 			return tools.map(cloneTool);
 		} catch (error) {
+			runtime.client = undefined;
 			await closeQuietly(client);
 			if (signal?.aborted || isAbortError(error)) {
 				runtime.state = "disconnected";
@@ -281,7 +313,7 @@ export class McpHub {
 				this.emitChange();
 				throw cancelledError("MCP connection cancelled");
 			}
-			const message = safeRuntimeError(error, runtime.definition);
+			const message = safeRuntimeError(errorWithStderr(error, stderrOutput), runtime.definition);
 			runtime.state = "error";
 			runtime.error = message;
 			this.emitChange();
@@ -296,15 +328,13 @@ export class McpHub {
 				requestInit: config.headers ? { headers: config.headers } : undefined,
 			});
 		}
-		const transport = new StdioClientTransport({
+		return new StdioClientTransport({
 			command: config.command,
 			args: playwrightMcpArgsWithTemporaryOutput(config.command, config.args),
 			env: { ...getDefaultEnvironment(), ...config.env },
 			cwd: config.cwd ? resolve(definition.sourceDirectory, config.cwd) : this.cwd,
 			stderr: "pipe",
 		});
-		transport.stderr?.on("data", () => undefined);
-		return transport;
 	}
 
 	private async fetchTools(
@@ -324,6 +354,44 @@ export class McpHub {
 			if (!cursor) return tools.sort((left, right) => left.name.localeCompare(right.name));
 		}
 		throw new Error("MCP server returned too many tool-list pages");
+	}
+
+	private async refreshConnectedTools(runtime: McpServerRuntime, client: Client): Promise<void> {
+		if (runtime.client !== client || runtime.state !== "connected" || runtime.refreshPromise) return;
+		const refreshAbort = new AbortController();
+		const refresh = this.fetchTools(client, runtime.definition, refreshAbort.signal)
+			.then(async (tools) => {
+				if (runtime.client !== client) return;
+				runtime.tools = tools;
+				runtime.metadataKnown = true;
+				runtime.error = undefined;
+				this.emitChange();
+				await this.cacheTools(runtime);
+			})
+			.catch((error) => {
+				if (runtime.client !== client || refreshAbort.signal.aborted) return;
+				runtime.error = safeRuntimeError(error, runtime.definition);
+				this.emitChange();
+			});
+		const trackedRefresh = refresh.finally(() => {
+			if (runtime.refreshPromise === trackedRefresh) runtime.refreshPromise = undefined;
+			if (runtime.refreshAbort === refreshAbort) runtime.refreshAbort = undefined;
+		});
+		runtime.refreshAbort = refreshAbort;
+		runtime.refreshPromise = trackedRefresh;
+		await trackedRefresh;
+	}
+
+	private validateToolOutput(tool: McpToolMetadata, response: unknown): void {
+		if (!tool.outputSchema || !isRecord(response) || response.isError === true) return;
+		if (response.structuredContent === undefined) {
+			throw new Error(`MCP tool ${tool.name} declared an output schema but returned no structured content`);
+		}
+		const validate = this.outputSchemaValidator.getValidator(tool.outputSchema as JsonSchemaType);
+		const validation = validate(response.structuredContent);
+		if (!validation.valid) {
+			throw new Error(`MCP tool ${tool.name} returned invalid structured content: ${validation.errorMessage}`);
+		}
 	}
 
 	private knownCatalogs(): McpToolCatalog[] {
@@ -370,11 +438,13 @@ export class McpHub {
 
 	private async stopRuntimeOperations(runtime: McpServerRuntime): Promise<void> {
 		runtime.connectAbort?.abort();
+		runtime.refreshAbort?.abort();
 		for (const callAbort of runtime.callAborts) callAbort.abort();
-		await Promise.allSettled([
-			runtime.connectPromise,
-			...runtime.activeCalls,
-		]);
+		const pendingOperations = [runtime.connectPromise, runtime.refreshPromise, ...runtime.activeCalls].filter(
+			(operation): operation is Promise<unknown> => operation !== undefined,
+		);
+		if (pendingOperations.length === 0) return;
+		await settleWithin(pendingOperations, 2_000);
 	}
 
 	private async waitForReload(signal?: AbortSignal): Promise<void> {
@@ -391,6 +461,16 @@ export class McpHub {
 	private emitChange(): void {
 		for (const listener of this.listeners) listener();
 	}
+}
+
+async function settleWithin(operations: Promise<unknown>[], timeoutMs: number): Promise<void> {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	const deadline = new Promise<void>((resolveDeadline) => {
+		timeout = setTimeout(resolveDeadline, timeoutMs);
+		timeout.unref?.();
+	});
+	await Promise.race([Promise.allSettled(operations).then(() => undefined), deadline]);
+	if (timeout) clearTimeout(timeout);
 }
 
 async function closeQuietly(client: Client): Promise<void> {
@@ -440,6 +520,17 @@ function abortablePromise<T>(pending: Promise<T>, signal?: AbortSignal): Promise
 
 function cloneTool(tool: McpToolMetadata): McpToolMetadata {
 	return structuredClone(tool);
+}
+
+function boundedStderr(stderr: string): string {
+	const maxLength = 4_096;
+	return stderr.length <= maxLength ? stderr : stderr.slice(-maxLength);
+}
+
+function errorWithStderr(error: unknown, stderr: string): Error {
+	const errorMessage = error instanceof Error ? error.message : "MCP connection failed";
+	const stderrMessage = stderr.trim();
+	return new Error(stderrMessage ? `${errorMessage}. Server stderr: ${stderrMessage}` : errorMessage);
 }
 
 function cancelledError(message: string): DOMException {

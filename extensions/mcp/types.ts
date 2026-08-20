@@ -34,12 +34,16 @@ export interface McpToolMetadata {
 	name: string;
 	description?: string;
 	inputSchema: Record<string, unknown>;
+	outputSchema?: Record<string, unknown>;
 	annotations?: {
 		title?: string;
 		readOnlyHint?: boolean;
 		destructiveHint?: boolean;
 		idempotentHint?: boolean;
 		openWorldHint?: boolean;
+	};
+	execution?: {
+		taskSupport?: "optional" | "required" | "forbidden";
 	};
 }
 

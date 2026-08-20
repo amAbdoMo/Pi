@@ -245,7 +245,29 @@ function httpConfig(
 		throw new McpConfigError("url must use HTTP or HTTPS");
 	}
 	const headers = optionalStringRecord(rawConfig.headers, "headers");
+	if (parsedUrl.protocol === "http:" && hasCredentialHeaders(headers) && !isLoopbackHostname(parsedUrl.hostname)) {
+		throw new McpConfigError("credential headers require HTTPS unless the MCP server is loopback-only");
+	}
 	return { transport: "streamable-http", url, headers, disabled, oauthConfigured };
+}
+
+function hasCredentialHeaders(headers: Record<string, string> | undefined): boolean {
+	return Object.keys(headers ?? {}).some((headerName) =>
+		/(?:authorization|proxy-authorization|cookie|token|api[-_]?key|secret|password)/i.test(headerName)
+	);
+}
+
+function isLoopbackHostname(hostname: string): boolean {
+	const normalized = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+	if (normalized === "localhost" || normalized === "::1") return true;
+	const octets = normalized.split(".");
+	return octets.length === 4 && octets[0] === "127" && octets.every(isIpv4Octet);
+}
+
+function isIpv4Octet(octet: string): boolean {
+	if (!/^\d{1,3}$/.test(octet)) return false;
+	const value = Number(octet);
+	return value >= 0 && value <= 255;
 }
 
 function hasOauthConfiguration(rawConfig: Record<string, unknown>): boolean {
