@@ -3,8 +3,8 @@ import type { ContextMode } from "./types.ts";
 export const DELEGATE_PROMPT_GUIDELINES = [
   "Use delegate only when a separate focused agent materially helps; do not delegate routine tiny steps.",
   "When using delegate, provide a short title so the UI can display 'Delegate: <title>'.",
-  "Choose the profile from the delegated task: fast for bounded lookup/summarization, balanced for routine analysis, implementation or review for normal code/review work, deep for architecture/security/integration, and critical only when failed judgment is expensive.",
-  "Prefer the lowest sufficient thinking level; xhigh/max are exceptional reasoning modes, not defaults for long tasks. Use explicit model/thinking only for a deliberate override or benchmark.",
+  "Choose the profile from the delegated task: fast through review use Luna max for easy and medium work; deep uses Sol medium for difficult architecture/security/integration; critical uses Sol high only when failed judgment is expensive.",
+  "Keep Sol between medium and high according to task risk; do not use Sol xhigh/max by default. Use explicit model/thinking only for a deliberate override or benchmark.",
   "delegate context defaults to compact summary only, not full transcript; use context='fresh' for unrelated tasks.",
   "Keep fan-out small (normally two or three children) and parallelize only read-only or file-disjoint work; serialize overlapping writes, shared config, lockfiles, schemas, and migrations.",
   "Recursive delegation is disabled by the default depth limit; raise it only for a materially independent nested problem with clear token value.",

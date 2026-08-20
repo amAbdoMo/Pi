@@ -29,12 +29,12 @@ export interface ChildProfile {
 export type ChildProfileMap = Record<ChildProfileName, ChildProfile>;
 
 export const DEFAULT_CHILD_PROFILES: ChildProfileMap = {
-  fast: { model: "openai-codex/gpt-5.6-luna", thinking: "low" },
-  balanced: { model: "openai-codex/gpt-5.6-terra", thinking: "medium" },
-  implementation: { model: "openai-codex/gpt-5.6-terra", thinking: "high" },
-  review: { model: "openai-codex/gpt-5.6-terra", thinking: "high" },
-  deep: { model: "openai-codex/gpt-5.6-sol", thinking: "high" },
-  critical: { model: "openai-codex/gpt-5.6-sol", thinking: "xhigh" },
+  fast: { model: "openai-codex/gpt-5.6-luna", thinking: "max" },
+  balanced: { model: "openai-codex/gpt-5.6-luna", thinking: "max" },
+  implementation: { model: "openai-codex/gpt-5.6-luna", thinking: "max" },
+  review: { model: "openai-codex/gpt-5.6-luna", thinking: "max" },
+  deep: { model: "openai-codex/gpt-5.6-sol", thinking: "medium" },
+  critical: { model: "openai-codex/gpt-5.6-sol", thinking: "high" },
 };
 
 export interface RequestedChildProfile extends ChildProfile {

@@ -47,7 +47,7 @@ test("project settings can override adaptive profiles and summary profile", () =
         model: "custom/cheap-summary",
         thinking: "minimal",
       });
-      assert.equal(settings.profiles.review.model, "openai-codex/gpt-5.6-terra");
+      assert.equal(settings.profiles.review.model, "openai-codex/gpt-5.6-luna");
     },
   );
 });

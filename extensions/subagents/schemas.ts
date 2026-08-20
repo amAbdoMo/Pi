@@ -24,7 +24,7 @@ export const DelegateParams = Type.Object({
   profile: Type.Optional(
     StringEnum(CHILD_PROFILE_NAMES, {
       description:
-        "Adaptive task profile. fast=Luna low; balanced=Terra medium; implementation/review=Terra high; deep=Sol high; critical=Sol xhigh. Explicit model/thinking values override the profile.",
+        "Adaptive task profile. fast/balanced/implementation/review=Luna max; deep=Sol medium; critical=Sol high. Explicit model/thinking values override the profile.",
     }),
   ),
   model: Type.Optional(

@@ -46,7 +46,7 @@ Pi can support all of this through its extension system; the difference is that 
 - **Workflows** with focused `pipeline` and opt-in `deep-review` routes, strict YAML validation, blocker-aware routing, isolated phase sessions, and safe global/project overrides
 - **Fast mode** for supported GPT-5.4, GPT-5.5, and GPT-5.6 tiers, plus code-state undo/redo and custom tool rendering
 
-Subagent profile defaults are `fast` (Luna/low), `balanced` (Terra/medium), `implementation` and `review` (Terra/high), `deep` (Sol/high), and `critical` (Sol/xhigh). Explicit model/thinking values override a profile. Simultaneous fan-out is capped at three active children, recursive delegation is opt-in through `subagents.maxDepth`, compact handoffs are reused within a parent turn, and oversized child results are summarized through the configurable `subagents.summaryProfile` before returning to the parent.
+Subagent profile defaults are `fast`, `balanced`, `implementation`, and `review` (Luna/max), `deep` (Sol/medium), and `critical` (Sol/high). Explicit model/thinking values override a profile. Simultaneous fan-out is capped at three active children, recursive delegation is opt-in through `subagents.maxDepth`, compact handoffs are reused within a parent turn, and oversized child results are summarized through the configurable `subagents.summaryProfile` before returning to the parent.
 
 ### Tools and integrations
 

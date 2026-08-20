@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Routed easy and medium subagent profiles to Luna/max and difficult fallbacks to Sol/medium or Sol/high, removing Terra and Sol xhigh/max from the defaults.
 - Preserved Kitty and iTerm inline-image rows while composing the docked Workbench, preventing valid screenshots from being replaced by blank terminal space.
 - Preserved unrelated multiline Warp TOML arrays during terminal setup while keeping managed settings fail-closed and byte-stable.
 - Refreshed vulnerable MCP transitive dependencies without lifecycle scripts and extended retired-package cleanup to remove stale `pi-mcp-adapter` installations.

@@ -12,30 +12,30 @@ const inherited = {
   thinking: "max",
 };
 
-test("GPT-5.6 defaults route bounded work to Luna, normal work to Terra, and deep work to Sol", () => {
+test("GPT-5.6 defaults route easy and medium work to Luna max and difficult work to Sol medium or high", () => {
   assert.deepEqual(DEFAULT_CHILD_PROFILES.fast, {
     model: "openai-codex/gpt-5.6-luna",
-    thinking: "low",
+    thinking: "max",
   });
   assert.deepEqual(DEFAULT_CHILD_PROFILES.balanced, {
-    model: "openai-codex/gpt-5.6-terra",
-    thinking: "medium",
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "max",
   });
   assert.deepEqual(DEFAULT_CHILD_PROFILES.implementation, {
-    model: "openai-codex/gpt-5.6-terra",
-    thinking: "high",
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "max",
   });
   assert.deepEqual(DEFAULT_CHILD_PROFILES.review, {
-    model: "openai-codex/gpt-5.6-terra",
-    thinking: "high",
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "max",
   });
   assert.deepEqual(DEFAULT_CHILD_PROFILES.deep, {
     model: "openai-codex/gpt-5.6-sol",
-    thinking: "high",
+    thinking: "medium",
   });
   assert.deepEqual(DEFAULT_CHILD_PROFILES.critical, {
     model: "openai-codex/gpt-5.6-sol",
-    thinking: "xhigh",
+    thinking: "high",
   });
 });
 
@@ -43,14 +43,14 @@ test("adaptive profile resolves a task-sized model and thinking level", () => {
   const profile = resolveChildProfile({ profile: "implementation" }, inherited);
 
   assert.deepEqual(profile, {
-    model: "openai-codex/gpt-5.6-terra",
-    thinking: "high",
+    model: "openai-codex/gpt-5.6-luna",
+    thinking: "max",
   });
   assert.deepEqual(childProfileArgs(profile), [
     "--model",
-    "openai-codex/gpt-5.6-terra",
+    "openai-codex/gpt-5.6-luna",
     "--thinking",
-    "high",
+    "max",
   ]);
 });
 
