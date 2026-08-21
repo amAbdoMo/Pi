@@ -259,62 +259,6 @@ Execute each step in order. Use plan_progress to mark a step running before work
 		if (todoItems.every((todoItem) => todoItem.status === "completed")) return;
 		updateStatus(ctx);
 		persistState();
-
-		// Show plan steps and prompt for next action
-		const todoListText = todoItems
-			.map((todoItem) => `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}`)
-			.join("\n");
-		const planTodoListMessage = {
-			customType: "plan-todo-list",
-			content: `**Plan Steps (${todoItems.length}):**\n\n${todoListText}`,
-			display: true,
-		};
-
-		const choice = await ctx.ui.select("Plan detected - what next?", [
-			"Execute the plan (track progress)",
-			"Dismiss",
-			"Refine the plan",
-		]);
-
-		if (choice === "Dismiss") {
-			todoItems = [];
-			completionAnnounced = false;
-			updateStatus(ctx);
-			persistState();
-			return;
-		}
-
-		if (choice?.startsWith("Execute")) {
-			const firstTodoItem = todoItems[0];
-			if (!firstTodoItem) return;
-
-			executionMode = true;
-			updateStatus(ctx);
-			persistState();
-
-			const remainingList = todoItems
-				.map((todoItem) => `${todoItem.step}. ${todoStatusSymbol(todoItem.status)} ${todoItem.text}`)
-				.join("\n");
-			const execMessage = `Execute the plan.
-
-Remaining steps:
-${remainingList}
-
-Start with: ${firstTodoItem.text}
-Use plan_progress to mark the step running before work starts, then completed with concise evidence after verification, or failed if the attempt cannot be completed.`;
-
-			pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-			pi.sendMessage(
-				{ customType: "plan-mode-execute", content: execMessage, display: true },
-				{ triggerTurn: true, deliverAs: "followUp" },
-			);
-		} else if (choice === "Refine the plan") {
-			const refinement = await ctx.ui.editor("Refine the plan:", "");
-			if (refinement?.trim()) {
-				pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-				pi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
-			}
-		}
 	});
 
 	// Restore state on session start/resume
