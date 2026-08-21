@@ -172,7 +172,7 @@ describe("schema compatibility, templates, routing, and reports", () => {
 	test("configures focused pipeline fallbacks without weakening required local checks", () => {
 		const file = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "pipeline.yaml");
 		const workflow = validateWorkflow(parseYamlText(fs.readFileSync(file, "utf8"), path.basename(file)), file, "built-in");
-		expect(workflow.phases.find((phase) => phase.id === "plan")?.nonFatalTools).toEqual(["web_search", "web_fetch", "mcp", "delegate"]);
+		expect(workflow.phases.find((phase) => phase.id === "plan")?.nonFatalTools).toEqual(["web_search", "web_fetch", "mcp", "delegate", "ctx_search", "ctx_fetch_and_index"]);
 		expect(workflow.phases.find((phase) => phase.id === "execute")?.nonFatalTools).toEqual(["web_search", "web_fetch", "delegate"]);
 		expect(workflow.phases.find((phase) => phase.id === "verify")?.nonFatalTools).toEqual(["web_fetch"]);
 		expect(workflow.phases.find((phase) => phase.id === "review")?.nonFatalTools).toBeUndefined();

@@ -19,6 +19,13 @@ Invalid overrides remain visible as diagnostics and do not silently run a differ
 3. `verify` performs one proportional real-feature pass and returns `PASS`, `FAIL`, or `BLOCKED`.
 4. `review` performs one direct correctness/security/contract review without a delegate panel.
 
+The phases are tuned for the everyday mix of Pi Workbench, WordPress/WooCommerce, and live-site work:
+
+- Phases have access to the context-mode sandbox tools (`ctx_execute`, `ctx_execute_file`, `ctx_batch_execute`, `ctx_search`, `ctx_fetch_and_index`, `ctx_index`) so large logs, test output, and docs are processed in-sandbox and only derived findings enter the conversation. Network-dependent tools are marked non-fatal.
+- WordPress/WooCommerce work must target the real plugin, theme, or staging/local site. Standalone HTML review pages, mocked WordPress pages, and synthetic fixtures are forbidden unless the user explicitly approved one. Without a real WordPress environment, Verify runs source/lint/static checks and states `Not tested in a real WordPress environment.` instead of returning `BLOCKED`.
+- Execute enforces repository discipline (canonical checkout at `C:\Users\COMPUMARTS\Projects\Pi`; managed clones stay read-only), WordPress code standards (core-API-first, HPOS-safe, escaping, nonces plus capabilities), UI conventions (fully styled controls, no outline focus rings, short microcopy), and depth-1 delegation with fast/deep/critical profiles.
+- Review maps its scope to the installed guard skills: `clean-code-guard`, `wp-guard`, `woo-guard`, `test-guard`, and `docs-guard`.
+
 One `FAIL` can route back to Execute. `BLOCKED` ends immediately for login, credentials, target access, browser availability, environment availability, or a failure that remains after the remediation pass. `maxTransitions: 7` allows one remediation to reach final review while preventing a second repair cycle.
 
 The Verify phase must use the real feature. It does not create substitute pages, sections, fixtures, or proof harnesses. When access is blocked, it may take one viewport screenshot only if useful, then returns `BLOCKED` instead of trying browser variants.
