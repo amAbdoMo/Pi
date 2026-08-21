@@ -1531,14 +1531,12 @@ test("workbench shell keeps PageUp and PageDown chat scrolling", () => {
 });
 
 function createTerminalEditor() {
-  let modeToggles = 0;
   const editor = new TerminalEditor(
     { requestRender() {} },
     {},
     {},
-    () => { modeToggles += 1; },
   );
-  return { editor, modeToggles: () => modeToggles };
+  return { editor };
 }
 
 test("terminal editor places the cursor from LTR, wrapped, and RTL mouse cells", () => {
@@ -1613,7 +1611,7 @@ test("terminal editor routes Warp Arabic Alt+S through the configured extension 
 });
 
 test("terminal editor delegates slash and visible autocomplete Tab input", () => {
-  const { editor, modeToggles } = createTerminalEditor();
+  const { editor } = createTerminalEditor();
 
   editor.setText("/workflow");
   editor.handleInput("tab");
@@ -1622,17 +1620,15 @@ test("terminal editor delegates slash and visible autocomplete Tab input", () =>
   editor.handleInput("tab");
 
   assert.deepEqual(editor.handledInputs, ["tab", "tab"]);
-  assert.equal(modeToggles(), 0);
 });
 
-test("terminal editor keeps PLAN/BUILD Tab toggling for ordinary and empty prompts", () => {
-  const { editor, modeToggles } = createTerminalEditor();
+test("terminal editor passes ordinary and empty prompt Tab input to the stock editor", () => {
+  const { editor } = createTerminalEditor();
 
   editor.setText("ordinary prompt");
   editor.handleInput("tab");
   editor.setText("");
   editor.handleInput("tab");
 
-  assert.deepEqual(editor.handledInputs, []);
-  assert.equal(modeToggles(), 2);
+  assert.deepEqual(editor.handledInputs, ["tab", "tab"]);
 });

@@ -1,4 +1,3 @@
-import { getPlanBuildMode } from "../plan-mode/modeState.ts";
 import { chatGptLimitLabels } from "./chatgptUsage.ts";
 import {
   bold,
@@ -37,15 +36,12 @@ function composerTitle(direction: string): string {
 }
 
 function composerStatus(width: number): string {
-  const mode = getPlanBuildMode();
-  const modeRole = mode === "plan" ? "warning" : "success";
   const fastMode = state.getFastModeActive?.() ?? state.fastModeActive;
   const modelAndThinking =
     color("toolTitle", `󰧑 ${state.model}`) +
     "  " +
     color(thinkingColor(state.thinking), `think ${state.thinking}`);
   const fields = [
-    color(modeRole, `󰒓 ${mode.toUpperCase()}`),
     modelAndThinking,
     ...(fastMode ? [color("accent", "fast")] : []),
     ...chatGptLimitLabels(),

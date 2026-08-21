@@ -93,7 +93,6 @@ export class TerminalEditor extends CustomEditor {
     tui: TUI,
     theme: EditorTheme,
     keybindings: KeybindingsManager,
-    private readonly togglePlanBuildMode: () => void,
   ) {
     // paddingX 0 avoids the stock editor's side-padding/wrap weirdness.
     super(tui, theme, keybindings, { paddingX: 0 });
@@ -109,16 +108,6 @@ export class TerminalEditor extends CustomEditor {
       ? legacyArabicAltSShortcut(inputSequence)
       : undefined;
     if (arabicAltS && this.onExtensionShortcut?.(arabicAltS)) return;
-
-    if (matchesKey(inputSequence, "tab")) {
-      const slashCommand = this.getText().trimStart().startsWith("/");
-      if (this.isShowingAutocomplete() || slashCommand) {
-        super.handleInput(inputSequence);
-      } else {
-        this.togglePlanBuildMode();
-      }
-      return;
-    }
 
     const isCustomPaste =
       matchesKey(inputSequence, "ctrl+v") || matchesKey(inputSequence, "alt+v");

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Removed the plan/build mode option: `/plan`, `/build`, `Ctrl+Alt+P`, the `--plan` flag, `Tab` mode switching, and the PLAN/BUILD composer badge. Plan progress tracking stays, with `Plan:` step extraction no longer requiring plan mode and `plan_progress`, `/todos`, the widget, and the sidebar Tasks section unchanged.
 - Routed easy and medium subagent profiles to Luna/max and difficult fallbacks to Sol/medium or Sol/high, removing Terra and Sol xhigh/max from the defaults.
 - Hardened the MCP Hub with encoded-secret redaction, safe concurrent reload and cancellation handling, SDK 1.30 tool metadata validation, list-change refresh, 24-hour cache freshness, HTTPS credential-header enforcement, bounded private output spills, and regression-tested stdio cleanup.
 - Preserved Kitty and iTerm inline-image rows while composing the docked Workbench, preventing valid screenshots from being replaced by blank terminal space.

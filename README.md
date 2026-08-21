@@ -16,7 +16,7 @@ Pi intentionally starts small and expects people to shape it with packages. Pi W
 | Default Pi | Pi Workbench adds |
 | --- | --- |
 | Header, message stream, editor, and footer | Full-screen graphite workbench with a fixed responsive sidebar and anchored composer |
-| Minimal agent loop; subagents and plan mode are intentionally left to extensions | Plan/build modes, verified task progress, nested subagents, side chat, and reusable workflows |
+| Minimal agent loop; subagents and plan mode are intentionally left to extensions | Verified task progress, nested subagents, side chat, and reusable workflows |
 | MCP integration is left to packages | An owned MCP Hub with JSON/JSONC configuration, discovery, calls, status, caching, cancellation, and secret redaction |
 | Built-in file, search, edit, and shell tools | Firecrawl web tools, image generation, persistent memory, tool display, fast mode, and code-state undo/redo |
 | Standard terminal text rendering | Arabic shaping, RTL visual ordering, right-aligned composition, and LTR code/path preservation |
@@ -39,7 +39,6 @@ Pi can support all of this through its extension system; the difference is that 
 
 ### Agent workflows
 
-- **Plan/build mode** with context-aware `Tab` switching outside command autocomplete and read-only planning
 - **Task progress** using explicit pending, running, completed-with-evidence, and failed states in a scrollable grey task card
 - **Subagents** with adaptive GPT-5.6 task profiles, bounded context/fan-out, complete parent-visible results, and parent-owned proportional review
 - **Side chat** for temporary questions that do not enter the main conversation context
@@ -126,14 +125,14 @@ Select `hypr-waves` from Pi settings if it is not already active.
 
 | Control | Action |
 | --- | --- |
-| `Tab` | Complete active or slash-command autocomplete; otherwise switch between plan and build modes |
+| `Tab` | Complete active or slash-command autocomplete |
 | `Shift+Tab` | Change thinking level |
 | Mouse wheel or `PageUp` / `PageDown` | Scroll the chat viewport during and after agent activity; scrolling up holds position while output continues |
 | Mouse drag | Select the exact Workbench text range without copying; holding at the chat edge auto-scrolls into off-screen rows, and `Ctrl+C` copies and clears the selection |
 | Mouse click in composer | Place the typing cursor at the clicked character, including wrapped and RTL text |
 | `Shift+drag` | Use the terminal's native selection instead of Workbench selection |
 | `/sidebar` | Toggle the workbench sidebar |
-| `/plan`, `/build`, `/todos` | Control mode and inspect task progress |
+| `/todos` | Show current tracked plan steps |
 | `Alt+S` or `/agents` | Open subagent management |
 | `/btw` or `/side` | Ask a temporary side question |
 | `/workflow` | List workflows or run focused `pipeline` or opt-in `deep-review` |

@@ -93,7 +93,7 @@ const statusSurfaceSource = [
   "extensions/ui/header.ts",
   "extensions/ui/workbenchSidebar.ts",
 ].map((relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8")).join("\n");
-const requiredStatusIcons = ["󰉋", "", "󰒓", "󰧑", "󰍛", ""];
+const requiredStatusIcons = ["󰉋", "", "󰧑", "󰍛", ""];
 for (const icon of requiredStatusIcons) {
   if (!statusSurfaceSource.includes(icon)) throw new Error(`Missing required status icon: ${icon}`);
 }

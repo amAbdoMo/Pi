@@ -95,7 +95,7 @@ test("progress counts and symbols reflect every explicit task state", () => {
   assert.deepEqual(items.map((item) => todoStatusSymbol(item.status)), ["○", "◉", "✓", "✓", "✕"]);
 });
 
-test("unfinished plans can enter or resume tracked execution only outside plan mode", () => {
+test("unfinished plans allow tracked execution; completed plans do not", () => {
   const pendingItems = [{ step: 1, text: "Implement the approved change", status: "pending" }];
   const completedItems = [{
     step: 1,
@@ -106,9 +106,7 @@ test("unfinished plans can enter or resume tracked execution only outside plan m
 
   assert.equal(hasIncompleteTodoItems(pendingItems), true);
   assert.equal(hasIncompleteTodoItems(completedItems), false);
-  assert.equal(canTrackTodoProgress(false, false, pendingItems), true);
-  assert.equal(canTrackTodoProgress(true, false, pendingItems), false);
-  assert.equal(canTrackTodoProgress(false, true, completedItems), true);
-  assert.equal(canTrackTodoProgress(false, false, completedItems), false);
-  assert.equal(canTrackTodoProgress(false, true, []), false);
+  assert.equal(canTrackTodoProgress(pendingItems), true);
+  assert.equal(canTrackTodoProgress(completedItems), false);
+  assert.equal(canTrackTodoProgress([]), false);
 });

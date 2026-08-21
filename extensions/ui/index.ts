@@ -1,13 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Key } from "@earendil-works/pi-tui";
-import {
-  requestPlanBuildModeToggle,
-  subscribePlanBuildModeChanges,
-} from "../plan-mode/modeEvents.ts";
-import {
-  setPlanBuildMode,
-  subscribePlanBuildMode,
-} from "../plan-mode/modeState.ts";
 import { hasActiveWorkflowActivity } from "../workflow/activity.ts";
 import {
   refreshChatGptUsage,
@@ -30,14 +22,11 @@ import type { UiTheme } from "./types.ts";
 import { WorkbenchSidebarController } from "./workbenchSidebar.ts";
 
 // UI extension: startup header, terminal-style editor, and footer cleanup.
-let unsubscribePlanBuildMode: (() => void) | undefined;
 let unsubscribeSubagents: (() => void) | undefined;
 let subagentUsagePoller: UsageRefreshPoller | undefined;
 const workbenchSidebar = new WorkbenchSidebarController();
 
 export default function uiExtension(pi: ExtensionAPI) {
-  subscribePlanBuildModeChanges(pi.events, setPlanBuildMode);
-
   pi.registerCommand("sidebar", {
     description: "Toggle the Pi workspace sidebar",
     handler: async (_args, ctx) => workbenchSidebar.toggle(ctx),
@@ -58,8 +47,6 @@ export default function uiExtension(pi: ExtensionAPI) {
     updateState(ctx, pi);
     void updateBranch(pi);
     void refreshChatGptUsage(ctx, { force: true });
-    unsubscribePlanBuildMode?.();
-    unsubscribePlanBuildMode = subscribePlanBuildMode(notifyEditors);
     unsubscribeSubagents?.();
     subagentUsagePoller?.dispose();
     subagentUsagePoller = createUsageRefreshPoller(() =>
@@ -86,12 +73,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     }));
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-      const editor = new TerminalEditor(
-        tui,
-        theme,
-        keybindings,
-        () => requestPlanBuildModeToggle(pi.events),
-      );
+      const editor = new TerminalEditor(tui, theme, keybindings);
       workbenchSidebar.attachDocked(
         tui,
         ctx.ui.theme,
@@ -173,8 +155,6 @@ export default function uiExtension(pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async (event) => {
     resetChatGptUsage();
-    unsubscribePlanBuildMode?.();
-    unsubscribePlanBuildMode = undefined;
     unsubscribeSubagents?.();
     unsubscribeSubagents = undefined;
     subagentUsagePoller?.dispose();
