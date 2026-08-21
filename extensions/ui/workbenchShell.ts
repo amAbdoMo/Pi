@@ -24,6 +24,7 @@ const {
 };
 
 import { isWorkbenchModalActive } from "./modalState.ts";
+import { renderChatImageMarkers } from "./chatImages.ts";
 import {
   clampScrollOffset,
   fixedViewport,
@@ -153,7 +154,12 @@ export function installWorkbenchShell(
 }
 
 function ensureWarpKittyImages(tui: TUI): void {
-  if (process.env.TERM_PROGRAM !== "WarpTerminal") return;
+  // Warp reports Kitty graphics support but older pi-tui detection tables miss it, and
+  // Windows Terminal (WT_SESSION) is detected as image-less even though recent releases
+  // render the Kitty graphics protocol. Force the protocol in both so inline images work.
+  const isWarp = process.env.TERM_PROGRAM === "WarpTerminal";
+  const isWindowsTerminal = Boolean(process.env.WT_SESSION);
+  if (!isWarp && !isWindowsTerminal) return;
   const capabilities = getCapabilities();
   if (capabilities.images === "kitty") return;
   setCapabilities({ ...capabilities, images: "kitty" });
@@ -361,14 +367,17 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     if (this.latestMainWidth > 0 && this.latestMainWidth !== dimensions.mainWidth) {
       this.clearTextSelection();
     }
-    const { scrollLines, dockLines, composerDockRows } = mainViewportParts(
+    const parts = mainViewportParts(
       this.tui,
       this.originalRender,
       dimensions.mainWidth,
     );
+    // Swap pasted-image markers for real inline images before viewport math so
+    // scroll offsets, selection rows, and column composition all stay aligned.
+    const scrollLines = renderChatImageMarkers(parts.scrollLines, dimensions.mainWidth);
     const metrics = viewportMetrics(
       scrollLines,
-      dockLines,
+      parts.dockLines,
       dimensions.height,
       this.scrollOffset,
     );
@@ -380,14 +389,14 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     );
     const visibleMetrics = viewportMetrics(
       scrollLines,
-      dockLines,
+      parts.dockLines,
       dimensions.height,
       this.scrollOffset,
     );
     this.latestMaxScrollOffset = visibleMetrics.maxOffset;
     this.composerScreenRows = visibleComposerRows(
-      composerDockRows,
-      dockLines.length,
+      parts.composerDockRows,
+      parts.dockLines.length,
       visibleMetrics.scrollHeight,
       visibleMetrics.dockHeight,
     );
@@ -414,7 +423,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.previousScrollLineCount = scrollLines.length;
     const liveMainLines = fixedViewport(
       scrollLines,
-      dockLines,
+      parts.dockLines,
       dimensions.height,
       this.scrollOffset,
       KITTY_IMAGE_VIEWPORT,

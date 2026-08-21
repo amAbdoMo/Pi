@@ -148,6 +148,11 @@ export function imagesForText(text: string): PastedImage[] {
   return [...new Set(ids)].map((id) => pastedImages.get(id)).filter((image): image is PastedImage => Boolean(image));
 }
 
+/** Store image bytes under the next `[Image N]` marker so chat rendering can resolve it. */
+export function registerPastedImage(bytes: Uint8Array, mimeType: string, currentText = ""): PastedImage {
+  return saveImage(bytes, mimeType, currentText);
+}
+
 export function expandPastedTextMarkers(text: string): string {
   return text.replace(TEXT_MARKER_RE, (marker, _lineCount, idText) => {
     const pastedText = pastedTexts.get(Number(idText));
