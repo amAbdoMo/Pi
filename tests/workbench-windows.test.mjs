@@ -1131,6 +1131,33 @@ test("text selection snaps both cells of a wide glyph to one grapheme", () => {
   assert.equal(highlightTerminalSelection(lines, { anchor: firstCell, focus: secondCell })[0], "A\x1b[7m界\x1b[27mB");
 });
 
+test("copied text strips user message frame borders", () => {
+  const frameLines = [
+    "╭ user ────────────────────╮",
+    "│ when the winter will come in egypt │",
+    "╰──────────────────────────╯",
+  ];
+  const range = {
+    anchor: { row: 0, column: 0, endColumn: 1 },
+    focus: clampSelectionPoint(frameLines, 2, 40),
+  };
+
+  assert.equal(
+    selectedTerminalText(frameLines, range),
+    "when the winter will come in egypt",
+  );
+});
+
+test("copied text keeps content without frames intact", () => {
+  const lines = ["| a | b |", "const x = 1;"];
+  const range = {
+    anchor: { row: 0, column: 0, endColumn: 1 },
+    focus: clampSelectionPoint(lines, 1, 20),
+  };
+
+  assert.equal(selectedTerminalText(lines, range), "| a | b |\nconst x = 1;");
+});
+
 test("docked sidebar survives a transient narrow width while a session resumes", () => {
   const { tui } = createWorkbenchTui();
   const controller = new WorkbenchSidebarController();
@@ -1401,12 +1428,14 @@ test("workbench shell routes composer clicks and preserves drag selection", () =
   }
 });
 
-test("workbench shell drag-selects only text cells and copies the exact range", () => {
+test("workbench shell drag-selects only text cells and copies the exact range", async () => {
   const { tui, input } = createWorkbenchTui();
   const copied = [];
+  const copyConfirmed = [];
   const handle = installWorkbenchShell(tui, component([]), {
     copyText: async (text) => { copied.push(text); },
     onCopyError: copyOptions.onCopyError,
+    onCopySuccess: () => copyConfirmed.push(copied.at(-1)),
     placeComposerCursor: copyOptions.placeComposerCursor,
   });
 
@@ -1427,7 +1456,10 @@ test("workbench shell drag-selects only text cells and copies the exact range", 
     assert.ok(selectedRows.every((line) => visibleWidth(line) < 80));
 
     assert.deepEqual(input("ctrl+c"), { consume: true });
+    await Promise.resolve();
+    await Promise.resolve();
     assert.deepEqual(copied, ["17\ncha"]);
+    assert.deepEqual(copyConfirmed, ["17\ncha"]);
     assert.doesNotMatch(tui.render(80).join("\n"), /\x1b\[7m/);
   } finally {
     handle.dispose();

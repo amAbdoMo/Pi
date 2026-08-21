@@ -50,7 +50,47 @@ export function selectedTerminalText(
     const segment = sliceByColumn(line, startColumn, Math.max(0, endColumn - startColumn), true);
     selected.push(stripTerminalSequences(segment).replace(/[ \t]+$/u, ""));
   }
-  return selected.join("\n");
+  return stripFrameDecorations(selected.join("\n"));
+}
+
+// Box-drawing glyphs used by Workbench message frames and panels.
+const FRAME_GLYPHS = new Set([
+  ..."\u2500\u2501\u2502\u2503\u2550\u2551\u2504\u2505\u2508\u2509\u250a\u250b",
+  ..."\u250c\u250d\u250e\u250f\u2510\u2511\u2512\u2513\u2514\u2515\u2516\u2517",
+  ..."\u2518\u2519\u251a\u251b\u251c\u251d\u251e\u251f\u2520\u2521\u2522\u2523",
+  ..."\u2524\u2525\u2526\u2527\u2528\u2529\u252a\u252b\u252c\u252d\u252e\u252f",
+  ..."\u2530\u2531\u2532\u2533\u2534\u2535\u2536\u2537\u2538\u2539\u253a\u253b",
+  ..."\u253c\u253d\u253e\u253f\u2540\u2541\u2542\u2543\u2544\u2545\u2546\u2547",
+  ..."\u2548\u2549\u254a\u254b\u2554\u2557\u255a\u255d\u2560\u2563\u2566\u2569",
+  ..."\u256c\u256d\u256e\u256f\u2570",
+]);
+// Corners and tees that mark a full frame border row (top/bottom edges).
+const FRAME_EDGE_START = /^[\u250c\u250f\u2514\u251c\u2523\u2554\u255e\u255f\u2560\u256d\u2570]/u;
+const FRAME_EDGE_END = /[\u2510\u2513\u2518\u2524\u252b\u2557\u2561\u2562\u2563\u2566\u2569\u256c\u256e\u256f\u2570]$/u;
+
+/** Drop frame borders and column rules from copied text so only content remains. */
+export function stripFrameDecorations(text: string): string {
+  const kept: string[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.length > 0 && [...trimmed].every((glyph) => FRAME_GLYPHS.has(glyph))) continue;
+    if (
+      trimmed.length >= 2 &&
+      FRAME_EDGE_START.test(trimmed) &&
+      FRAME_EDGE_END.test(trimmed)
+    ) {
+      continue;
+    }
+    kept.push(
+      line
+        .replace(/^\s*[\u2502\u2503\u2551]\s?/u, "")
+        .replace(/\s?[\u2502\u2503\u2551]\s*$/u, "")
+        .replace(/[^\S \t]+$/u, ""),
+    );
+  }
+  while (kept.length > 0 && kept[0].trim().length === 0) kept.shift();
+  while (kept.length > 0 && (kept.at(-1) ?? "").trim().length === 0) kept.pop();
+  return kept.join("\n");
 }
 
 export function highlightTerminalSelection(

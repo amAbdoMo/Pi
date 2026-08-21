@@ -85,6 +85,9 @@ export default function uiExtension(pi: ExtensionAPI) {
         (error) => {
           ctx.ui.notify(`Could not copy the selected text: ${error.message}`, "error");
         },
+        () => {
+          ctx.ui.notify("Text copied", "info");
+        },
       );
       editors.add(editor);
       return editor;

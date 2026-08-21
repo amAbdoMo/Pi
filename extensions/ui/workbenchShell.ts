@@ -114,6 +114,7 @@ export interface ComposerCursorRequest {
 export interface WorkbenchShellOptions {
   copyText?: (text: string) => Promise<void>;
   onCopyError: (error: Error) => void;
+  onCopySuccess?: () => void;
   placeComposerCursor: (request: ComposerCursorRequest) => boolean;
 }
 
@@ -130,13 +131,19 @@ export function installWorkbenchShell(
     return existing;
   }
   const installation = tui.mode === "fullscreen"
-    ? new NativeFullscreenWorkbenchInstallation(tui, sidebar, options.onCopyError)
+    ? new NativeFullscreenWorkbenchInstallation(
+        tui,
+        sidebar,
+        options.onCopyError,
+        options.onCopySuccess,
+      )
     : new WorkbenchShellInstallation(
         tui,
         sidebar,
         options.copyText ?? copyToClipboard,
         options.onCopyError,
         options.placeComposerCursor,
+        options.onCopySuccess,
       );
   shellTui[WORKBENCH_SHELL_KEY] = installation;
   return installation;
@@ -156,11 +163,17 @@ class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
   private readonly nativeSelectionBounds?: () => unknown;
   private readonly suppressNativeCopy = () => {};
   private readonly removeInputListener: () => void;
+  private readonly onCopySuccess?: () => void;
   private sidebar: Component;
   private sidebarVisible = false;
   private overlay?: OverlayHandle;
 
-  constructor(tui: TUI, sidebar: Component, onCopyError: (error: Error) => void) {
+  constructor(
+    tui: TUI,
+    sidebar: Component,
+    onCopyError: (error: Error) => void,
+    onCopySuccess?: () => void,
+  ) {
     this.tui = tui as NativeFullscreenTui;
     this.nativeCopySelection = typeof this.tui.copySelectionToClipboard === "function"
       ? this.tui.copySelectionToClipboard
@@ -202,6 +215,7 @@ class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
     const copySelection = this.nativeCopySelection;
     if (!matchesKey(input, "ctrl+c") || !copySelection || !this.hasSelection()) return undefined;
     Reflect.apply(copySelection, this.tui, []);
+    this.onCopySuccess?.();
     this.tui.selectionAnchor = undefined;
     this.tui.selectionFocus = undefined;
     this.tui.requestRender();
@@ -239,6 +253,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
   private sidebar: Component;
   private copyText: (text: string) => Promise<void>;
   private onCopyError: (error: Error) => void;
+  private onCopySuccess?: () => void;
   private placeComposerCursor: (request: ComposerCursorRequest) => boolean;
   private sidebarVisible = true;
   private scrollOffset = 0;
@@ -262,10 +277,12 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     copyText: (text: string) => Promise<void>,
     onCopyError: (error: Error) => void,
     placeComposerCursor: (request: ComposerCursorRequest) => boolean,
+    onCopySuccess?: () => void,
   ) {
     this.sidebar = sidebar;
     this.copyText = copyText;
     this.onCopyError = onCopyError;
+    this.onCopySuccess = onCopySuccess;
     this.placeComposerCursor = placeComposerCursor;
     this.originalRender = tui.render.bind(tui);
     this.originalStart = tui.start.bind(tui);
@@ -278,6 +295,7 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.sidebar = component;
     this.copyText = options.copyText ?? copyToClipboard;
     this.onCopyError = options.onCopyError;
+    this.onCopySuccess = options.onCopySuccess;
     this.placeComposerCursor = options.placeComposerCursor;
     this.clearTextSelection();
     this.composerClickCandidate = undefined;
@@ -603,9 +621,11 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     if (!this.textSelection) return;
     const text = selectedTerminalText(this.textSelection.lines, this.textSelection);
     if (!text.trim()) return;
-    void this.copyText(text).catch((error: unknown) => {
-      this.onCopyError(error instanceof Error ? error : new Error(String(error)));
-    });
+    void this.copyText(text)
+      .then(() => this.onCopySuccess?.())
+      .catch((error: unknown) => {
+        this.onCopyError(error instanceof Error ? error : new Error(String(error)));
+      });
   }
 
   private clearTextSelection(): void {

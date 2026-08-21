@@ -76,6 +76,7 @@ export class WorkbenchSidebarController {
     theme: Theme,
     placeComposerCursor: (request: ComposerCursorRequest) => boolean,
     onCopyError: (error: Error) => void,
+    onCopySuccess?: () => void,
   ): void {
     this.handle?.hide();
     this.handle = undefined;
@@ -91,6 +92,7 @@ export class WorkbenchSidebarController {
     );
     this.shell = installWorkbenchShell(tui, this.component, {
       onCopyError,
+      onCopySuccess,
       placeComposerCursor,
     });
     this.syncVisibility();
