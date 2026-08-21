@@ -342,7 +342,19 @@ Fix the checkout coupon layout.`;
   assert.equal(deriveSessionTitle(prompt), "Checkout coupon layout fix");
 });
 
-test("automatic session titles persist once and preserve manual names", () => {
+function createNamingContext(overrides = {}) {
+  return {
+    sessionManager: { getBranch: () => [] },
+    ...overrides,
+  };
+}
+
+async function flushAsyncNames() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+test("agent-generated session titles come from the active model", async () => {
   let sessionName;
   const writes = [];
   const pi = {
@@ -352,27 +364,83 @@ test("automatic session titles persist once and preserve manual names", () => {
       writes.push(name);
     },
   };
-  const ctx = { sessionManager: { getBranch: () => [] } };
+  const registry = {
+    completeCount: 0,
+    complete: async (_model, _context) => {
+      registry.completeCount += 1;
+      return {
+        role: "assistant",
+        content: [{ type: "text", text: "\n" + "Checkout coupon layout repair" }],
+      };
+    },
+  };
+  const ctx = createNamingContext({ model: { provider: "openrouter" }, modelRegistry: registry });
 
-  assert.equal(
-    ensureAutomaticSessionTitle(pi, ctx, "Add automatic session naming."),
-    "Dynamic session titles",
-  );
   assert.equal(
     ensureAutomaticSessionTitle(pi, ctx, "Fix an unrelated checkout issue."),
     undefined,
   );
-  assert.deepEqual(writes, ["Dynamic session titles"]);
+  await flushAsyncNames();
 
-  sessionName = "My manual session name";
+  assert.equal(sessionName, "Checkout coupon layout repair");
+  assert.equal(registry.completeCount, 1);
+
+  // A later task must not rename the session.
+  ensureAutomaticSessionTitle(pi, ctx, "Improve the agent sidebar.");
+  await flushAsyncNames();
+  assert.deepEqual(writes, ["Checkout coupon layout repair"]);
+});
+
+test("manual session names block automatic naming", async () => {
+  let sessionName = "My manual session name";
+  const writes = [];
+  const pi = {
+    getSessionName: () => sessionName,
+    setSessionName: (name) => {
+      sessionName = name;
+      writes.push(name);
+    },
+  };
+  const ctx = createNamingContext();
+
   assert.equal(
     ensureAutomaticSessionTitle(pi, ctx, "Improve the agent sidebar."),
     undefined,
   );
-  assert.deepEqual(writes, ["Dynamic session titles"]);
+  await flushAsyncNames();
+  assert.deepEqual(writes, []);
 });
 
-test("resumed unnamed sessions use their first substantive task", () => {
+test("session titles fall back to heuristics when the model is unavailable", async () => {
+  let sessionName;
+  const pi = {
+    getSessionName: () => sessionName,
+    setSessionName: (name) => { sessionName = name; },
+  };
+  const failingRegistry = {
+    complete: async () => {
+      throw new Error("no auth");
+    },
+  };
+  const ctx = createNamingContext({ model: { provider: "openrouter" }, modelRegistry: failingRegistry });
+
+  ensureAutomaticSessionTitle(pi, ctx, "Investigate FFmpeg installation failures on Windows.");
+  await flushAsyncNames();
+  assert.equal(sessionName, "FFmpeg installation failures investigation");
+
+  // Without any model at all, the heuristic still applies.
+  sessionName = undefined;
+  const plainPi = {
+    getSessionName: () => sessionName,
+    setSessionName: (name) => { sessionName = name; },
+  };
+  const plainCtx = createNamingContext();
+  ensureAutomaticSessionTitle(plainPi, plainCtx, "Update README");
+  await flushAsyncNames();
+  assert.equal(sessionName, "README update");
+});
+
+test("resumed unnamed sessions use their first substantive task", async () => {
   let sessionName;
   const pi = {
     getSessionName: () => sessionName,
@@ -397,10 +465,8 @@ test("resumed unnamed sessions use their first substantive task", () => {
     },
   };
 
-  assert.equal(
-    ensureAutomaticSessionTitle(pi, ctx),
-    "FFmpeg installation failures investigation",
-  );
+  assert.equal(ensureAutomaticSessionTitle(pi, ctx), undefined);
+  await flushAsyncNames();
   assert.equal(sessionName, "FFmpeg installation failures investigation");
 });
 
@@ -630,9 +696,12 @@ test("automatic and manual session names update the live workbench state", async
       message: { role: "user", content: "Update README" },
     }];
     await handlers.get("session_start")({ reason: "new" }, ctx);
+    await flushAsyncNames();
     assert.equal(sessionName, "README update");
     assert.equal(workbenchState.sessionName, "README update");
 
+    // Automatic naming runs once per session: clearing the name afterwards
+    // must not trigger a second rename from a later task.
     sessionName = undefined;
     branch = [];
     await handlers.get("message_end")(
@@ -644,8 +713,8 @@ test("automatic and manual session names update the live workbench state", async
       },
       ctx,
     );
-    assert.equal(sessionName, "Dynamic session titles");
-    assert.equal(workbenchState.sessionName, "Dynamic session titles");
+    await flushAsyncNames();
+    assert.equal(sessionName, undefined);
 
     const rendersBeforeRename = renderRequests;
     await handlers.get("session_info_changed")(

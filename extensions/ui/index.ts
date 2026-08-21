@@ -43,7 +43,10 @@ export default function uiExtension(pi: ExtensionAPI) {
     if (event.reason === "startup" || event.reason === "resume")
       clearTerminal();
 
-    ensureAutomaticSessionTitle(pi, ctx);
+    ensureAutomaticSessionTitle(pi, ctx, undefined, () => {
+      updateState(ctx, pi);
+      notifyEditors();
+    });
     updateState(ctx, pi);
     void updateBranch(pi);
     void refreshChatGptUsage(ctx, { force: true });
@@ -136,7 +139,10 @@ export default function uiExtension(pi: ExtensionAPI) {
   pi.on("message_end", async (event, ctx) => {
     if (ctx.mode !== "tui") return;
     if (event.message.role === "user") {
-      ensureAutomaticSessionTitle(pi, ctx, event.message.content);
+      ensureAutomaticSessionTitle(pi, ctx, event.message.content, () => {
+        updateState(ctx, pi);
+        notifyEditors();
+      });
     }
     updateState(ctx, pi);
     if (event.message.role === "assistant") void refreshChatGptUsage(ctx);

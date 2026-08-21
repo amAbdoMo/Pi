@@ -142,7 +142,28 @@ const TITLE_STOP_WORDS = new Set([
 const NON_TASK_PROMPT = /^(?:hi|hello|hey|thanks|thank you|okay|ok|yes|no|continue|go ahead|looks good|sounds good|help me)[\s!.?]*$/i;
 
 type NamingApi = Pick<ExtensionAPI, "getSessionName" | "setSessionName">;
-type NamingContext = Pick<ExtensionContext, "sessionManager">;
+type NamingModel = ExtensionContext["model"];
+type NamingModelRegistry = ExtensionContext["modelRegistry"];
+type NamingContext = Pick<ExtensionContext, "sessionManager" | "model" | "modelRegistry">;
+
+const TITLE_AGENT_SYSTEM_PROMPT = [
+  "You name coding-agent sessions.",
+  "From the user's first message, reply with ONLY a session title:",
+  "- 2 to 5 words, maximum 40 characters",
+  "- Describe the task or subject, not the wording",
+  "- No quotes, no labels, no trailing punctuation",
+].join("\n");
+const TITLE_AGENT_MAX_CHARS = 800;
+const TITLE_AGENT_TIMEOUT_MS = 20_000;
+
+// Session ids whose automatic naming has already been requested.
+let namingRequestedSessionId: string | undefined;
+
+function currentSessionId(ctx: NamingContext): string | undefined {
+  const manager = ctx.sessionManager as { getSessionId?: () => string };
+  const id = manager.getSessionId?.();
+  return typeof id === "string" ? id : undefined;
+}
 
 function cleanPrompt(prompt: string): string {
   return prompt
@@ -303,28 +324,99 @@ function messageText(content: unknown): string {
     .join("\n");
 }
 
-function firstSubstantiveTitle(ctx: NamingContext): string | undefined {
+function firstSubstantivePrompt(ctx: NamingContext): string {
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type !== "message" || entry.message.role !== "user") continue;
-    const title = deriveSessionTitle(messageText(entry.message.content));
-    if (title) return title;
+    const text = messageText(entry.message.content);
+    if (isNamablePrompt(text)) return text;
   }
-  return undefined;
+  return "";
 }
 
-/** Name an unnamed session once, preserving native/manual session names. */
+/** A prompt is worth naming when it is substantive and not a command or greeting. */
+function isNamablePrompt(prompt: string): boolean {
+  const cleaned = cleanPrompt(prompt);
+  if (!cleaned) return false;
+  if (cleaned.startsWith("/") || cleaned.startsWith("!")) return false;
+  return !NON_TASK_PROMPT.test(cleaned);
+}
+
+/** Keep only a clean, bounded first line of an agent-suggested title. */
+export function sanitizeGeneratedTitle(raw: string): string | undefined {
+  const firstLine = raw.split(/\r?\n/).find((line) => line.trim().length > 0) ?? "";
+  const cleaned = firstLine
+    .replace(/[`*_["'“”«»]/g, "")
+    .replace(/^\s*(?:title|session)\s*:\s*/i, "")
+    .replace(/[.!?…]+$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned || cleaned.length > MAX_TITLE_LENGTH + 20) return undefined;
+  if (/\b(?:sorry|cannot|can't|unable|as an ai)\b/i.test(cleaned)) return undefined;
+
+  const words = cleaned.split(" ");
+  const title = words.length <= MAX_TITLE_WORDS + 2
+    ? capitalizeFirst(cleaned)
+    : `${capitalizeFirst(words.slice(0, MAX_TITLE_WORDS).join(" "))}…`;
+  return title.slice(0, MAX_TITLE_LENGTH + 1).trimEnd() || undefined;
+}
+
+/** Ask the active model for a short title; returns undefined on any failure. */
+async function agentSessionTitle(
+  ctx: NamingContext,
+  prompt: string,
+): Promise<string | undefined> {
+  const model: NamingModel = ctx.model;
+  const registry = ctx.modelRegistry as NamingModelRegistry | undefined;
+  if (!model || typeof registry?.complete !== "function") return undefined;
+
+  try {
+    const response = await registry.complete(
+      model,
+      {
+        systemPrompt: TITLE_AGENT_SYSTEM_PROMPT,
+        messages: [{
+          role: "user",
+          content: `First message of the session:\n\n${prompt.slice(0, TITLE_AGENT_MAX_CHARS)}`,
+        }],
+      },
+      { maxTokens: 512, signal: AbortSignal.timeout(TITLE_AGENT_TIMEOUT_MS) },
+    );
+    return sanitizeGeneratedTitle(messageText(response.content));
+  } catch {
+    return undefined;
+  }
+}
+
+/** Name an unnamed session once, preserving native/manual session names.
+ *
+ * The active model names the session from the first substantive task when one
+ * is available; otherwise the local heuristic title is used as fallback.
+ * onNamed runs whenever a name is actually applied.
+ */
 export function ensureAutomaticSessionTitle(
   pi: NamingApi,
   ctx: NamingContext,
   content?: unknown,
-): string | undefined {
-  if (pi.getSessionName()?.trim()) return undefined;
+  onNamed?: (name: string) => void,
+): void {
+  if (pi.getSessionName()?.trim()) return;
+  const sessionId = currentSessionId(ctx);
+  if (sessionId !== undefined && sessionId === namingRequestedSessionId) return;
 
-  const title = content === undefined
-    ? firstSubstantiveTitle(ctx)
-    : deriveSessionTitle(messageText(content));
-  if (!title) return undefined;
+  const prompt = content === undefined ? firstSubstantivePrompt(ctx) : messageText(content);
+  if (!isNamablePrompt(prompt)) return;
 
-  pi.setSessionName(title);
-  return title;
+  namingRequestedSessionId = sessionId;
+  const applyName = (name: string) => {
+    if (pi.getSessionName()?.trim()) return;
+    pi.setSessionName(name);
+    onNamed?.(name);
+  };
+
+  const cleaned = cleanPrompt(prompt);
+  const heuristic = deriveSessionTitle(prompt);
+  void agentSessionTitle(ctx, cleaned).then((agentTitle) => {
+    const finalTitle = agentTitle ?? heuristic;
+    if (finalTitle) applyName(finalTitle);
+  });
 }
