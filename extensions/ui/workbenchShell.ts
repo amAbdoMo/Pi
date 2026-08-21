@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 import {
   getCapabilities,
+  getCellDimensions,
   matchesKey,
   setCapabilities,
   truncateToWidth,
@@ -25,6 +26,7 @@ const {
 
 import { isWorkbenchModalActive } from "./modalState.ts";
 import { renderChatImageMarkers } from "./chatImages.ts";
+import { convertKittyLineToSixel } from "./sixelImages.ts";
 import {
   clampScrollOffset,
   fixedViewport,
@@ -151,6 +153,17 @@ export function installWorkbenchShell(
       );
   shellTui[WORKBENCH_SHELL_KEY] = installation;
   return installation;
+}
+
+/**
+ * Windows Terminal ignores Kitty graphics but renders Sixel. After the docked
+ * composition reserved the image rows, swap each Kitty sequence for a Sixel
+ * drawing of the same footprint.
+ */
+function renderSixelOnWindowsTerminal(lines: readonly string[]): string[] {
+  if (!process.env.WT_SESSION) return [...lines];
+  const { widthPx, heightPx } = getCellDimensions();
+  return lines.map((line) => line.includes("\x1b_G") ? convertKittyLineToSixel(line, widthPx, heightPx) : line);
 }
 
 function ensureWarpKittyImages(tui: TUI): void {
@@ -435,14 +448,14 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     this.refreshAutoScrollFocus();
     this.reconcileTextSelection(liveMainLines, scrollLines);
     const mainLines = this.highlightSelection(liveMainLines);
-    if (!dimensions.showSidebar) return mainLines;
-    return combineWorkbenchColumns({
+    if (!dimensions.showSidebar) return renderSixelOnWindowsTerminal(mainLines);
+    return renderSixelOnWindowsTerminal(combineWorkbenchColumns({
       mainLines,
       sidebarLines: this.sidebar.render(dimensions.sidebarWidth),
       mainWidth: dimensions.mainWidth,
       sidebarWidth: dimensions.sidebarWidth,
       height: dimensions.height,
-    });
+    }));
   }
 
   private handleScrollInput(input: string): { consume?: true; data?: string } | undefined {

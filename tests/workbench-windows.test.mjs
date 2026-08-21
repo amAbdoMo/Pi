@@ -74,6 +74,7 @@ const tuiStub = String.raw`
     }
   }
   export class Text extends Markdown {}
+  export function getCellDimensions() { return { widthPx: 9, heightPx: 18 }; }
   export function stripTerminalSequences(str) {
     return String(str).replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, "").replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "").replace(/\x1b_G[^\x1b]*\x1b\\/g, "");
   }
@@ -1857,4 +1858,65 @@ test("pasted image markers render inline in image-only framed messages", async (
   } finally {
     setCapabilities(previousCapabilities);
   }
+});
+
+test("kitty image lines convert to sixel drawings on Windows Terminal", async () => {
+  const { deflateSync } = await import("node:zlib");
+  const { convertKittyLineToSixel, decodePng, encodeSixel } = await import("../extensions/ui/sixelImages.ts");
+
+  // Build a 4x2 RGBA PNG: top row red, bottom row blue.
+  function chunk(type, data) {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const crcTable = [...Array(256)].map((_, n) => {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      return c >>> 0;
+    });
+    let crc = 0xffffffff;
+    for (const byte of body) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    const crcBuf = Buffer.alloc(4);
+    crcBuf.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
+    return Buffer.concat([length, body, crcBuf]);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(4, 0);
+  ihdr.writeUInt32BE(2, 4);
+  ihdr[8] = 8; ihdr[9] = 6; ihdr[10] = 0; ihdr[11] = 0; ihdr[12] = 0;
+  const raw = Buffer.concat([
+    Buffer.from([0, 255, 0, 0, 255, 0, 255, 0, 255, 255, 255, 255, 255, 255, 255, 255, 255]),
+    Buffer.from([0, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255, 0, 0, 255, 255]),
+  ]);
+  const png = Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", ihdr),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+
+  const decoded = decodePng(png);
+  assert.ok(decoded, "minimal PNG decodes");
+  assert.equal(decoded.width, 4);
+  assert.equal(decoded.height, 2);
+  assert.equal(decoded.pixels[0], 255);
+  assert.equal(decoded.pixels[2], 0, "top-left pixel is red, so blue channel is 0");
+
+  // Sixel structure: header, palette, band data, terminator.
+  const sixel = encodeSixel(decoded, 8, 4);
+  assert.ok(sixel.startsWith("\x1bPq\"1;1;8;4"));
+  assert.ok(sixel.includes("#"), "palette entries emitted");
+  assert.ok(sixel.endsWith("\x1b\\"));
+  assert.match(sixel, /#\d+;2;\d+;\d+;\d+/, "palette definitions emitted");
+
+  // Kitty line conversion swaps the sequence for sixel of the same footprint.
+  const base64 = png.toString("base64");
+  const kittyLine = `\x1b_Ga=T,f=100,q=2,C=1,c=4,r=2;${base64}\x1b\\`;
+  const converted = convertKittyLineToSixel(kittyLine, 9, 18);
+  assert.ok(converted.startsWith("\x1bPq\"1;1;36;36"), "sixel sized from kitty cell controls");
+  assert.ok(converted.endsWith("\x1b[2A"), "cursor restored to the image top row");
+  assert.ok(!converted.includes("\x1b_Ga=T"), "kitty transmission removed");
+
+  // Non-image lines pass through untouched.
+  assert.equal(convertKittyLineToSixel("plain text", 9, 18), "plain text");
 });

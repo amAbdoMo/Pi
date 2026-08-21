@@ -159,3 +159,4 @@ test("workbench dimensions do not reserve a scrollbar column", () => {
   assert.equal(dimensions.mainWidth + dimensions.sidebarWidth, 160);
   assert.equal(fixedViewport(["chat"], ["composer"], 2)[0], "chat");
 });
+

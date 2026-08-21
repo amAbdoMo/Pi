@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Inline images now render on Windows Terminal: Kitty image sequences are converted to Sixel drawings of the same cell footprint (with cursor restore) since WT ignores the Kitty graphics protocol.
+- Text selection inside framed messages highlights only the message text; trailing frame borders and padded background no longer light up.
 - Pasted images now render inline in the chat: framed `[Image N]` messages are swapped for the actual picture (image-only messages; mixed text keeps its marker), and inline images are enabled on Windows Terminal by forcing the Kitty protocol where detection reported none.
 - Fullscreen selection copies now strip message frame borders through the same decoration filter as the docked shell, so selecting a framed user message in native fullscreen copies only its text; disposing the Workbench restores the native clipboard writer untouched.
 - Plan detection is now fully silent: numbered `Plan:` sections are tracked in the sidebar Tasks section and status bar without any approval dialog, follow-up messages, or turn interruptions; `plan_progress` and completion announcements are unchanged.

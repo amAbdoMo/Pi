@@ -101,9 +101,12 @@ export function highlightTerminalSelection(
   return lines.map((line, row) => {
     if (row < start.row || row > end.row) return line;
     const selectableWidth = selectableLineWidth(line);
+    // Highlight stops at the visible text: trailing frame borders and padded
+    // background must not light up, so trim them from the paint extent.
+    const paintedWidth = visibleWidth(stripTerminalSequences(line).replace(/[ \t\u2500-\u257f]+$/u, ""));
     const fullLineWidth = visibleWidth(line);
     const startColumn = row === start.row ? start.column : 0;
-    const endColumn = row === end.row ? end.endColumn : selectableWidth;
+    const endColumn = row === end.row ? Math.min(end.endColumn, paintedWidth) : paintedWidth;
     if (endColumn <= startColumn) return line;
 
     const before = sliceByColumn(line, 0, startColumn, true);
