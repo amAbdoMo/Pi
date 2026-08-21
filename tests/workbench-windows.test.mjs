@@ -1289,6 +1289,69 @@ test("native fullscreen keeps renderer ownership and copies selection only on Ct
   assert.equal(inputListener, undefined);
 });
 
+test("native fullscreen selection copy strips message frame borders and dispose restores the raw writer", async () => {
+  const copied = [];
+  const overlays = [];
+  let inputListener;
+  const fullscreenPrototype = {
+    copySelectionToClipboard() {},
+    getSelectionBounds() {
+      return this.selectionAnchor && this.selectionFocus ? { start: {}, end: {} } : undefined;
+    },
+    copySelection(text) {
+      copied.push(text);
+      return Promise.resolve(true);
+    },
+  };
+  const tui = Object.assign(Object.create(fullscreenPrototype), {
+    mode: "fullscreen",
+    terminal: { columns: 160, rows: 40, write() {} },
+    selectionAnchor: {},
+    selectionFocus: {},
+    render: () => ["native"],
+    start() {},
+    stop() {},
+    invalidate() {},
+    requestRender() {},
+    addInputListener(listener) {
+      inputListener = listener;
+      return () => { inputListener = undefined; };
+    },
+    showOverlay(_component, options) {
+      const overlay = {
+        options,
+        hidden: false,
+        hide() { this.hidden = true; },
+        setHidden(hidden) { this.hidden = hidden; },
+        isHidden() { return this.hidden; },
+      };
+      overlays.push(overlay);
+      return overlay;
+    },
+  });
+  const previousTermProgram = process.env.TERM_PROGRAM;
+  const previousCapabilities = getCapabilities();
+  process.env.TERM_PROGRAM = "";
+  setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+
+  const handle = installWorkbenchShell(tui, component(["sidebar"]), copyOptions);
+  try {
+    assert.notEqual(tui.copySelection, fullscreenPrototype.copySelection, "install wraps the clipboard writer");
+
+    await tui.copySelection("┌─────────────┐\n│ hello world │\n└─────────────┘");
+    assert.deepEqual(copied, ["hello world"], "frame borders are stripped before the clipboard");
+  } finally {
+    handle.dispose();
+    setCapabilities(previousCapabilities);
+    if (previousTermProgram === undefined) delete process.env.TERM_PROGRAM;
+    else process.env.TERM_PROGRAM = previousTermProgram;
+  }
+
+  assert.equal(tui.copySelection, fullscreenPrototype.copySelection, "dispose restores the native writer");
+  await tui.copySelection("│ raw │");
+  assert.deepEqual(copied, ["hello world", "│ raw │"]);
+});
+
 test("workbench shell keeps clipped Kitty images visible and above the dock while scrolling", () => {
   const kittyImage = "\x1b_Ga=T,f=100,q=2,C=1,c=12,r=6,i=7;AAAA\x1b\\";
   const { tui, input } = createWorkbenchTui({

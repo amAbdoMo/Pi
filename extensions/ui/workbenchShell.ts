@@ -44,6 +44,7 @@ import {
   clampSelectionPoint,
   highlightTerminalSelection,
   selectedTerminalText,
+  stripFrameDecorations,
   type TextSelectionPoint,
   type TextSelectionRange,
 } from "./textSelection.ts";
@@ -103,6 +104,8 @@ interface NativeFullscreenTui extends TUI {
   getSelectionBounds?: () => unknown;
   selectionAnchor?: unknown;
   selectionFocus?: unknown;
+  /** Injected clipboard writer used internally by copySelectionToClipboard. */
+  copySelection?: (text: string) => Promise<boolean>;
 }
 
 export interface ComposerCursorRequest {
@@ -160,6 +163,7 @@ function ensureWarpKittyImages(tui: TUI): void {
 class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
   private readonly tui: NativeFullscreenTui;
   private readonly nativeCopySelection?: () => void;
+  private readonly nativeCopyWriter?: (text: string) => Promise<boolean>;
   private readonly nativeSelectionBounds?: () => unknown;
   private readonly suppressNativeCopy = () => {};
   private readonly removeInputListener: () => void;
@@ -181,6 +185,15 @@ class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
     this.nativeSelectionBounds = typeof this.tui.getSelectionBounds === "function"
       ? this.tui.getSelectionBounds
       : undefined;
+    // Wrap the TUI's clipboard writer so fullscreen selection copies drop message frame
+    // borders exactly like the docked-shell copy path.
+    this.nativeCopyWriter = typeof this.tui.copySelection === "function"
+      ? this.tui.copySelection
+      : undefined;
+    if (this.nativeCopyWriter) {
+      this.tui.copySelection = async (text: string) =>
+        this.nativeCopyWriter!.call(this.tui, stripFrameDecorations(text));
+    }
     if (this.nativeCopySelection && this.nativeSelectionBounds) {
       this.tui.copySelectionToClipboard = this.suppressNativeCopy;
     } else {
@@ -207,6 +220,7 @@ class NativeFullscreenWorkbenchInstallation implements WorkbenchShellHandle {
     this.hideOverlay();
     this.removeInputListener();
     if (this.nativeCopySelection) this.tui.copySelectionToClipboard = this.nativeCopySelection;
+    if (this.nativeCopyWriter) this.tui.copySelection = this.nativeCopyWriter;
     (this.tui as ShellTui)[WORKBENCH_SHELL_KEY] = undefined;
     this.tui.requestRender(true);
   }
