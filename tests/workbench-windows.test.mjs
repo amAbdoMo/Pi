@@ -683,6 +683,7 @@ test("automatic and manual session names update the live workbench state", async
     getThinkingLevel: () => "off",
     exec: async () => ({ stdout: "main\n", stderr: "", code: 0 }),
     registerCommand() {},
+    registerEntryRenderer() {},
     registerShortcut() {},
     on(event, handler) { handlers.set(event, handler); },
   };
@@ -694,6 +695,7 @@ test("automatic and manual session names update the live workbench state", async
       setHeader() {},
       setEditorComponent() {},
       setFooter() {},
+      setWidget() {},
       custom: async () => undefined,
       notify() {},
     },

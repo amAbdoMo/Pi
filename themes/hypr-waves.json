@@ -20,6 +20,7 @@
     "magenta": "#A8245E",
     "magentaBright": "#C43878",
     "cyan": "#5EC4D4",
+    "commentTeal": "#4FB3AA",
     "cyanBright": "#7ED4E0",
     "green": "#65D17A",
     "shadow": "#1A1A1A"
@@ -64,7 +65,7 @@
     "toolDiffRemoved": "primaryBright",
     "toolDiffContext": "softFg",
 
-    "syntaxComment": "surface3",
+    "syntaxComment": "commentTeal",
     "syntaxKeyword": "primaryBright",
     "syntaxFunction": "orangeBright",
     "syntaxVariable": "cyanBright",

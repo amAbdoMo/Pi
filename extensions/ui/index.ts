@@ -1,6 +1,19 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Key } from "@earendil-works/pi-tui";
+import { Key, Text } from "@earendil-works/pi-tui";
 import { hasActiveWorkflowActivity } from "../workflow/activity.ts";
+import {
+  AGENT_WORKED_ENTRY_TYPE,
+  resetAgentTime,
+  settleAgentTime,
+  startAgentTime,
+  type AgentWorkedEntry,
+} from "./agentTime.ts";
+import { formatElapsedDuration } from "./agentTimeTracker.ts";
+import {
+  COPY_FEEDBACK_KEY,
+  CopyFeedbackWidget,
+  TransientFeedback,
+} from "./copyFeedback.ts";
 import {
   refreshChatGptUsage,
   resetChatGptUsage,
@@ -24,9 +37,19 @@ import { WorkbenchSidebarController } from "./workbenchSidebar.ts";
 // UI extension: startup header, terminal-style editor, and footer cleanup.
 let unsubscribeSubagents: (() => void) | undefined;
 let subagentUsagePoller: UsageRefreshPoller | undefined;
+let copyFeedback: TransientFeedback | undefined;
 const workbenchSidebar = new WorkbenchSidebarController();
 
 export default function uiExtension(pi: ExtensionAPI) {
+  pi.registerEntryRenderer<AgentWorkedEntry>(
+    AGENT_WORKED_ENTRY_TYPE,
+    (entry, _options, theme) => new Text(
+      theme.fg("dim", `Worked for ${formatElapsedDuration(entry.data.elapsedMs)}`),
+      0,
+      0,
+    ),
+  );
+
   pi.registerCommand("sidebar", {
     description: "Toggle the Pi workspace sidebar",
     handler: async (_args, ctx) => workbenchSidebar.toggle(ctx),
@@ -38,6 +61,7 @@ export default function uiExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (event, ctx) => {
+    resetAgentTime();
     if (ctx.mode !== "tui") return;
 
     if (event.reason === "startup" || event.reason === "resume")
@@ -75,6 +99,17 @@ export default function uiExtension(pi: ExtensionAPI) {
       invalidate: () => {},
     }));
 
+    copyFeedback?.dispose();
+    copyFeedback = new TransientFeedback(
+      () =>
+        ctx.ui.setWidget(
+          COPY_FEEDBACK_KEY,
+          (_tui, theme) => new CopyFeedbackWidget(theme),
+          { placement: "belowEditor" },
+        ),
+      () => ctx.ui.setWidget(COPY_FEEDBACK_KEY, undefined),
+    );
+
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const editor = new TerminalEditor(tui, theme, keybindings);
       workbenchSidebar.attachDocked(
@@ -86,7 +121,7 @@ export default function uiExtension(pi: ExtensionAPI) {
           ctx.ui.notify(`Could not copy the selected text: ${error.message}`, "error");
         },
         () => {
-          ctx.ui.notify("Text copied", "info");
+          copyFeedback?.trigger();
         },
       );
       editors.add(editor);
@@ -153,6 +188,11 @@ export default function uiExtension(pi: ExtensionAPI) {
     workbenchSidebar.invalidate();
   });
 
+  pi.on("agent_start", async (_event, ctx) => {
+    if (ctx.mode !== "tui") return;
+    startAgentTime();
+  });
+
   pi.on("agent_end", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     updateState(ctx, pi);
@@ -162,8 +202,18 @@ export default function uiExtension(pi: ExtensionAPI) {
     workbenchSidebar.invalidate();
   });
 
+  pi.on("agent_settled", async (_event, ctx) => {
+    if (ctx.mode !== "tui") return;
+    const elapsedMs = settleAgentTime();
+    if (elapsedMs === null) return;
+    pi.appendEntry<AgentWorkedEntry>(AGENT_WORKED_ENTRY_TYPE, { elapsedMs });
+  });
+
   pi.on("session_shutdown", async (event) => {
+    resetAgentTime();
     resetChatGptUsage();
+    copyFeedback?.dispose();
+    copyFeedback = undefined;
     unsubscribeSubagents?.();
     unsubscribeSubagents = undefined;
     subagentUsagePoller?.dispose();

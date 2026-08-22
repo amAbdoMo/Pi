@@ -59,3 +59,28 @@ test("composer and sidebar backgrounds are distinct from the chat canvas", () =>
   assert.equal(theme.colors.success, "green");
   assert.match(theme.vars.green, /^#[0-9A-F]{6}$/i);
 });
+
+test("syntax comments use a readable teal accent distinct from neighboring tokens", () => {
+  const themePath = new URL("../themes/hypr-waves.json", import.meta.url);
+  const theme = JSON.parse(fs.readFileSync(themePath, "utf8"));
+
+  assert.equal(theme.colors.syntaxComment, "commentTeal");
+  assert.match(theme.vars.commentTeal, /^#[0-9A-F]{6}$/i);
+
+  // WCAG contrast against the black chat canvas must stay comfortably readable.
+  const hex = theme.vars.commentTeal;
+  const channel = (offset) => {
+    const value = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance =
+    0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  const contrast = (luminance + 0.05) / 0.05;
+  assert.ok(contrast >= 7, `comment contrast ${contrast.toFixed(2)} below 7:1`);
+
+  assert.notEqual(
+    theme.vars.commentTeal.toLowerCase(),
+    theme.vars.cyanBright.toLowerCase(),
+  );
+  assert.notEqual(theme.colors.syntaxComment, "surface3");
+});

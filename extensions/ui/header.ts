@@ -1,3 +1,4 @@
+import { agentTimeStatus } from "./agentTime.ts";
 import { chatGptLimitLabels } from "./chatgptUsage.ts";
 import {
   bold,
@@ -44,6 +45,9 @@ function composerStatus(width: number): string {
   const fields = [
     modelAndThinking,
     ...(fastMode ? [color("accent", "fast")] : []),
+    ...(agentTimeStatus.label
+      ? [color(agentTimeStatus.working ? "accent" : "muted", agentTimeStatus.label)]
+      : []),
     ...chatGptLimitLabels(),
   ];
   return clipToWidth(fields.join(color("borderMuted", " · ")), width);
