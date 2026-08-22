@@ -7,9 +7,11 @@ import {
   startAgentTime,
 } from "./agentTime.ts";
 import {
-  COPY_FEEDBACK_KEY,
-  CopyFeedbackWidget,
   TransientFeedback,
+  clearCopyFeedbackTheme,
+  copyFeedbackState,
+  setCopyFeedbackTheme,
+  type CopyFeedbackTheme,
 } from "./copyFeedback.ts";
 import {
   refreshChatGptUsage,
@@ -88,14 +90,16 @@ export default function uiExtension(pi: ExtensionAPI) {
     }));
 
     copyFeedback?.dispose();
+    setCopyFeedbackTheme(ctx.ui.theme as unknown as CopyFeedbackTheme);
     copyFeedback = new TransientFeedback(
-      () =>
-        ctx.ui.setWidget(
-          COPY_FEEDBACK_KEY,
-          (_tui, theme) => new CopyFeedbackWidget(theme),
-          { placement: "belowEditor" },
-        ),
-      () => ctx.ui.setWidget(COPY_FEEDBACK_KEY, undefined),
+      () => {
+        copyFeedbackState.visible = true;
+        notifyEditors();
+      },
+      () => {
+        copyFeedbackState.visible = false;
+        notifyEditors();
+      },
     );
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
@@ -200,6 +204,7 @@ export default function uiExtension(pi: ExtensionAPI) {
     resetChatGptUsage();
     copyFeedback?.dispose();
     copyFeedback = undefined;
+    clearCopyFeedbackTheme();
     unsubscribeSubagents?.();
     unsubscribeSubagents = undefined;
     subagentUsagePoller?.dispose();

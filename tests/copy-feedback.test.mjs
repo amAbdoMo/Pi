@@ -2,21 +2,44 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   COPY_FEEDBACK_VISIBLE_MS,
-  CopyFeedbackWidget,
   TransientFeedback,
+  clearCopyFeedbackTheme,
+  copyFeedbackState,
+  renderCopyBadgeLine,
+  setCopyFeedbackTheme,
 } from "../extensions/ui/copyFeedback.ts";
 
-test("copy confirmation renders one background-highlighted success badge", () => {
-  const widget = new CopyFeedbackWidget({
-    bold: (text) => `<bold>${text}`,
-    fg: (color, text) => `<${color}>${text}`,
-    getFgAnsi: (color) => `\x1b[38;2;101;209;122m<${color}>`,
-  });
+const badgeTheme = {
+  bold: (text) => `<bold>${text}`,
+  getFgAnsi: (color) => `\x1b[38;2;101;209;122m<${color}>`,
+};
 
-  const [line] = widget.render();
+test("copy badge renders a background-highlighted chip only while visible", () => {
+  clearCopyFeedbackTheme();
+  assert.equal(renderCopyBadgeLine(), undefined);
+
+  setCopyFeedbackTheme(badgeTheme);
+  assert.equal(renderCopyBadgeLine(), undefined);
+
+  copyFeedbackState.visible = true;
+  const [line] = [renderCopyBadgeLine()];
+  assert.ok(line);
   assert.ok(line.startsWith("\x1b[48;2;101;209;122m<success>"));
   assert.ok(line.includes("<bold> ✓ Copied "));
   assert.ok(line.endsWith("\x1b[39m\x1b[49m"));
+
+  copyFeedbackState.visible = false;
+  assert.equal(renderCopyBadgeLine(), undefined);
+});
+
+test("clearing the copy theme hides any visible badge", () => {
+  setCopyFeedbackTheme(badgeTheme);
+  copyFeedbackState.visible = true;
+  assert.ok(renderCopyBadgeLine());
+
+  clearCopyFeedbackTheme();
+  assert.equal(copyFeedbackState.visible, false);
+  assert.equal(renderCopyBadgeLine(), undefined);
 });
 
 test("copy confirmation shows immediately and hides once after its lifetime", (t) => {

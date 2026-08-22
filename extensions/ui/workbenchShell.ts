@@ -27,6 +27,10 @@ const {
 import { isWorkbenchModalActive } from "./modalState.ts";
 import { convertKittyLineToSixel } from "./sixelImages.ts";
 import {
+  copyFeedbackState,
+  renderCopyBadgeLine,
+} from "./copyFeedback.ts";
+import {
   clampScrollOffset,
   fixedViewport,
   preserveScrollAnchor,
@@ -387,6 +391,12 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
     // Pasted images stay textual `[Image N]` markers in chat; the model still
     // receives the real image data through the input pipeline.
     const scrollLines = [...parts.scrollLines];
+    // The copy badge lives inside the chat viewport, above the composer, and
+    // participates in viewport metrics so scrolling stays aligned.
+    if (copyFeedbackState.visible) {
+      const badgeLine = renderCopyBadgeLine();
+      if (badgeLine) scrollLines.push(badgeLine);
+    }
     const metrics = viewportMetrics(
       scrollLines,
       parts.dockLines,
