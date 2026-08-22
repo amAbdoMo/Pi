@@ -1819,48 +1819,6 @@ test("terminal editor passes ordinary and empty prompt Tab input to the stock ed
   assert.deepEqual(editor.handledInputs, ["tab", "tab"]);
 });
 
-test("pasted image markers render inline in image-only framed messages", async () => {
-  const { renderChatImageMarkers } = await import("../extensions/ui/chatImages.ts");
-  const { registerPastedImage } = await import("../extensions/ui/imagePaste.ts");
-  const { setCapabilities } = await import("@earendil-works/pi-tui");
-
-  const previousCapabilities = getCapabilities();
-  setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-  try {
-    const image = registerPastedImage(new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]), "image/png");
-    const framed = [
-      "╭─user──────────────╮",
-      "│ " + image.marker + " │",
-      "╰──────────────────╯",
-    ];
-
-    const rendered = renderChatImageMarkers(framed, 80);
-    console.log("DEBUG", JSON.stringify(rendered));
-    assert.equal(rendered.length, 3);
-    assert.match(rendered[0], /^IMG:/);
-    assert.ok(!rendered.join("\n").includes(image.marker), "marker text is replaced");
-
-    // Stable component reuse: a second render reuses the same cached lines.
-    const again = renderChatImageMarkers(framed, 80);
-    assert.deepEqual(again, rendered);
-
-    // Mixed text-and-image messages keep their frame and textual marker.
-    const mixed = [
-      "╭─user──────────────╮",
-      "│ " + image.marker + " │",
-      "│ look at this │",
-      "╰──────────────────╯",
-    ];
-    assert.deepEqual(renderChatImageMarkers(mixed, 80), mixed);
-
-    // Without image capabilities nothing changes.
-    setCapabilities({ images: null, trueColor: true, hyperlinks: true });
-    assert.deepEqual(renderChatImageMarkers(framed, 80), framed);
-  } finally {
-    setCapabilities(previousCapabilities);
-  }
-});
-
 test("kitty image lines convert to sixel drawings on Windows Terminal", async () => {
   const { deflateSync } = await import("node:zlib");
   const { convertKittyLineToSixel, decodePng, encodeSixel } = await import("../extensions/ui/sixelImages.ts");

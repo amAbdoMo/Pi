@@ -25,7 +25,6 @@ const {
 };
 
 import { isWorkbenchModalActive } from "./modalState.ts";
-import { renderChatImageMarkers } from "./chatImages.ts";
 import { convertKittyLineToSixel } from "./sixelImages.ts";
 import {
   clampScrollOffset,
@@ -385,9 +384,9 @@ class WorkbenchShellInstallation implements WorkbenchShellHandle {
       this.originalRender,
       dimensions.mainWidth,
     );
-    // Swap pasted-image markers for real inline images before viewport math so
-    // scroll offsets, selection rows, and column composition all stay aligned.
-    const scrollLines = renderChatImageMarkers(parts.scrollLines, dimensions.mainWidth);
+    // Pasted images stay textual `[Image N]` markers in chat; the model still
+    // receives the real image data through the input pipeline.
+    const scrollLines = [...parts.scrollLines];
     const metrics = viewportMetrics(
       scrollLines,
       parts.dockLines,
