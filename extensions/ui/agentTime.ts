@@ -5,12 +5,6 @@ import {
   workingLabel,
 } from "./agentTimeTracker.ts";
 
-export const AGENT_WORKED_ENTRY_TYPE = "agent-worked";
-
-export interface AgentWorkedEntry {
-  elapsedMs: number;
-}
-
 export const agentTimeStatus = { label: "", working: false };
 
 const tracker = new AgentTimeTracker();
@@ -39,15 +33,14 @@ export function startAgentTime(nowMs: number = Date.now()): void {
   interval.unref?.();
 }
 
-export function settleAgentTime(nowMs: number = Date.now()): number | null {
+export function settleAgentTime(nowMs: number = Date.now()): void {
   const elapsedMs = tracker.settle(nowMs);
-  if (elapsedMs === null) return null;
+  if (elapsedMs === null) return;
 
   stopInterval();
   agentTimeStatus.label = workedLabel(elapsedMs);
   agentTimeStatus.working = false;
   notifyEditors();
-  return elapsedMs;
 }
 
 export function resetAgentTime(): void {

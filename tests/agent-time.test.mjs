@@ -59,12 +59,16 @@ test("UI timer adapter keeps one live run and one settled duration", (context) =
     label: `${AGENT_TIME_ICON} working 0s`,
     working: true,
   });
-  assert.equal(settleAgentTime(11_000), 10_000);
+  settleAgentTime(11_000);
   assert.deepEqual(agentTimeStatus, {
     label: `${AGENT_TIME_ICON} worked 10s`,
     working: false,
   });
-  assert.equal(settleAgentTime(12_000), null);
+  settleAgentTime(12_000);
+  assert.deepEqual(agentTimeStatus, {
+    label: `${AGENT_TIME_ICON} worked 10s`,
+    working: false,
+  });
 });
 
 test("agent duration labels stay concise across boundaries", () => {

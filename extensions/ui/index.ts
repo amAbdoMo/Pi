@@ -1,17 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Key, Text } from "@earendil-works/pi-tui";
+import { Key } from "@earendil-works/pi-tui";
 import { hasActiveWorkflowActivity } from "../workflow/activity.ts";
 import {
-  AGENT_WORKED_ENTRY_TYPE,
   resetAgentTime,
   settleAgentTime,
   startAgentTime,
-  type AgentWorkedEntry,
 } from "./agentTime.ts";
-import {
-  AGENT_TIME_ICON,
-  formatElapsedDuration,
-} from "./agentTimeTracker.ts";
 import {
   COPY_FEEDBACK_KEY,
   CopyFeedbackWidget,
@@ -44,15 +38,6 @@ let copyFeedback: TransientFeedback | undefined;
 const workbenchSidebar = new WorkbenchSidebarController();
 
 export default function uiExtension(pi: ExtensionAPI) {
-  pi.registerEntryRenderer<AgentWorkedEntry>(
-    AGENT_WORKED_ENTRY_TYPE,
-    (entry, _options, theme) => new Text(
-      theme.fg("dim", `${AGENT_TIME_ICON} Worked for ${formatElapsedDuration(entry.data.elapsedMs)}`),
-      0,
-      0,
-    ),
-  );
-
   pi.registerCommand("sidebar", {
     description: "Toggle the Pi workspace sidebar",
     handler: async (_args, ctx) => workbenchSidebar.toggle(ctx),
@@ -207,9 +192,7 @@ export default function uiExtension(pi: ExtensionAPI) {
 
   pi.on("agent_settled", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    const elapsedMs = settleAgentTime();
-    if (elapsedMs === null) return;
-    pi.appendEntry<AgentWorkedEntry>(AGENT_WORKED_ENTRY_TYPE, { elapsedMs });
+    settleAgentTime();
   });
 
   pi.on("session_shutdown", async (event) => {
