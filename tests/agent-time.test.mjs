@@ -7,6 +7,7 @@ import {
   startAgentTime,
 } from "../extensions/ui/agentTime.ts";
 import {
+  AGENT_TIME_ICON,
   AgentTimeTracker,
   formatElapsedDuration,
   workedLabel,
@@ -54,9 +55,15 @@ test("UI timer adapter keeps one live run and one settled duration", (context) =
 
   startAgentTime(1_000);
   startAgentTime(9_000);
-  assert.deepEqual(agentTimeStatus, { label: "working 0s", working: true });
+  assert.deepEqual(agentTimeStatus, {
+    label: `${AGENT_TIME_ICON} working 0s`,
+    working: true,
+  });
   assert.equal(settleAgentTime(11_000), 10_000);
-  assert.deepEqual(agentTimeStatus, { label: "worked 10s", working: false });
+  assert.deepEqual(agentTimeStatus, {
+    label: `${AGENT_TIME_ICON} worked 10s`,
+    working: false,
+  });
   assert.equal(settleAgentTime(12_000), null);
 });
 
@@ -75,6 +82,6 @@ test("agent duration labels stay concise across boundaries", () => {
   for (const [elapsedMs, expected] of cases) {
     assert.equal(formatElapsedDuration(elapsedMs), expected);
   }
-  assert.equal(workingLabel(42_000), "working 42s");
-  assert.equal(workedLabel(125_000), "worked 2m 05s");
+  assert.equal(workingLabel(42_000), `${AGENT_TIME_ICON} working 42s`);
+  assert.equal(workedLabel(125_000), `${AGENT_TIME_ICON} worked 2m 05s`);
 });

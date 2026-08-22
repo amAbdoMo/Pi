@@ -41,19 +41,20 @@ registerHooks({
 });
 
 const { agentTimeStatus } = await import("../extensions/ui/agentTime.ts");
+const { AGENT_TIME_ICON } = await import("../extensions/ui/agentTimeTracker.ts");
 const { buildComposerHeader } = await import("../extensions/ui/header.ts");
 
 test("composer status surfaces live and settled timer labels", () => {
   try {
-    agentTimeStatus.label = "working 5s";
+    agentTimeStatus.label = `${AGENT_TIME_ICON} working 5s`;
     agentTimeStatus.working = true;
     const working = buildComposerHeader(120, "ltr").join("\n");
-    assert.ok(working.includes("working 5s"));
+    assert.ok(working.includes(`${AGENT_TIME_ICON} working 5s`));
 
-    agentTimeStatus.label = "worked 8s";
+    agentTimeStatus.label = `${AGENT_TIME_ICON} worked 8s`;
     agentTimeStatus.working = false;
     const settled = buildComposerHeader(120, "ltr").join("\n");
-    assert.ok(settled.includes("worked 8s"));
+    assert.ok(settled.includes(`${AGENT_TIME_ICON} worked 8s`));
   } finally {
     agentTimeStatus.label = "";
     agentTimeStatus.working = false;

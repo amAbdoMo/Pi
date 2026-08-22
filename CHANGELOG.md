@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Added a live agent work timer to the composer and a compact completed duration in chat after each settled run.
+- Added a clock-marked live agent work timer to the composer and a compact completed duration in chat after each settled run.
 - Brightened syntax comments in chat from near-invisible dark gray to a readable teal that stays distinct from strings, keywords, and variables on the dark background.
 - Inline images now render on Windows Terminal: Kitty image sequences are converted to Sixel drawings of the same cell footprint (with cursor restore) since WT ignores the Kitty graphics protocol.
 - Text selection inside framed messages highlights only the message text; trailing frame borders and padded background no longer light up.

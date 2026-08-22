@@ -8,7 +8,10 @@ import {
   startAgentTime,
   type AgentWorkedEntry,
 } from "./agentTime.ts";
-import { formatElapsedDuration } from "./agentTimeTracker.ts";
+import {
+  AGENT_TIME_ICON,
+  formatElapsedDuration,
+} from "./agentTimeTracker.ts";
 import {
   COPY_FEEDBACK_KEY,
   CopyFeedbackWidget,
@@ -44,7 +47,7 @@ export default function uiExtension(pi: ExtensionAPI) {
   pi.registerEntryRenderer<AgentWorkedEntry>(
     AGENT_WORKED_ENTRY_TYPE,
     (entry, _options, theme) => new Text(
-      theme.fg("dim", `Worked for ${formatElapsedDuration(entry.data.elapsedMs)}`),
+      theme.fg("dim", `${AGENT_TIME_ICON} Worked for ${formatElapsedDuration(entry.data.elapsedMs)}`),
       0,
       0,
     ),

@@ -41,10 +41,12 @@ export function formatElapsedDuration(ms: number): string {
   return `${seconds}s`;
 }
 
+export const AGENT_TIME_ICON = "";
+
 export function workingLabel(elapsedMs: number): string {
-  return `working ${formatElapsedDuration(elapsedMs)}`;
+  return `${AGENT_TIME_ICON} working ${formatElapsedDuration(elapsedMs)}`;
 }
 
 export function workedLabel(elapsedMs: number): string {
-  return `worked ${formatElapsedDuration(elapsedMs)}`;
+  return `${AGENT_TIME_ICON} worked ${formatElapsedDuration(elapsedMs)}`;
 }
