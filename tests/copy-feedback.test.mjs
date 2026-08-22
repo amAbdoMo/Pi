@@ -6,13 +6,17 @@ import {
   TransientFeedback,
 } from "../extensions/ui/copyFeedback.ts";
 
-test("copy confirmation renders one bold success-accented line outside chat", () => {
+test("copy confirmation renders one background-highlighted success badge", () => {
   const widget = new CopyFeedbackWidget({
     bold: (text) => `<bold>${text}`,
     fg: (color, text) => `<${color}>${text}`,
+    getFgAnsi: (color) => `\x1b[38;2;101;209;122m<${color}>`,
   });
 
-  assert.deepEqual(widget.render(), ["<success><bold>✓ Copied"]);
+  const [line] = widget.render();
+  assert.ok(line.startsWith("\x1b[48;2;101;209;122m<success>"));
+  assert.ok(line.includes("<bold> ✓ Copied "));
+  assert.ok(line.endsWith("\x1b[39m\x1b[49m"));
 });
 
 test("copy confirmation shows immediately and hides once after its lifetime", (t) => {
