@@ -158,11 +158,18 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 		ctx.ui.setStatus("workflow", undefined);
 		return;
 	}
-	const active = state.activePhaseId ? `:${state.activePhaseId}` : "";
 	const focus = runner.focusedRunId === state.runId ? " focused" : "";
-	const workspace = state.workspace?.mode === "live" ? " · live" : state.workspace?.cwd ? ` · ${sanitizeTerminalText(state.workspace.cwd)}` : "";
 	const heartbeat = formatHeartbeat(state);
-	ctx.ui.setStatus("workflow", `workflow ${state.workflowId}${active} ${heartbeat ?? state.status}${workspace}${focus}`);
+	const phases = state.phases
+		.filter((phase) => phase.id !== "report" && phase.startedAt)
+		.map((phase) => {
+			const icon = phase.status === "succeeded" ? "✔" : phase.status === "failed" ? "✗" : phase.status === "running" ? "●" : "○";
+			const end = phase.status === "running" ? Date.now() : phase.endedAt;
+			const time = end ? ` ${formatWorkflowDuration(end - phase.startedAt!)}` : "";
+			return `${icon}${phase.id}${time}`;
+		})
+		.join(" ");
+	ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
 }
 
 function getSelectedPhase(state: WorkflowRunState): PhaseRunState | undefined {
@@ -594,6 +601,7 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 					return;
 				}
 				task = await ctx.ui.editor(`Task for workflow ${workflow.id}`, "");
+				task = expandPastedTextMarkers(task ?? "");
 				if (!task?.trim()) {
 					pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: "Workflow cancelled — no task entered.", display: true }, { triggerTurn: false });
 					return;

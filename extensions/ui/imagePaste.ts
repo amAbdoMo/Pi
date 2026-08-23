@@ -108,7 +108,36 @@ export function savePastedText(text: string, currentText: string): PastedText {
   const marker = `[${lineCount} ${noun} pasted #${id}]`;
   const pastedText = { marker, text };
   pastedTexts.set(id, pastedText);
+  writePastedTextFile(id, text);
   return pastedText;
+}
+
+/**
+ * Paste text is stored on disk as well as in memory: extensions are loaded as
+ * separate module instances, so a marker created by the chat composer must be
+ * resolvable by other extensions (e.g. the workflow task editor) that get
+ * their own copy of this module.
+ */
+function pastedTextDir(): string {
+  return path.join(os.tmpdir(), "pi-pasted-text");
+}
+
+function writePastedTextFile(id: number, text: string): void {
+  try {
+    const dir = pastedTextDir();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${id}.txt`), text, "utf8");
+  } catch {
+    // best effort — in-memory store still covers the common case
+  }
+}
+
+function readPastedTextFile(id: number): string | undefined {
+  try {
+    return fs.readFileSync(path.join(pastedTextDir(), `${id}.txt`), "utf8");
+  } catch {
+    return undefined;
+  }
 }
 
 function mimeTypeFromPath(filePath: string): string | null {
@@ -155,7 +184,7 @@ export function registerPastedImage(bytes: Uint8Array, mimeType: string, current
 
 export function expandPastedTextMarkers(text: string): string {
   return text.replace(TEXT_MARKER_RE, (marker, _lineCount, idText) => {
-    const pastedText = pastedTexts.get(Number(idText));
-    return pastedText?.text ?? marker;
+    const id = Number(idText);
+    return pastedTexts.get(id)?.text ?? readPastedTextFile(id) ?? marker;
   });
 }
