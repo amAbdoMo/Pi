@@ -14,6 +14,7 @@ import {
 import { RpcPhaseClient, type RpcPhaseTransport } from "./rpc-client.ts";
 import {
 	CONTEXT_MESSAGE_TYPE,
+	INFO_MESSAGE_TYPE,
 	PANEL_ENTRY_TYPE,
 	RUN_STATE_ENTRY,
 	SNAPSHOT_VERSION,
@@ -124,11 +125,24 @@ export function resolveWorkflowWorkspace(options: {
 	return { mode: "local", cwd, label: `Local: ${cwd}`, projectTrusted: trusted };
 }
 
+export function formatWorkflowDuration(ms: number): string {
+	const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+	if (minutes > 0) return `${minutes}m ${seconds}s`;
+	return `${seconds}s`;
+}
+
 export function formatHeartbeat(state: WorkflowRunState): string | undefined {
-	if (state.status !== "running" || !state.heartbeat) return undefined;
+	const total = `total ${formatWorkflowDuration((state.endedAt ?? Date.now()) - state.startedAt)}`;
+	if (state.status !== "running" || !state.heartbeat) {
+		return state.endedAt ? `${state.status} · ${total}` : undefined;
+	}
 	const frames = ["◐", "◓", "◑", "◒"];
 	const elapsedSeconds = Math.max(0, Math.floor((state.heartbeat.updatedAt - state.heartbeat.startedAt) / 1000));
-	return `${frames[state.heartbeat.tick % frames.length]} running ${elapsedSeconds}s`;
+	return `${frames[state.heartbeat.tick % frames.length]} running ${elapsedSeconds}s · ${total}`;
 }
 
 export function addLog(phase: PhaseRunState, kind: LogEntry["kind"], text: string): void {
@@ -406,6 +420,15 @@ export class WorkflowRunner {
 		this.hooks.onStateChanged?.(ctx, state);
 	}
 
+	/** Best-effort live progress note in the main chat transcript. */
+	private chatNote(ctx: ExtensionContext, content: string): void {
+		try {
+			this.pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content, display: true }, { triggerTurn: false });
+		} catch {
+			// transcript notes must never break the workflow run
+		}
+	}
+
 	private persist(state: WorkflowRunState): void {
 		const snapshot: PersistedRunSnapshot = { version: SNAPSHOT_VERSION, state: snapshotRunState(state, false) };
 		this.pi.appendEntry(RUN_STATE_ENTRY, snapshot);
@@ -535,6 +558,8 @@ export class WorkflowRunner {
 				const phaseState = state.phases.find((item) => item.id === phase!.id)!;
 				if (visit > 1) {
 					phaseState.status = "pending";
+					phaseState.startedAt = undefined;
+					phaseState.endedAt = undefined;
 					phaseState.error = undefined;
 					phaseState.output = undefined;
 					phaseState.structuredOutput = undefined;
@@ -556,13 +581,17 @@ export class WorkflowRunner {
 					this.persist(state);
 					throw error;
 				}
-				const result = await this.runPhase({ workflow, phase, phaseState, state, prompt, ctx, parentTools, parentModel, parentThinking, signal: controller.signal, emitUpdate });
+				phaseState.startedAt = Date.now();
+				this.chatNote(ctx, `▶ **${phase.id}** started — workflow ${workflow.id}`);
+				const result = await this.runPhase({ workflow, phase, phaseState, state, prompt, ctx, parentTools, parentModel, parentThinking, signal: controller.signal, emitUpdate })
+					.finally(() => { phaseState.endedAt = Date.now(); });
 				await new Promise<void>((resolve) => setImmediate(resolve));
 				assertNotAborted(controller.signal);
 				outputs.set(phase.id, result);
 				const next = resolveNextPhase(workflow, phase, result);
 				assertNotAborted(controller.signal);
 				addLog(phaseState, "info", next.reason);
+				this.chatNote(ctx, `${phaseState.status === "succeeded" ? "✔" : "✗"} **${phase.id}** ${phaseState.status} in ${formatWorkflowDuration((phaseState.endedAt ?? Date.now()) - (phaseState.startedAt ?? Date.now()))} — ${next.reason}`);
 				emitUpdate();
 				phase = next.phase;
 			}

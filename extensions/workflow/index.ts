@@ -33,6 +33,7 @@ import {
 	WorkflowRunner,
 	addLog,
 	formatHeartbeat,
+	formatWorkflowDuration,
 	formatStructuredOutputContract,
 	normalizeWorkflowDirectory,
 	resolveWorkflowWorkspace,
@@ -307,6 +308,12 @@ function getWorkflowStateFromToolDetails(details: unknown, runner: WorkflowRunne
 export function renderWorkflowPanel(state: WorkflowRunState, width: number, theme: any, focusedRunId?: string): string[] {
 	const minWidth = 52;
 	const heartbeat = formatHeartbeat(state);
+	const phaseLabel = (phase: PhaseRunState): string => {
+		if (!phase.startedAt) return phase.id;
+		const end = phase.status === "running" ? Date.now() : phase.endedAt;
+		if (!end) return phase.id;
+		return `${phase.id} · ${formatWorkflowDuration(end - phase.startedAt)}`;
+	};
 	if (width < minWidth) {
 		const lines = [
 			`${statusIcon(state.status, theme)} ${heartbeat ?? state.status}`,
@@ -324,7 +331,7 @@ export function renderWorkflowPanel(state: WorkflowRunState, width: number, them
 	const focused = focusedRunId === state.runId;
 	const borderColor = focused ? (text: string) => theme.fg("accent", text) : (text: string) => theme.fg("border", text);
 	const left = [theme.bold("Phases"), "", ...state.phases.map((phase) => {
-		const label = `${statusIcon(phase.status, theme)} ${phase.id}`;
+		const label = `${statusIcon(phase.status, theme)} ${phaseLabel(phase)}`;
 		return phase.id === selected?.id ? theme.fg("accent", theme.bold(label)) : label;
 	})];
 	const right = [

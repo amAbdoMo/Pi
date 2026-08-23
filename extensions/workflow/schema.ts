@@ -107,6 +107,8 @@ export interface LogEntry {
 export interface PhaseRunState {
 	id: string;
 	status: PhaseStatus;
+	startedAt?: number;
+	endedAt?: number;
 	logs: LogEntry[];
 	output?: string;
 	structuredOutput?: WorkflowPhaseResult;
