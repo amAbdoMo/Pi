@@ -153,9 +153,14 @@ function registerPhaseResultTool(pi: ExtensionAPI): void {
 }
 
 function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRunState): void {
-	if (!ctx?.ui?.setStatus) return;
+	const composer = (globalThis as any).__piWorkflowComposerStatus;
+	if (!ctx?.ui?.setStatus) {
+		if (!state && composer !== undefined) (globalThis as any).__piWorkflowComposerStatus = undefined;
+		return;
+	}
 	if (!state) {
 		ctx.ui.setStatus("workflow", undefined);
+		(globalThis as any).__piWorkflowComposerStatus = undefined;
 		return;
 	}
 	const focus = runner.focusedRunId === state.runId ? " focused" : "";
@@ -170,6 +175,14 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 		})
 		.join(" ");
 	ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
+	// Compact timer for the composer header (rendered beside the model/thinking line).
+	const runningPhase = state.phases.find((phase) => phase.status === "running");
+	const runningBit = runningPhase?.startedAt
+		? ` ${runningPhase.id} ${formatWorkflowDuration((runningPhase.endedAt ?? Date.now()) - runningPhase.startedAt)}`
+		: "";
+	(globalThis as any).__piWorkflowComposerStatus = state.status === "running"
+		? `⏱ ${state.workflowId}${runningBit} · total ${formatWorkflowDuration(Date.now() - state.startedAt)}`
+		: undefined;
 }
 
 function getSelectedPhase(state: WorkflowRunState): PhaseRunState | undefined {

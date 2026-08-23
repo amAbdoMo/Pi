@@ -14,6 +14,7 @@ import {
 import { RpcPhaseClient, type RpcPhaseTransport } from "./rpc-client.ts";
 import {
 	CONTEXT_MESSAGE_TYPE,
+	INFO_MESSAGE_TYPE,
 	PANEL_ENTRY_TYPE,
 	RUN_STATE_ENTRY,
 	SNAPSHOT_VERSION,
@@ -419,6 +420,15 @@ export class WorkflowRunner {
 		this.hooks.onStateChanged?.(ctx, state);
 	}
 
+	/** Compact live progress line in the chat transcript; never breaks the run. */
+	private chatNote(ctx: ExtensionContext, content: string): void {
+		try {
+			this.pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content, display: true }, { triggerTurn: false });
+		} catch {
+			// transcript notes are best-effort
+		}
+	}
+
 	private persist(state: WorkflowRunState): void {
 		const snapshot: PersistedRunSnapshot = { version: SNAPSHOT_VERSION, state: snapshotRunState(state, false) };
 		this.pi.appendEntry(RUN_STATE_ENTRY, snapshot);
@@ -572,6 +582,7 @@ export class WorkflowRunner {
 					throw error;
 				}
 				phaseState.startedAt = Date.now();
+				this.chatNote(ctx, `workflow · ${phase.id} started`);
 				const result = await this.runPhase({ workflow, phase, phaseState, state, prompt, ctx, parentTools, parentModel, parentThinking, signal: controller.signal, emitUpdate })
 					.finally(() => { phaseState.endedAt = Date.now(); });
 				await new Promise<void>((resolve) => setImmediate(resolve));
@@ -580,6 +591,7 @@ export class WorkflowRunner {
 				const next = resolveNextPhase(workflow, phase, result);
 				assertNotAborted(controller.signal);
 				addLog(phaseState, "info", next.reason);
+				this.chatNote(ctx, `workflow · ${phase.id} ${phaseState.status} in ${formatWorkflowDuration((phaseState.endedAt ?? Date.now()) - (phaseState.startedAt ?? Date.now()))} — ${next.reason}`);
 				emitUpdate();
 				phase = next.phase;
 			}

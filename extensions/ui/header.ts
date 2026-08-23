@@ -45,6 +45,9 @@ function composerStatus(width: number): string {
   const fields = [
     modelAndThinking,
     ...(fastMode ? [color("accent", "fast")] : []),
+    ...(((globalThis as any).__piWorkflowComposerStatus as string | undefined)
+      ? [color("accent", (globalThis as any).__piWorkflowComposerStatus as string)]
+      : []),
     ...(agentTimeStatus.label
       ? [color(agentTimeStatus.working ? "accent" : "muted", agentTimeStatus.label)]
       : []),

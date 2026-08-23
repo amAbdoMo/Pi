@@ -185,7 +185,7 @@ phases:
       Rules:
       1. Derive acceptance scenarios from the task and plan; do not expand the feature surface.
       2. Run the smallest relevant automated, lint, type, build, API, or command checks after the latest mutation.
-      3. For UI behavior, use the configured browser through MCP to exercise the actual user journey. Use snapshots for targeting and inspect console/network only when applicable.
+      3. For UI behavior, use a browser through MCP to exercise the actual user journey. Prefer the isolated browser server (e.g. "Browser Iso") so the shared logged-in profile stays free for the interactive session. Use snapshots for targeting and inspect console/network only when applicable. If a browser call fails with "already in use", retry once against the isolated browser server before reporting BLOCKED.
       4. If login, credentials, target access, browser availability, or environment availability blocks the journey, take at most one viewport screenshot only if useful, return BLOCKED, and stop. Do not try alternate browser actions repeatedly.
       5. Do not create custom pages, sections, fixtures, or visual harnesses. If the real target cannot be exercised, report it as BLOCKED — except WordPress static-only verification, which follows the system-prompt disclosure rule.
       6. If this phase already returned FAIL once and the issue remains, return BLOCKED rather than starting another repair loop.
