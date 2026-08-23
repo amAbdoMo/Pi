@@ -2,6 +2,7 @@ import { StringEnum } from "@earendil-works/pi-ai";
 import { type ExtensionAPI, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import { Markdown, Text, isKeyRelease, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { expandPastedTextMarkers } from "../ui/imagePaste.ts";
 import {
 	CONTEXT_MESSAGE_TYPE,
 	INFO_MESSAGE_TYPE,
@@ -546,7 +547,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 			if (first.includes(" ")) return null;
 			return cachedDiscovery.workflows.filter((workflow) => workflow.id.startsWith(first)).map((workflow) => ({ value: workflow.id, label: workflow.id, description: workflow.description }));
 		},
-		handler: async (args, ctx) => {
+		handler: async (rawArgs, ctx) => {
+			// Paste markers from the chat composer ([N lines pasted #id]) are expanded on the
+			// input event, which never fires for extension commands — expand them here too.
+			const args = expandPastedTextMarkers(rawArgs ?? "");
 			let parsed: ParsedWorkflowArgs;
 			try { parsed = parseWorkflowArgs(args); }
 			catch (error) {
