@@ -482,15 +482,12 @@ async function chooseCommandWorkspace(parsed: ParsedWorkflowArgs, ctx: any): Pro
 	const anotherLabel = "Another existing folder…";
 	const liveLabel = "Live / remote — no local project";
 	const choice = await ctx.ui.select("Workspace for this workflow", [currentLabel, anotherLabel, liveLabel]);
-	if (!choice) {
-		ctx.ui.notify("Workflow cancelled — no workspace selected.", "info");
-		return undefined;
-	}
+	if (!choice) return undefined;
 	if (choice === liveLabel) return { live: true, projectTrusted: false };
 	let cwd = ctx.cwd;
 	if (choice === anotherLabel) {
 		let entered: string | undefined | null = await ctx.ui.input(
-			"Existing working folder — paste with right-click or Ctrl+Shift+V; empty Enter cancels",
+			"Existing working folder — paste with Ctrl+Shift+V; empty Enter cancels",
 			ctx.cwd,
 		);
 		while (entered != null && entered.trim()) {
@@ -502,10 +499,7 @@ async function chooseCommandWorkspace(parsed: ParsedWorkflowArgs, ctx: any): Pro
 				entered = await ctx.ui.input(`${reason} — enter another folder, or leave empty to cancel`, ctx.cwd);
 			}
 		}
-		if (!entered?.trim()) {
-			ctx.ui.notify("Workflow cancelled — no working folder entered.", "warning");
-			return undefined;
-		}
+		if (!entered?.trim()) return undefined;
 	}
 	const normalized = normalizeWorkflowDirectory(cwd, ctx.cwd);
 	return { cwd: normalized, live: false, projectTrusted: trustSelectedWorkspace(ctx, normalized, false) };
