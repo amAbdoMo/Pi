@@ -100,7 +100,7 @@ export default function loginGuardExtension(pi: ExtensionAPI): void {
 			`LOGIN GUARD ACTIVE: ${what}. Do NOT continue other work, do NOT fall back to the ` +
 			`live/public site, and do NOT retry credentials. Stop now and tell the user exactly this: ` +
 			`"I could not access the WordPress dashboard (${g.site}). Please log in manually in my ` +
-			`browser window (the Edge session I am driving), then run /logged-in or tell me to continue." ` +
+			`browser window (the Edge session I am driving), then tell me to continue." ` +
 			`Then wait for the user. You may only use browser_navigate/browser_snapshot to re-check.`
 		);
 	}
@@ -151,8 +151,8 @@ export default function loginGuardExtension(pi: ExtensionAPI): void {
 				gate = { site, phase };
 				ctx.ui.notify(
 					failedMarker
-						? "WordPress login FAILED. Please log in manually in my browser window, then run /logged-in."
-						: "WordPress dashboard needs login. Please log in manually in my browser window, then run /logged-in.",
+						? "WordPress login FAILED. Please log in manually in my browser window, then tell me to continue."
+						: "WordPress dashboard needs login. Please log in manually in my browser window, then tell me to continue.",
 					"warning",
 				);
 			}
@@ -167,7 +167,7 @@ export default function loginGuardExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.registerCommand("logged-in", {
-		description: "Confirm you logged into the agent browser; the agent will re-check the dashboard",
+		description: "Confirm you logged into the agent browser (optional — you can also just tell the agent to continue)",
 		handler: async (_args, ctx) => {
 			if (!gate) {
 				ctx.ui.notify("No login guard is active.", "info");
