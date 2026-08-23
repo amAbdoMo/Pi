@@ -27,7 +27,7 @@ const LOGIN_FAILED_MARKERS = [
   "The password you entered for the username",
   "The username you entered is not registered",
   "The password you entered is incorrect",
-  "Lost your password?",
+  "Error: The password",
 ];
 
 const LOGGED_IN_MARKERS = [
