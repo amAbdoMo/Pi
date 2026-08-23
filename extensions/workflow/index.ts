@@ -482,13 +482,30 @@ async function chooseCommandWorkspace(parsed: ParsedWorkflowArgs, ctx: any): Pro
 	const anotherLabel = "Another existing folder…";
 	const liveLabel = "Live / remote — no local project";
 	const choice = await ctx.ui.select("Workspace for this workflow", [currentLabel, anotherLabel, liveLabel]);
-	if (!choice) return undefined;
+	if (!choice) {
+		ctx.ui.notify("Workflow cancelled — no workspace selected.", "info");
+		return undefined;
+	}
 	if (choice === liveLabel) return { live: true, projectTrusted: false };
 	let cwd = ctx.cwd;
 	if (choice === anotherLabel) {
-		const entered = await ctx.ui.input("Existing working folder", ctx.cwd);
-		if (!entered?.trim()) return undefined;
-		cwd = entered;
+		let entered: string | undefined | null = await ctx.ui.input(
+			"Existing working folder — paste with right-click or Ctrl+Shift+V; empty Enter cancels",
+			ctx.cwd,
+		);
+		while (entered != null && entered.trim()) {
+			try {
+				cwd = normalizeWorkflowDirectory(entered, ctx.cwd);
+				break;
+			} catch (error) {
+				const reason = error instanceof Error ? error.message : String(error);
+				entered = await ctx.ui.input(`${reason} — enter another folder, or leave empty to cancel`, ctx.cwd);
+			}
+		}
+		if (!entered?.trim()) {
+			ctx.ui.notify("Workflow cancelled — no working folder entered.", "warning");
+			return undefined;
+		}
 	}
 	const normalized = normalizeWorkflowDirectory(cwd, ctx.cwd);
 	return { cwd: normalized, live: false, projectTrusted: trustSelectedWorkspace(ctx, normalized, false) };
@@ -553,7 +570,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: error instanceof Error ? error.message : String(error), display: true }, { triggerTurn: false });
 				return;
 			}
-			if (!workspace) return;
+			if (!workspace) {
+				pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: "Workflow cancelled — no workspace selected.", display: true }, { triggerTurn: false });
+				return;
+			}
 			const discoveryCwd = workspace.cwd ?? ctx.cwd;
 			cachedDiscovery = discoverWorkflows(discoveryCwd, trustWorkspaceDefinition(ctx, workspace));
 			let workflow: WorkflowDefinition;
@@ -569,7 +589,10 @@ export default function workflowExtension(pi: ExtensionAPI): void {
 					return;
 				}
 				task = await ctx.ui.editor(`Task for workflow ${workflow.id}`, "");
-				if (!task?.trim()) return;
+				if (!task?.trim()) {
+					pi.sendMessage({ customType: INFO_MESSAGE_TYPE, content: "Workflow cancelled — no task entered.", display: true }, { triggerTurn: false });
+					return;
+				}
 			}
 			try {
 				const cleanTask = task.trim();
