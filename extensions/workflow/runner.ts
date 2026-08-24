@@ -415,6 +415,17 @@ export class WorkflowRunner {
 		return this.focusedRunId ? this.runStates.get(this.focusedRunId) : undefined;
 	}
 
+	/** Active run if any; otherwise the most recently started retained run (for focus/scroll). */
+	getLatestState(): WorkflowRunState | undefined {
+		const active = this.getActiveState();
+		if (active) return active;
+		let latest: WorkflowRunState | undefined;
+		for (const state of this.runStates.values()) {
+			if (!latest || state.startedAt > latest.startedAt) latest = state;
+		}
+		return latest;
+	}
+
 	private changed(ctx: ExtensionContext, state?: WorkflowRunState): void {
 		this.hooks.onStateChanged?.(ctx, state);
 	}

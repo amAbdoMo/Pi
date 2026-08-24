@@ -173,7 +173,8 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 	const composer = (globalThis as any).__piWorkflowComposerStatus;
 	if (!state) {
 		ctx?.ui?.setStatus && ctx.ui.setStatus("workflow", undefined);
-		(globalThis as any).__piWorkflowComposerStatus = undefined;
+		// Keep the composer timer label (like the agent "worked 4m 24s" indicator);
+		// it is overwritten by the next run and cleared on restart.
 		setTaskbarProgress(false);
 		return;
 	}
@@ -192,7 +193,9 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 	// Composer-header timer styled like the normal agent "◎ worked 4m 24s" indicator.
 	(globalThis as any).__piWorkflowComposerStatus = state.status === "running"
 		? `${AGENT_TIME_ICON} workflow ${formatWorkflowDuration(Date.now() - state.startedAt)}`
-		: undefined;
+		: state.endedAt
+			? `${AGENT_TIME_ICON} workflow ${formatWorkflowDuration(state.endedAt - state.startedAt)}`
+			: undefined;
 	setTaskbarProgress(state.status === "running");
 }
 
@@ -226,6 +229,7 @@ function removeLastGrapheme(text: string): string {
 
 function handleWorkflowInput(data: string, ctx: any, runner: WorkflowRunner): { consume?: boolean; data?: string } | undefined {
 	const active = runner.getActiveState();
+	const latest = runner.getLatestState();
 	const focused = runner.getFocusedState();
 	if (isKeyRelease(data)) return focused ? { consume: true } : undefined;
 	if (matchesKey(data, "ctrl+c") && active) {
@@ -233,10 +237,10 @@ function handleWorkflowInput(data: string, ctx: any, runner: WorkflowRunner): { 
 		setStatusForRender(ctx, runner, active);
 		return { consume: true };
 	}
-	if (matchesKey(data, "ctrl+w") && active) {
-		runner.focusedRunId = active.runId;
-		active.focused = true;
-		setStatusForRender(ctx, runner, active);
+	if (matchesKey(data, "ctrl+w") && latest) {
+		runner.focusedRunId = latest.runId;
+		latest.focused = true;
+		setStatusForRender(ctx, runner, latest);
 		return { consume: true };
 	}
 	if (!focused) return undefined;
