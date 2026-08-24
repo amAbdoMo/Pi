@@ -81,6 +81,9 @@ const requiredFiles = [
   "scripts/retire-packages.mjs",
   "scripts/refresh-managed-dependencies.mjs",
   "scripts/setup-ffmpeg.mjs",
+  "scripts/setup-browser-mcp.mjs",
+  "scripts/browser/pi-browser-mcp.ps1",
+  "scripts/browser/pi-browser-idle-close.ps1",
   "scripts/setup-terminal-font.ps1",
   "scripts/set-terminal-font.mjs",
   "scripts/set-warp-settings.mjs",
@@ -134,6 +137,17 @@ for (const installer of ["install.ps1", "install.sh"]) {
     if (installerSource.includes(retiredPackage)) {
       throw new Error(`${installer} still installs the retired ${retiredPackage} package`);
     }
+  }
+}
+
+const windowsInstallerSource = fs.readFileSync(path.join(root, "install.ps1"), "utf8");
+for (const browserMcpAsset of [
+  "setup-browser-mcp.mjs",
+  "pi-browser-mcp.ps1",
+  "pi-browser-idle-close.ps1",
+]) {
+  if (!windowsInstallerSource.includes(browserMcpAsset)) {
+    throw new Error(`install.ps1 does not provision ${browserMcpAsset}`);
   }
 }
 

@@ -50,6 +50,7 @@ Subagent profile defaults are `fast`, `balanced`, `implementation`, and `review`
 ### Tools and integrations
 
 - Owned MCP Hub for local stdio and remote streamable-HTTP servers
+- Windows shared-browser MCP supervisor with persistent logins, concurrent per-session tabs, and automatic idle shutdown
 - Firecrawl-backed search, scrape, map, and crawl tools
 - OpenAI image generation and image editing
 - Persistent user, global, and project memory
@@ -107,7 +108,8 @@ The installer is designed to be run again. It:
 5. Installs or refreshes the managed global agent policy in `~/.pi/agent/APPEND_SYSTEM.md` while preserving personal instructions outside its marked block.
 6. Creates an empty personal `mcp.jsonc` only when one does not already exist.
 7. Installs and verifies FFmpeg plus FFprobe through an already available trusted system package manager so screen recordings can be inspected. No media binaries are bundled; unsupported or non-privileged systems receive a warning with manual installation guidance instead.
-8. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
+8. On Windows, installs the shared Playwright browser supervisor and its normal `browser` plus optional `Browser Iso` MCP definitions without replacing user-managed definitions with those names.
+9. On Windows, installs the pinned Nerd Font and updates detected Windows Terminal and Warp settings after creating backups.
 
 > **Hypa security note:** `npm:@hypabolic/pi-hypa` is no longer installed by this setup after a native Windows executable under that package triggered an antivirus detection. The reviewed `@hypabolic/hypa-win32-x64@0.1.13` artifact is unsigned. Its available provenance does not prove that verdict is either malicious or a false positive, so the installer removes the package rather than weakening antivirus protection.
 
@@ -202,6 +204,12 @@ Personal servers live in `~/.pi/agent/mcp.jsonc` (`$HOME\.pi\agent\mcp.jsonc` on
 
 Open `/mcp` and press `R` after changing configuration. Enabled servers remain idle until connected or called; the sidebar reports Connected, Connecting, Disconnected, Disabled, or Error for each server. Global discovery uses cached metadata for up to 24 hours and does not wake every idle server.
 
+### Shared browser on Windows
+
+Full setup installs a Playwright MCP supervisor that attaches each Pi session to one persistent Edge profile over CDP. Use `browser` for normal work: concurrent Pi sessions can create and select separate tabs while retaining the same browser logins. `Browser Iso` is optional when a task needs its own isolated Playwright selection/context; a session normally connects only one of the two servers.
+
+The supervisor serializes Edge startup, tracks clients by PID plus process start time, and closes only the managed browser after every client has been disconnected for 60 seconds. Existing user-managed `browser` or `Browser Iso` definitions are preserved rather than overwritten.
+
 <details>
 <summary>Configuration locations and compatibility</summary>
 
@@ -250,7 +258,7 @@ Rerun `npx --yes github:amAbdoMo/Pi` when shared settings, companion packages, v
 | `themes/hypr-waves.json` | Shared terminal theme |
 | `settings.example.json` | Safe, portable Pi defaults |
 | `keybindings.json` | Shared clipboard and interaction bindings |
-| `scripts/` | One-line installation, secure package retirement, FFmpeg provisioning, configuration, terminal setup, validation, privacy-safe session analysis, and report generation |
+| `scripts/` | One-line installation, secure package retirement, shared-browser MCP provisioning, FFmpeg provisioning, configuration, terminal setup, validation, privacy-safe session analysis, and report generation |
 | `reports/pi-workflow-audit.html` | Standalone public-safe 30-day session and workflow audit |
 | `tests/` | Behavior and regression coverage |
 | `install.ps1`, `install.sh` | One-command installers and updaters |

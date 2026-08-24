@@ -14,6 +14,7 @@
 - Removed the plan/build mode option: `/plan`, `/build`, `Ctrl+Alt+P`, the `--plan` flag, `Tab` mode switching, and the PLAN/BUILD composer badge. Plan progress tracking stays, with `Plan:` step extraction no longer requiring plan mode and `plan_progress`, `/todos`, the widget, and the sidebar Tasks section unchanged.
 - Routed easy and medium subagent profiles to Luna/max and difficult fallbacks to Sol/medium or Sol/high, removing Terra and Sol xhigh/max from the defaults.
 - Hardened the MCP Hub with encoded-secret redaction, safe concurrent reload and cancellation handling, SDK 1.30 tool metadata validation, list-change refresh, 24-hour cache freshness, HTTPS credential-header enforcement, bounded private output spills, and regression-tested stdio cleanup.
+- Added a Windows shared-browser MCP supervisor with serialized Edge startup, concurrent per-session tabs, persistent logins, PID/start-time client locks, and 60-second idle shutdown.
 - Preserved Kitty and iTerm inline-image rows while composing the docked Workbench, preventing valid screenshots from being replaced by blank terminal space.
 - Preserved unrelated multiline Warp TOML arrays during terminal setup while keeping managed settings fail-closed and byte-stable.
 - Refreshed vulnerable MCP transitive dependencies without lifecycle scripts and extended retired-package cleanup to remove stale `pi-mcp-adapter` installations.

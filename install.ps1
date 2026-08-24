@@ -50,6 +50,9 @@ try {
   $RetirementScriptFile = Resolve-SetupAsset 'scripts/retire-packages.mjs'
   $DependencyRefreshScriptFile = Resolve-SetupAsset 'scripts/refresh-managed-dependencies.mjs'
   $FfmpegSetupScriptFile = Resolve-SetupAsset 'scripts/setup-ffmpeg.mjs'
+  $BrowserSetupScriptFile = Resolve-SetupAsset 'scripts/setup-browser-mcp.mjs'
+  $BrowserSupervisorFile = Resolve-SetupAsset 'scripts/browser/pi-browser-mcp.ps1'
+  $BrowserIdleWatcherFile = Resolve-SetupAsset 'scripts/browser/pi-browser-idle-close.ps1'
   $SystemPolicyFile = Resolve-SetupAsset 'APPEND_SYSTEM.md'
   $FontSetupScriptFile = Resolve-SetupAsset 'scripts/setup-terminal-font.ps1'
   $TerminalSettingsScriptFile = Resolve-SetupAsset 'scripts/set-terminal-font.mjs'
@@ -64,6 +67,11 @@ try {
   Invoke-CheckedNative -Command 'pi' -Arguments @('update', '--extensions')
   Invoke-CheckedNative -Command 'node' -Arguments @($ConfigScriptFile, '--system-policy', $SystemPolicyFile)
   Invoke-CheckedNative -Command 'node' -Arguments @($DependencyRefreshScriptFile)
+  Invoke-CheckedNative -Command 'node' -Arguments @(
+    $BrowserSetupScriptFile,
+    '--supervisor', $BrowserSupervisorFile,
+    '--watcher', $BrowserIdleWatcherFile
+  )
 
   if (-not $SkipFfmpeg) {
     try {
