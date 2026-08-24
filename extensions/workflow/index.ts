@@ -190,11 +190,11 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 		})
 		.join(" ");
 	ctx?.ui?.setStatus && ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
-	// Composer-header timer styled like the normal agent "◎ worked 4m 24s" indicator.
+	// Composer-header timer styled like the normal agent "working/worked" indicator.
 	(globalThis as any).__piWorkflowComposerStatus = state.status === "running"
-		? `${AGENT_TIME_ICON} workflow ${formatWorkflowDuration(Date.now() - state.startedAt)}`
+		? `${AGENT_TIME_ICON} working ${formatWorkflowDuration(Date.now() - state.startedAt)}`
 		: state.endedAt
-			? `${AGENT_TIME_ICON} workflow ${formatWorkflowDuration(state.endedAt - state.startedAt)}`
+			? `${AGENT_TIME_ICON} worked ${formatWorkflowDuration(state.endedAt - state.startedAt)}`
 			: undefined;
 	setTaskbarProgress(state.status === "running");
 }
