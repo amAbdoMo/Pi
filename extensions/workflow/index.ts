@@ -3,6 +3,7 @@ import { type ExtensionAPI, getMarkdownTheme } from "@earendil-works/pi-coding-a
 import { Markdown, Text, isKeyRelease, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { expandPastedTextMarkers } from "../ui/imagePaste.ts";
+import { AGENT_TIME_ICON } from "../ui/agentTimeTracker.ts";
 import {
 	CONTEXT_MESSAGE_TYPE,
 	INFO_MESSAGE_TYPE,
@@ -190,7 +191,7 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 	ctx?.ui?.setStatus && ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
 	// Composer-header timer styled like the normal agent "◎ worked 4m 24s" indicator.
 	(globalThis as any).__piWorkflowComposerStatus = state.status === "running"
-		? `◎ workflow ${formatWorkflowDuration(Date.now() - state.startedAt)}`
+		? `${AGENT_TIME_ICON} workflow ${formatWorkflowDuration(Date.now() - state.startedAt)}`
 		: undefined;
 	setTaskbarProgress(state.status === "running");
 }
