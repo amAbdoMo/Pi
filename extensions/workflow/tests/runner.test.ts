@@ -433,8 +433,7 @@ describe("workflow state machine", () => {
 			expect(h.invocations[0].env.PI_WORKFLOW_PARENT_PID).toBe(String(process.pid));
 			expect(state.phases.find((phase) => phase.id === "run")?.sessionFile).toBeUndefined();
 			expect(h.appended.some((entry) => entry.type === PANEL_ENTRY_TYPE)).toBe(true);
-			expect(h.sent.filter((message) => message.customType === "workflow-context")).toEqual([expect.objectContaining({ customType: "workflow-context", display: false })]);
-			expect(h.sent.filter((message) => message.customType === "workflow-info").length).toBeGreaterThanOrEqual(2);
+			expect(h.sent).toEqual([expect.objectContaining({ customType: "workflow-context", display: false })]);
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}

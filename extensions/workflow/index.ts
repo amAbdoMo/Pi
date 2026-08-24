@@ -152,15 +152,28 @@ function registerPhaseResultTool(pi: ExtensionAPI): void {
 	});
 }
 
+const TASKBAR_PROGRESS_ACTIVE = "\x1b]9;4;3\x07";
+const TASKBAR_PROGRESS_CLEAR = "\x1b]9;4;0\x07";
+let taskbarProgressInterval: ReturnType<typeof setInterval> | undefined;
+
+/** Mirror pi's terminal taskbar progress (orange bar under the terminal icon) while a workflow runs. */
+function setTaskbarProgress(active: boolean): void {
+	if (active && !taskbarProgressInterval) {
+		process.stdout.write(TASKBAR_PROGRESS_ACTIVE);
+		taskbarProgressInterval = setInterval(() => process.stdout.write(TASKBAR_PROGRESS_ACTIVE), 1000);
+	} else if (!active && taskbarProgressInterval) {
+		clearInterval(taskbarProgressInterval);
+		taskbarProgressInterval = undefined;
+		process.stdout.write(TASKBAR_PROGRESS_CLEAR);
+	}
+}
+
 function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRunState): void {
 	const composer = (globalThis as any).__piWorkflowComposerStatus;
-	if (!ctx?.ui?.setStatus) {
-		if (!state && composer !== undefined) (globalThis as any).__piWorkflowComposerStatus = undefined;
-		return;
-	}
 	if (!state) {
-		ctx.ui.setStatus("workflow", undefined);
+		ctx?.ui?.setStatus && ctx.ui.setStatus("workflow", undefined);
 		(globalThis as any).__piWorkflowComposerStatus = undefined;
+		setTaskbarProgress(false);
 		return;
 	}
 	const focus = runner.focusedRunId === state.runId ? " focused" : "";
@@ -174,15 +187,12 @@ function setStatusForRender(ctx: any, runner: WorkflowRunner, state?: WorkflowRu
 			return `${icon}${phase.id}${time}`;
 		})
 		.join(" ");
-	ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
-	// Compact timer for the composer header (rendered beside the model/thinking line).
-	const runningPhase = state.phases.find((phase) => phase.status === "running");
-	const runningBit = runningPhase?.startedAt
-		? ` ${runningPhase.id} ${formatWorkflowDuration((runningPhase.endedAt ?? Date.now()) - runningPhase.startedAt)}`
-		: "";
+	ctx?.ui?.setStatus && ctx.ui.setStatus("workflow", `workflow ${state.workflowId} · ${phases || (heartbeat ?? state.status)} · ${heartbeat ?? state.status}${focus}`);
+	// Composer-header timer styled like the normal agent "◎ worked 4m 24s" indicator.
 	(globalThis as any).__piWorkflowComposerStatus = state.status === "running"
-		? `⏱ ${state.workflowId}${runningBit} · total ${formatWorkflowDuration(Date.now() - state.startedAt)}`
+		? `◎ workflow ${formatWorkflowDuration(Date.now() - state.startedAt)}`
 		: undefined;
+	setTaskbarProgress(state.status === "running");
 }
 
 function getSelectedPhase(state: WorkflowRunState): PhaseRunState | undefined {

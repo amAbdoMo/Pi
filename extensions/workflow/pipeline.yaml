@@ -28,6 +28,12 @@ phases:
       - ctx_search
       - ctx_fetch_and_index
     nonFatalTools:
+      - bash
+      - read
+      - find
+      - ls
+      - ctx_execute
+      - ctx_batch_execute
       - web_search
       - web_fetch
       - mcp
@@ -83,8 +89,17 @@ phases:
       - ctx_batch_execute
       - ctx_index
     nonFatalTools:
+      - bash
+      - read
+      - edit
+      - write
+      - find
+      - ls
+      - ctx_execute
+      - ctx_batch_execute
       - web_search
       - web_fetch
+      - mcp
       - delegate
     system: |
       You are the implementation phase of a focused engineering workflow.
@@ -159,7 +174,13 @@ phases:
       - ctx_execute_file
       - ctx_batch_execute
     nonFatalTools:
+      - bash
+      - read
+      - find
+      - ls
+      - ctx_batch_execute
       - web_fetch
+      - mcp
     system: |
       You are the read-only verification phase of a focused engineering workflow.
       Verify the promised outcome through the smallest strong end-to-end evidence. Do not edit files and do not delegate.
