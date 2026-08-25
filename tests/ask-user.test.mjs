@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { registerHooks, stripTypeScriptTypes } from "node:module";
 import test from "node:test";
+
+// Resolve the repo root from THIS test file so it works in any checkout
+// (local clone, CI workspace, installed package copy).
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const moduleUrl = (relative) =>
+	`file://${path.join(repoRoot, relative).replaceAll("\\", "/")}`;
 
 // Stub the pi packages so the extension + picker modules load bare (the repo
 // has no node_modules for @earendil-works/*; see agent-time-wiring.test.mjs).
@@ -53,10 +59,10 @@ registerHooks({
 });
 
 const { buildSelectOptions, formatAnswerSummary } = await import(
-	`file://${path.join(os.homedir(), "Pi", "extensions", "ask-user", "format.ts").replaceAll("\\", "/")}`
+	moduleUrl(path.join("extensions", "ask-user", "format.ts"))
 );
 const { FramedQuestionPicker } = await import(
-	`file://${path.join(os.homedir(), "Pi", "extensions", "ask-user", "picker.ts").replaceAll("\\", "/")}`
+	moduleUrl(path.join("extensions", "ask-user", "picker.ts"))
 );
 
 const themeStub = new Proxy({}, {
