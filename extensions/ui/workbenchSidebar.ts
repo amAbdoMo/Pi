@@ -357,7 +357,7 @@ export class WorkbenchSidebar implements Component {
     windowRow("7d", state.chatGptWeeklyUsedPercent, state.chatGptWeeklyResetsAtMs);
     if (body.length === 0) return [];
 
-    return framedSection(this.theme, "Usage", body, sectionWidth);
+    return framedSection(this.theme, "Usage Resets", body, sectionWidth);
   }
 
   private contextLines(width: number): string[] {
