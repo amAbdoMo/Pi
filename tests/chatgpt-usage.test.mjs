@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { extractChatGptUsage, formatUsageResetSuffix } from "../extensions/ui/usageWindows.ts";
+import { extractChatGptUsage } from "../extensions/ui/usageWindows.ts";
+import { formatUsageResetSuffix } from "../extensions/ui/usageWindowsUi.ts";
 import {
   createUsageRefreshPoller,
   SUBAGENT_USAGE_REFRESH_INTERVAL_MS,

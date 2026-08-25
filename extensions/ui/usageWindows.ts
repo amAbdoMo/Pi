@@ -77,43 +77,6 @@ function windowForDuration(
   );
 }
 
-/**
- * Formats a reset timestamp the way the ChatGPT "General usage limits"
- * screen does, but compact: "11:10pm" on the current day, otherwise
- * "Sep 1, 5:44pm" (year included when it differs). Callers prepend their
- * own icon/word (e.g. the nerd-font rotate arrow).
- */
-export function formatUsageResetSuffix(resetsAtMs?: number, nowMs: number = Date.now()): string {
-  if (resetsAtMs === undefined || !Number.isFinite(resetsAtMs)) return "";
-
-  const resetDate = new Date(resetsAtMs);
-  const nowDate = new Date(nowMs);
-  // Compact meridiem ("5:44pm") keeps chips short and visually light.
-  const time = resetDate
-    .toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    })
-    .replace(" AM", "am")
-    .replace(" PM", "pm");
-
-  const sameDay =
-    resetDate.getFullYear() === nowDate.getFullYear() &&
-    resetDate.getMonth() === nowDate.getMonth() &&
-    resetDate.getDate() === nowDate.getDate();
-  if (sameDay) return time;
-
-  const day = resetDate.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-  const year =
-    resetDate.getFullYear() === nowDate.getFullYear()
-      ? ""
-      : `, ${resetDate.getFullYear()}`;
-  return `${day}${year}, ${time}`;
-}
-
 export function extractChatGptUsage(payload: unknown, nowMs: number = Date.now()): ChatGptUsage {
   const windows = rateLimitWindows(payload, nowMs);
   const fiveHour = windowForDuration(windows, FIVE_HOUR_SECONDS);

@@ -1,25 +1,13 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { notifyEditors } from "./editorRegistry.ts";
-import {
-  color,
-  ratioProgressBar,
-  thinkingColor,
-} from "./formatting.ts";
+import { color, ratioProgressBar } from "./formatting.ts";
 import { isOpenAICodexProvider } from "./providers.ts";
 import { state } from "./state.ts";
-import {
-  extractChatGptUsage,
-  formatUsageResetSuffix,
-  type ChatGptUsage,
-} from "./usageWindows.ts";
+import { extractChatGptUsage, type ChatGptUsage } from "./usageWindows.ts";
 
 const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const OPENAI_AUTH_CLAIM = "https://api.openai.com/auth";
 const USAGE_REFRESH_THROTTLE_MS = 30 * 1000;
-// Nerd-font rotate-right glyph built from its codepoint so it survives any
-// editor/encoding round-trip: a clockwise circular arrow matching the
-// requested Lucide "rotate-cw" look; rendered in the active "think" accent.
-const USAGE_RESET_ICON = String.fromCodePoint(0xf01e);
 
 let usageRequestId = 0;
 let usageLastRefreshStartedAt = 0;
@@ -53,22 +41,15 @@ function usageLimitColor(percent: number): string {
   return "muted";
 }
 
-function usageLimitLabel(label: string, usedPercent: number, resetsAtMs?: number): string {
+function usageLimitLabel(label: string, usedPercent: number): string {
+  // Composer header shows only the compact usage bars; reset dates live in
+  // the sidebar Usage section to keep the message area uncluttered.
   const clampedPercent = clampPercent(usedPercent);
-  const resetSuffix = formatUsageResetSuffix(resetsAtMs);
   return [
     color("warning", `${label} `),
     color(usageLimitColor(clampedPercent), `${Math.round(clampedPercent)}%`),
     " ",
     ratioProgressBar(clampedPercent / 100),
-    resetSuffix
-      ? // Leading space separates the icon from the progress bar; icon takes
-        // the "think <level>" accent (red at high); the compact timestamp uses
-        // the model-name token — terminals have one font size, brightness and
-        // glyph height are the size cues (lowercase am/pm reads lighter).
-        color(thinkingColor(state.thinking), ` ${USAGE_RESET_ICON}`) +
-          color("toolTitle", ` ${resetSuffix}`)
-      : "",
   ].join("");
 }
 
@@ -77,14 +58,10 @@ export function chatGptLimitLabels(): string[] {
 
   const labels: string[] = [];
   if (state.chatGptFiveHourUsedPercent !== undefined) {
-    labels.push(
-      usageLimitLabel("5h", state.chatGptFiveHourUsedPercent, state.chatGptFiveHourResetsAtMs),
-    );
+    labels.push(usageLimitLabel("5h", state.chatGptFiveHourUsedPercent));
   }
   if (state.chatGptWeeklyUsedPercent !== undefined) {
-    labels.push(
-      usageLimitLabel("7d", state.chatGptWeeklyUsedPercent, state.chatGptWeeklyResetsAtMs),
-    );
+    labels.push(usageLimitLabel("7d", state.chatGptWeeklyUsedPercent));
   }
   return labels;
 }

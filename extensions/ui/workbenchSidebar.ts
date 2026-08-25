@@ -31,11 +31,16 @@ import {
   type TodoStatus,
 } from "../plan-mode/utils.ts";
 import { framedPanel } from "./framedPanel.ts";
+import { thinkingColor } from "./formatting.ts";
 import {
   isWorkbenchModalActive,
   subscribeWorkbenchModals,
 } from "./modalState.ts";
 import { state } from "./state.ts";
+import {
+  USAGE_RESET_ICON,
+  formatUsageResetSuffix,
+} from "./usageWindowsUi.ts";
 import {
   installWorkbenchShell,
   type ComposerCursorRequest,
@@ -278,16 +283,23 @@ export class WorkbenchSidebar implements Component {
   private bodyLines(width: number, rows: number): string[] {
     const divider = this.theme.fg("borderMuted", "─".repeat(width));
     const sectionContentWidth = sidebarSectionContentWidth(width);
-    const lines = [
+    const sections = [
       "",
       ...framedSection(this.theme, "Session", this.sessionLines(sectionContentWidth), width),
       "",
       ...framedSection(this.theme, "Context", this.contextLines(sectionContentWidth), width),
+    ];
+    const usageSection = this.usageSection(sectionContentWidth, width);
+    if (usageSection.length > 0) {
+      sections.push("", ...usageSection);
+    }
+    sections.push(
       "",
       ...framedSection(this.theme, "Activity", this.activityLines(sectionContentWidth), width),
       "",
       ...framedSection(this.theme, "MCP", this.mcpLines(sectionContentWidth), width),
-    ];
+    );
+    const lines = sections;
     const contentRows = lines.slice(0, Math.max(0, rows - 2));
     while (contentRows.length < rows - 2) contentRows.push("");
     return [
@@ -304,6 +316,48 @@ export class WorkbenchSidebar implements Component {
       ...wrapSidebarText(this.theme.fg("accent", ` ${sessionName}`), width),
       ...wrapSidebarText(this.theme.fg("muted", location), width),
     ];
+  }
+
+  private usageSection(contentWidth: number, sectionWidth: number): string[] {
+    // Only meaningful for the OpenAI Codex provider; hidden otherwise.
+    if (
+      state.chatGptFiveHourUsedPercent === undefined &&
+      state.chatGptWeeklyUsedPercent === undefined
+    ) {
+      return [];
+    }
+
+    const body: string[] = [];
+    const windowRow = (
+      label: string,
+      usedPercent: number | undefined,
+      resetsAtMs: number | undefined,
+    ): void => {
+      if (usedPercent === undefined) return;
+      // Sidebar shows only the window label and its reset time; usage
+      // percentage and bars stay in the composer header. Label sits flush
+      // left, rotate icon + time flush right — same shape as Context rows.
+      const labelStyled = this.theme.fg("muted", label);
+      const resetSuffix = formatUsageResetSuffix(resetsAtMs);
+      if (!resetSuffix) {
+        body.push(labelStyled);
+        return;
+      }
+      const valueStyled =
+        this.theme.fg(thinkingColor(state.thinking), USAGE_RESET_ICON) +
+        this.theme.fg("toolTitle", ` ${resetSuffix}`);
+      const gap = Math.max(
+        1,
+        contentWidth - visibleWidth(labelStyled) - visibleWidth(valueStyled),
+      );
+      body.push(`${labelStyled}${" ".repeat(gap)}${valueStyled}`);
+    };
+
+    windowRow("5h", state.chatGptFiveHourUsedPercent, state.chatGptFiveHourResetsAtMs);
+    windowRow("7d", state.chatGptWeeklyUsedPercent, state.chatGptWeeklyResetsAtMs);
+    if (body.length === 0) return [];
+
+    return framedSection(this.theme, "Usage", body, sectionWidth);
   }
 
   private contextLines(width: number): string[] {
