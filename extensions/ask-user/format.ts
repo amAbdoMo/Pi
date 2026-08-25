@@ -43,11 +43,11 @@ export function buildSelectOptions(
 }
 
 /** Transcript-friendly summary handed back to the model after a round. */
-export function formatAnswerSummary(answers: AnsweredQuestion[]): string {
+export function formatAnswerSummary(answers: AnsweredQuestion[], baseNumber: number = 0): string {
 	const lines: string[] = [];
 	for (let i = 0; i < answers.length; i++) {
 		const entry = answers[i];
-		lines.push(`Q${i + 1}: ${entry.question}`);
+		lines.push(`Q${baseNumber + i + 1}: ${entry.question}`);
 		if (entry.dismissed) {
 			lines.push("→ (dismissed by user)");
 			continue;

@@ -1,14 +1,18 @@
 /**
- * ask-user — OpenCode-style interactive questions for the pi harness.
+ * ask-user — OpenCode-style interactive questions for the pi harness, v2.
  *
- * Gives the model an `ask_user` tool that pops native pi selectors:
- *   • numbered options with descriptions, "(Recommended)" first
- *   • arrow keys + enter, or press its number to pick instantly
- *   • "Type your own answer" free-text entry (like OpenCode's)
- *   • Esc dismisses a question ("dismissed by user")
+ * The `ask_user` tool pops framed, workspace-style question pickers
+ * (┌─ ❓ Q1 · title ─┐ … └──┘) with:
+ *   • numbered options + descriptions, "(Recommended)" first
+ *   • arrow keys / number keys / enter, "Type your own answer" free text
+ *   • rich multi-sentence context under the question title (markdown-ish)
+ *
+ * Follow-up mode: call ask_user again with `followUp: true` to branch on
+ * earlier answers ("you picked WordPress → here are 3 WP-specific options")
+ * without re-stating settled decisions.
  *
  * Commands:
- *   /grill [topic] — run the grilling interview with these option UIs;
+ *   /grill [topic] — grilling interview driven through these pickers;
  *                    loads ~/.agents/skills/grilling/SKILL.md when present.
  */
 
@@ -18,8 +22,8 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { FramedQuestionPicker, type PickerResult } from "./picker.ts";
 import {
-	buildSelectOptions,
 	fallbackPromptText,
 	formatAnswerSummary,
 	type AnsweredQuestion,
@@ -28,12 +32,6 @@ import {
 
 const MAX_QUESTIONS = 6;
 const MAX_OPTIONS = 8;
-
-type RawQuestion = {
-	question?: unknown;
-	options?: unknown;
-	allowCustom?: unknown;
-};
 
 function normalizeOptions(raw: unknown): AskOption[] {
 	if (!Array.isArray(raw)) return [];
@@ -52,16 +50,27 @@ function normalizeOptions(raw: unknown): AskOption[] {
 	return parsed;
 }
 
-function normalizeQuestions(raw: unknown): { question: string; options: AskOption[]; allowCustom: boolean }[] {
+function normalizeQuestions(raw: unknown): {
+	question: string;
+	context?: string;
+	options: AskOption[];
+	allowCustom: boolean;
+}[] {
 	if (!Array.isArray(raw)) return [];
-	const parsed: { question: string; options: AskOption[]; allowCustom: boolean }[] = [];
+	const parsed: {
+		question: string;
+		context?: string;
+		options: AskOption[];
+		allowCustom: boolean;
+	}[] = [];
 	for (const item of raw.slice(0, MAX_QUESTIONS)) {
 		if (!item || typeof item !== "object") continue;
-		const record = item as RawQuestion;
+		const record = item as Record<string, unknown>;
 		const question = typeof record.question === "string" ? record.question.trim() : "";
 		if (!question) continue;
 		parsed.push({
 			question,
+			context: typeof record.context === "string" && record.context.trim() ? record.context.trim() : undefined,
 			options: normalizeOptions(record.options),
 			allowCustom: record.allowCustom !== false,
 		});
@@ -69,120 +78,137 @@ function normalizeQuestions(raw: unknown): { question: string; options: AskOptio
 	return parsed;
 }
 
-async function askOne(
+async function askOneFramed(
 	ctx: ExtensionContext,
+	questionNumber: number,
 	question: string,
+	context: string | undefined,
 	options: AskOption[],
 	allowCustom: boolean,
 ): Promise<AnsweredQuestion> {
 	const entry: AnsweredQuestion = { question, answer: "", custom: false, dismissed: false };
 
-	if (!ctx.hasUI) {
-		entry.answer = fallbackPromptText([{ question, options }]).split("\n").slice(2).join("\n");
+	if (!ctx.hasUI || ctx.mode !== "tui") {
+		entry.answer = fallbackPromptText([{ question, options }]);
 		entry.dismissed = true;
 		return entry;
 	}
 
-	// No options: plain text input (OpenCode shows an input-only tab too).
 	if (options.length === 0) {
 		const answer = await ctx.ui.input(question);
-		if (answer === undefined) {
+		if (answer === undefined || answer.trim() === "") {
 			entry.dismissed = true;
 			return entry;
 		}
-		entry.answer = answer;
+		entry.answer = answer.trim();
 		entry.custom = true;
 		return entry;
 	}
 
-	const ordered = buildSelectOptions(options, allowCustom);
-	const picked = await ctx.ui.select(question, ordered.rows);
-	if (picked === undefined) {
+	const result = await ctx.ui.custom<PickerResult>(
+		(tui, theme, keybindings, done) =>
+			new FramedQuestionPicker(tui, theme as never, keybindings, {
+				questionNumber,
+				title: question,
+				context,
+				options: options.map((option) => ({
+					label: option.label,
+					description: option.description,
+					recommended: option.recommended,
+				})),
+				allowCustom,
+			}),
+		done,
+	);
+
+	if (!result) {
 		entry.dismissed = true;
 		return entry;
 	}
-	if (picked === ordered.customRow) {
-		const typed = await ctx.ui.input(question);
-		if (typed === undefined || typed.trim() === "") {
-			entry.dismissed = true;
-			return entry;
-		}
-		entry.answer = typed.trim();
-		entry.custom = true;
-		return entry;
-	}
-
-	// Map the rendered row back to the canonical option label.
-	const rowIndex = ordered.rows.indexOf(picked);
-	const chosen = ordered.orderedOptions[rowIndex];
-	entry.answer = chosen?.label ?? picked.replace(/^\d+\.\s*/, "").replace(/\s+—.*$/, "").replace(/\s+\(Recommended\)$/, "");
+	entry.answer = result.value;
+	entry.custom = result.custom;
 	return entry;
 }
 
 export default function askUserExtension(pi: ExtensionAPI): void {
+	let roundCounter = 0;
 	let lastRoundSummary = "";
 
 	pi.registerTool({
 		name: "ask_user",
 		label: "Ask User",
 		description: [
-			"Ask the user 1-6 questions with interactive multiple-choice pickers (arrow keys / number keys / enter), each with an optional 'Type your own answer' field.",
-			"Each question: { question, options: [{ label, description?, recommended? }], allowCustom? }. With no options the user gets a free-text input.",
-			"Returns the chosen answers verbatim. Use for clarifications, decisions, and grill-style interviews instead of asking in plain text.",
+			"DEFAULT for ANY clarification, interview, decision, plan approval, or mid-task choice — use this instead of asking questions in plain text. Grill/interview rounds (grilling skill) MUST deliver every question through this tool.",
+			"Framed workspace-style pickers: numbered options with descriptions and a (Recommended) marker, plus 'Type your own answer'. Rich multi-sentence context is supported via the `context` field — put long explanations there instead of squeezing them into the title.",
+			"FOLLOW-UP MODE: you may call this tool repeatedly within one round. Ask the unblocking questions first, then call again branching on answers ('you picked WordPress → these 3 WP-specific options'). Prefer small batches that branch over one giant upfront batch.",
+			"Each question: { question, context?, options?: [{ label, description?, recommended? }], allowCustom? }. With no options the user gets a free-text input. Returns chosen answers verbatim; dismissed questions are marked — never assume an answer for them.",
 		].join("\n"),
-		promptSnippet: "Ask the user structured questions with interactive choice UIs",
+		promptSnippet: "Ask the user structured questions with interactive choice UIs (default for all clarifications)",
 		promptGuidelines: [
-			"When you need a decision or clarification, prefer ask_user over plain-text questions.",
-			"Batch independent questions into one call; mark exactly one option recommended when you have a preference.",
+			"DEFAULT to ask_user for any clarification or decision — never ask questions in plain text while this tool is available.",
+			"Grill/interview rounds: every question goes through ask_user; keep the numbered titles (Q1, Q2, …) and put your ➡️ recommendation on the recommended option.",
+			"Use follow-up calls to branch on earlier answers instead of forcing all questions upfront.",
+			"Long background belongs in `context`; keep `question` short enough for a panel title.",
 			"After receiving answers, act on them — do not re-ask answered questions.",
 		],
 		parameters: Type.Object({
 			questions: Type.Array(
 				Type.Object({
-					question: Type.String({ description: "The question to show" }),
+					question: Type.String({ description: "Short question shown as the frame title" }),
+					context: Type.Optional(
+						Type.String({ description: "Rich multi-sentence background shown inside the frame under the title" }),
+					),
 					options: Type.Optional(
 						Type.Array(
 							Type.Object({
 								label: Type.String({ description: "Short answer text" }),
 								description: Type.Optional(Type.String({ description: "One-line explanation shown under the label" })),
-								recommended: Type.Optional(Type.Boolean({ description: "Show as (Recommended) and list it first" })),
+								recommended: Type.Optional(Type.Boolean({ description: "Marked (Recommended) and listed first" })),
 							}),
 						),
 					),
 					allowCustom: Type.Optional(Type.Boolean({ description: "Add a 'Type your own answer' entry (default true)" })),
 				}),
-				{ description: `1-${MAX_QUESTIONS} questions` },
+				{ description: `1-${MAX_QUESTIONS} questions for THIS call; call again to branch on answers` },
 			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const questions = normalizeQuestions(params.questions);
 			if (questions.length === 0) {
-				return {
-					content: [{ type: "text", text: "No valid questions provided." }],
-					isError: true,
-				};
+				return { content: [{ type: "text", text: "No valid questions provided." }], isError: true };
 			}
 
+			roundCounter += 1;
+			const baseNumber = (roundCounter - 1) * MAX_QUESTIONS;
+
 			const answers: AnsweredQuestion[] = [];
-			for (const item of questions) {
-				answers.push(await askOne(ctx, item.question, item.options, item.allowCustom));
-				ctx.ui.setStatus("ask-user", `${answers.length}/${questions.length} answered`);
+			for (let i = 0; i < questions.length; i++) {
+				const item = questions[i];
+				answers.push(
+					await askOneFramed(ctx, baseNumber + i + 1, item.question, item.context, item.options, item.allowCustom),
+				);
+				ctx.ui.setStatus("ask-user", `${baseNumber + i + 1} · ${i + 1}/${questions.length} answered`);
 			}
 			ctx.ui.setStatus("ask-user", undefined);
 
-			const summary = formatAnswerSummary(answers);
+			const summary = formatAnswerSummary(answers, baseNumber);
 			lastRoundSummary = summary;
-			const dismissed = answers.filter((answer) => answer.dismissed).length;
+			const dismissedCount = answers.filter((answer) => answer.dismissed).length;
+			const followUpHint =
+				"\n\n(Follow-up mode: call ask_user again to branch on these answers; numbering continues automatically.)";
 			return {
 				content: [
 					{
 						type: "text",
-						text: dismissed > 0
-							? `${summary}\n\n${dismissed} question(s) dismissed — proceed carefully without assuming dismissed answers.`
-							: summary,
+						text:
+							summary +
+							(dismissedCount > 0
+								? `\n\n${dismissedCount} question(s) dismissed — proceed carefully without assuming dismissed answers.`
+								: "") +
+							followUpHint,
 					},
 				],
-				details: { answers },
+				details: { round: roundCounter, answers },
 			};
 		},
 		renderCall(args, theme) {
@@ -213,10 +239,8 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 				topic ? `Topic: ${topic}` : "Topic: the plan, decision, or idea I give you next.",
 				"",
 				skillText
-					? `Follow the grilling method from this skill file:\n\n${skillText}`
-					: "Interview me relentlessly in rounds: map decisions as a design tree, ask every currently-unblocked question per round, wait for my answers before the next round, and stop only when nothing is left assumed. Do not act until we confirm shared understanding.",
-				"",
-				"IMPORTANT: For every question, use the ask_user tool so I can answer with the interactive pickers. Number your questions across rounds (Q1, Q2, ... continuing the count), give each question 2-5 concrete options where possible, and mark exactly one as recommended unless there is genuinely no basis for a recommendation.",
+					? `Follow the grilling method from this skill file, WITH ONE OVERRIDE:\n\n${skillText}\n\nOVERRIDE: deliver every round through the ask_user tool (framed pickers) instead of plain-text ❓ blocks. Keep the numbered titles (Q1, Q2, … continuing across rounds). Put the question body into ask_user's `context` field, put each option's explanation into its `description`, and express your "➡️ recommendation" by marking that option recommended: true. Ask only currently-unblocked questions per call, then call ask_user again to branch on my answers.`
+					: "Interview me relentlessly in rounds: map decisions as a design tree, ask every currently-unblocked question per call through the ask_user tool (framed pickers), then call it again to branch on my answers. Stop only when nothing is left assumed. Do not act until we confirm shared understanding.",
 			].join("\n");
 
 			await ctx.ui.notify(topic ? `Grilling on: ${topic}` : "Grilling session started — answer the pickers.", "info");
