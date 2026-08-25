@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test, { afterEach } from "node:test";
-import { extractChatGptUsage } from "../extensions/ui/usageWindows.ts";
+import { extractChatGptUsage, formatUsageResetSuffix } from "../extensions/ui/usageWindows.ts";
 import {
   createUsageRefreshPoller,
   SUBAGENT_USAGE_REFRESH_INTERVAL_MS,
@@ -24,7 +24,12 @@ test("Codex usage windows are identified by duration rather than response positi
           secondary_window: { used_percent: 42, limit_window_seconds: 18000 },
         },
       },
-      expected: { fiveHourUsedPercent: 42, weeklyUsedPercent: 16 },
+      expected: {
+        fiveHourUsedPercent: 42,
+        fiveHourResetsAtMs: undefined,
+        weeklyUsedPercent: 16,
+        weeklyResetsAtMs: undefined,
+      },
     },
     {
       payload: {
@@ -33,7 +38,12 @@ test("Codex usage windows are identified by duration rather than response positi
           secondary_window: null,
         },
       },
-      expected: { fiveHourUsedPercent: 9, weeklyUsedPercent: undefined },
+      expected: {
+        fiveHourUsedPercent: 9,
+        fiveHourResetsAtMs: undefined,
+        weeklyUsedPercent: undefined,
+        weeklyResetsAtMs: undefined,
+      },
     },
     {
       payload: {
@@ -42,13 +52,89 @@ test("Codex usage windows are identified by duration rather than response positi
           secondary_window: { used_percent: 3, limit_window_seconds: 0 },
         },
       },
-      expected: { fiveHourUsedPercent: undefined, weeklyUsedPercent: undefined },
+      expected: {
+        fiveHourUsedPercent: undefined,
+        fiveHourResetsAtMs: undefined,
+        weeklyUsedPercent: undefined,
+        weeklyResetsAtMs: undefined,
+      },
     },
   ];
 
   for (const { payload, expected } of cases) {
     assert.deepEqual(extractChatGptUsage(payload), expected);
   }
+});
+
+test("Codex usage windows capture reset times from reset_at and reset_after_seconds", () => {
+  const nowMs = Date.parse("2026-08-25T19:00:00Z");
+
+  const fromResetAt = extractChatGptUsage(
+    {
+      rate_limit: {
+        primary_window: { used_percent: 16, limit_window_seconds: 18000, reset_at: 1788000000 },
+        secondary_window: { used_percent: 42, limit_window_seconds: 604800, reset_at: 1789000000 },
+      },
+    },
+    nowMs,
+  );
+  assert.equal(fromResetAt.fiveHourUsedPercent, 16);
+  assert.equal(fromResetAt.fiveHourResetsAtMs, 1788000000000);
+  assert.equal(fromResetAt.weeklyUsedPercent, 42);
+  assert.equal(fromResetAt.weeklyResetsAtMs, 1789000000000);
+
+  const fromResetAfter = extractChatGptUsage(
+    {
+      rate_limit: {
+        primary_window: { used_percent: 9, limit_window_seconds: 604800, reset_after_seconds: 7200 },
+      },
+    },
+    nowMs,
+  );
+  assert.equal(fromResetAfter.weeklyUsedPercent, 9);
+  assert.equal(fromResetAfter.weeklyResetsAtMs, nowMs + 7200 * 1000);
+  assert.equal(fromResetAfter.fiveHourUsedPercent, undefined);
+  assert.equal(fromResetAfter.fiveHourResetsAtMs, undefined);
+
+  const withoutResets = extractChatGptUsage(
+    {
+      rate_limit: {
+        primary_window: { used_percent: 33, limit_window_seconds: 18000 },
+      },
+    },
+    nowMs,
+  );
+  assert.deepEqual(withoutResets, {
+    fiveHourUsedPercent: 33,
+    fiveHourResetsAtMs: undefined,
+    weeklyUsedPercent: undefined,
+    weeklyResetsAtMs: undefined,
+  });
+});
+
+test("usage reset suffix matches the ChatGPT limits screen wording", () => {
+  const now = new Date(2026, 7, 25, 14, 30).getTime(); // Aug 25 2026, local time
+
+  // Same day: only the clock time; the caller prepends the icon/word.
+  assert.equal(
+    formatUsageResetSuffix(new Date(2026, 7, 25, 22, 44).getTime(), now),
+    "10:44pm",
+  );
+
+  // Same year, another day: month day plus time, like the weekly limit screen.
+  assert.equal(
+    formatUsageResetSuffix(new Date(2026, 8, 1, 17, 44).getTime(), now),
+    "Sep 1, 5:44pm",
+  );
+
+  // Different year: the year is included.
+  assert.equal(
+    formatUsageResetSuffix(new Date(2027, 0, 15, 3, 4).getTime(), now),
+    "Jan 15, 2027, 3:04am",
+  );
+
+  // No reset information: empty suffix, chip renders exactly as before.
+  assert.equal(formatUsageResetSuffix(undefined), "");
 });
 
 function createTestScheduler() {

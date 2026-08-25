@@ -22,6 +22,26 @@ export function background(token: string, text: string): string {
   return theme?.bg?.(token, text) ?? text;
 }
 
+// Shared with the composer header so chips can match the "think <level>" color.
+export function thinkingColor(level: string): string {
+  switch (level) {
+    case "minimal":
+      return "thinkingMinimal";
+    case "low":
+      return "thinkingLow";
+    case "medium":
+      return "thinkingMedium";
+    case "high":
+      return "thinkingHigh";
+    case "xhigh":
+      return "thinkingXhigh";
+    case "max":
+      return "thinkingMax";
+    default:
+      return "thinkingOff";
+  }
+}
+
 export function ratioProgressBar(ratio: number, width = 4): string {
   const clamped = Math.max(0, Math.min(1, ratio));
   const filled = Math.round(clamped * width);

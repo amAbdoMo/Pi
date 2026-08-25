@@ -6,28 +6,10 @@ import {
   color,
   padToWidth,
   textWidth,
+  thinkingColor,
 } from "./formatting.ts";
 import { state } from "./state.ts";
 import { composerFrame } from "./workbenchLayout.ts";
-
-function thinkingColor(level: string): string {
-  switch (level) {
-    case "minimal":
-      return "thinkingMinimal";
-    case "low":
-      return "thinkingLow";
-    case "medium":
-      return "thinkingMedium";
-    case "high":
-      return "thinkingHigh";
-    case "xhigh":
-      return "thinkingXhigh";
-    case "max":
-      return "thinkingMax";
-    default:
-      return "thinkingOff";
-  }
-}
 
 function composerTitle(direction: string): string {
   const directionLabel = direction.startsWith("RTL")

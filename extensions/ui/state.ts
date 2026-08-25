@@ -38,6 +38,8 @@ export function updateState(ctx: ExtensionContext, pi: ExtensionAPI): void {
   if (!isOpenAICodexProvider(state.provider)) {
     state.chatGptFiveHourUsedPercent = undefined;
     state.chatGptWeeklyUsedPercent = undefined;
+    state.chatGptFiveHourResetsAtMs = undefined;
+    state.chatGptWeeklyResetsAtMs = undefined;
     state.chatGptUsageProvider = undefined;
   }
 }

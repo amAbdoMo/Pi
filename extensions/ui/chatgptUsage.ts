@@ -1,13 +1,25 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { notifyEditors } from "./editorRegistry.ts";
-import { color, ratioProgressBar } from "./formatting.ts";
+import {
+  color,
+  ratioProgressBar,
+  thinkingColor,
+} from "./formatting.ts";
 import { isOpenAICodexProvider } from "./providers.ts";
 import { state } from "./state.ts";
-import { extractChatGptUsage, type ChatGptUsage } from "./usageWindows.ts";
+import {
+  extractChatGptUsage,
+  formatUsageResetSuffix,
+  type ChatGptUsage,
+} from "./usageWindows.ts";
 
 const CHATGPT_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const OPENAI_AUTH_CLAIM = "https://api.openai.com/auth";
 const USAGE_REFRESH_THROTTLE_MS = 30 * 1000;
+// Nerd-font rotate-right glyph built from its codepoint so it survives any
+// editor/encoding round-trip: a clockwise circular arrow matching the
+// requested Lucide "rotate-cw" look; rendered in the active "think" accent.
+const USAGE_RESET_ICON = String.fromCodePoint(0xf01e);
 
 let usageRequestId = 0;
 let usageLastRefreshStartedAt = 0;
@@ -41,13 +53,22 @@ function usageLimitColor(percent: number): string {
   return "muted";
 }
 
-function usageLimitLabel(label: string, usedPercent: number): string {
+function usageLimitLabel(label: string, usedPercent: number, resetsAtMs?: number): string {
   const clampedPercent = clampPercent(usedPercent);
+  const resetSuffix = formatUsageResetSuffix(resetsAtMs);
   return [
     color("warning", `${label} `),
     color(usageLimitColor(clampedPercent), `${Math.round(clampedPercent)}%`),
     " ",
     ratioProgressBar(clampedPercent / 100),
+    resetSuffix
+      ? // Leading space separates the icon from the progress bar; icon takes
+        // the "think <level>" accent (red at high); the compact timestamp uses
+        // the model-name token — terminals have one font size, brightness and
+        // glyph height are the size cues (lowercase am/pm reads lighter).
+        color(thinkingColor(state.thinking), ` ${USAGE_RESET_ICON}`) +
+          color("toolTitle", ` ${resetSuffix}`)
+      : "",
   ].join("");
 }
 
@@ -56,10 +77,14 @@ export function chatGptLimitLabels(): string[] {
 
   const labels: string[] = [];
   if (state.chatGptFiveHourUsedPercent !== undefined) {
-    labels.push(usageLimitLabel("5h", state.chatGptFiveHourUsedPercent));
+    labels.push(
+      usageLimitLabel("5h", state.chatGptFiveHourUsedPercent, state.chatGptFiveHourResetsAtMs),
+    );
   }
   if (state.chatGptWeeklyUsedPercent !== undefined) {
-    labels.push(usageLimitLabel("7d", state.chatGptWeeklyUsedPercent));
+    labels.push(
+      usageLimitLabel("7d", state.chatGptWeeklyUsedPercent, state.chatGptWeeklyResetsAtMs),
+    );
   }
   return labels;
 }
@@ -67,11 +92,15 @@ export function chatGptLimitLabels(): string[] {
 function clearChatGptUsage(): void {
   state.chatGptFiveHourUsedPercent = undefined;
   state.chatGptWeeklyUsedPercent = undefined;
+  state.chatGptFiveHourResetsAtMs = undefined;
+  state.chatGptWeeklyResetsAtMs = undefined;
 }
 
 function setChatGptUsage(usage: ChatGptUsage): void {
   state.chatGptFiveHourUsedPercent = usage.fiveHourUsedPercent;
   state.chatGptWeeklyUsedPercent = usage.weeklyUsedPercent;
+  state.chatGptFiveHourResetsAtMs = usage.fiveHourResetsAtMs;
+  state.chatGptWeeklyResetsAtMs = usage.weeklyResetsAtMs;
 }
 
 export async function refreshChatGptUsage(
