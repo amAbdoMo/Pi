@@ -134,6 +134,38 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 	let roundCounter = 0;
 	let lastRoundSummary = "";
 
+	const grillSkillText = (): string => {
+		const skillPath = path.join(os.homedir(), ".agents", "skills", "grilling", "SKILL.md");
+		try {
+			return fs.readFileSync(skillPath, "utf8");
+		} catch {
+			return "";
+		}
+	};
+
+	const buildGrillPrompt = (topic: string): string => {
+		const skillText = grillSkillText();
+		return [
+			"# Grilling session",
+			topic ? `Topic: ${topic}` : "Topic: the plan, decision, or idea I give you next.",
+			"",
+			skillText
+				? `Follow the grilling method from this skill file, WITH ONE OVERRIDE:\n\n${skillText}\n\nOVERRIDE: deliver every round through the ask_user tool (framed pickers) instead of plain-text ❓ blocks. Keep the numbered titles (Q1, Q2, … continuing across rounds). Put the question body into ask_user's 'context' field, put each option's explanation into its 'description', and express your ➡️ recommendation by marking that option recommended: true. Ask only currently-unblocked questions per call, then call ask_user again to branch on my answers.`
+				: "Interview me relentlessly in rounds: map decisions as a design tree, ask every currently-unblocked question per call through the ask_user tool (framed pickers), then call it again to branch on my answers. Stop only when nothing is left assumed. Do not act until we confirm shared understanding.",
+		].join("\n");
+	};
+
+	// Deterministic trigger: "grill me ...", "grilling ..." typed as a normal
+	// message is transformed into the picker-driven grilling prompt BEFORE the
+	// model sees it — no reliance on the model choosing prose over the tool.
+	pi.on("input", (event) => {
+		if (event.source === "extension") return { action: "continue" };
+		const match = event.text.match(/^\s*(?:grill(?:ing)?\s+(?:me\s+)?(?:about\s+)?|grill\s*$)(.*)$/i);
+		if (!match) return { action: "continue" };
+		const topic = match[1]?.trim() ?? "";
+		return { action: "transform", text: buildGrillPrompt(topic) };
+	});
+
 	pi.registerTool({
 		name: "ask_user",
 		label: "Ask User",
@@ -226,25 +258,8 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 		description: "Grill me — interactive grilling interview with choice UIs",
 		handler: async (args, ctx) => {
 			const topic = args.trim();
-			const skillPath = path.join(os.homedir(), ".agents", "skills", "grilling", "SKILL.md");
-			let skillText = "";
-			try {
-				skillText = fs.readFileSync(skillPath, "utf8");
-			} catch {
-				skillText = "";
-			}
-
-			const intro = [
-				"# Grilling session",
-				topic ? `Topic: ${topic}` : "Topic: the plan, decision, or idea I give you next.",
-				"",
-				skillText
-					? `Follow the grilling method from this skill file, WITH ONE OVERRIDE:\n\n${skillText}\n\nOVERRIDE: deliver every round through the ask_user tool (framed pickers) instead of plain-text ❓ blocks. Keep the numbered titles (Q1, Q2, … continuing across rounds). Put the question body into ask_user's `context` field, put each option's explanation into its `description`, and express your "➡️ recommendation" by marking that option recommended: true. Ask only currently-unblocked questions per call, then call ask_user again to branch on my answers.`
-					: "Interview me relentlessly in rounds: map decisions as a design tree, ask every currently-unblocked question per call through the ask_user tool (framed pickers), then call it again to branch on my answers. Stop only when nothing is left assumed. Do not act until we confirm shared understanding.",
-			].join("\n");
-
 			await ctx.ui.notify(topic ? `Grilling on: ${topic}` : "Grilling session started — answer the pickers.", "info");
-			pi.sendUserMessage(intro, { deliverAs: "nextTurn" });
+			pi.sendUserMessage(buildGrillPrompt(topic), { deliverAs: "nextTurn" });
 		},
 	});
 

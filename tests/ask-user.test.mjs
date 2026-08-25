@@ -40,7 +40,8 @@ registerHooks({
 		return nextResolve(specifier, context);
 	},
 	load(url, context, nextLoad) {
-		if (url === "stub:pi-tui" || url === "stub:pia") {
+		if (url === "stub:pi-tui") return { format: "module", source: tuiStub, shortCircuit: true };
+		if (url === "stub:pia") {
 			return { format: "module", source: "export default {};", shortCircuit: true };
 		}
 		if (url === "stub:typebox") return { format: "module", source: typeboxStub, shortCircuit: true };
@@ -64,6 +65,41 @@ const { buildSelectOptions, formatAnswerSummary } = await import(
 const { FramedQuestionPicker } = await import(
 	moduleUrl(path.join("extensions", "ask-user", "picker.ts"))
 );
+
+function makeHarness() {
+	const handlers = new Map();
+	const sent = [];
+	const pi = {
+		on(event, handler) { handlers.set(event, handler); },
+		registerTool() {},
+		registerCommand() {},
+		sendUserMessage(content) { sent.push(content); },
+	};
+	return { pi, handlers, sent };
+}
+
+test('typed "grill me ..." input is deterministically transformed into the picker prompt', async () => {
+	const { pi, handlers, sent } = makeHarness();
+	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
+	extension.default(pi);
+	const inputHandler = handlers.get("input");
+	assert.ok(inputHandler, "input event handler registered");
+
+	const result = inputHandler({ type: "input", text: "grill me about egypt", source: "interactive" });
+	assert.equal(result.action, "transform");
+	assert.match(result.text, /# Grilling session/);
+	assert.match(result.text, /Topic: egypt/);
+	assert.match(result.text, /ask_user tool \(framed pickers\)/);
+	assert.ok(!sent.length, "no direct message sent for transformed input");
+
+	// Non-grill text passes through untouched.
+	const pass = inputHandler({ type: "input", text: "hello world", source: "interactive" });
+	assert.deepEqual(pass, { action: "continue" });
+
+	// Extension-sent grill prompts are never re-transformed (loop guard).
+	const loop = inputHandler({ type: "input", text: "grill me about x", source: "extension" });
+	assert.deepEqual(loop, { action: "continue" });
+});
 
 const themeStub = new Proxy({}, {
 	get(_target, prop) {
