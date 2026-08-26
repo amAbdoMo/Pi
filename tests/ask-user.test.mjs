@@ -78,27 +78,38 @@ function makeHarness() {
 	return { pi, handlers, sent };
 }
 
-test('typed "grill me ..." input is deterministically transformed into the picker prompt', async () => {
+test('typed "grill me ..." keeps the message verbatim and injects a hidden brief', async () => {
 	const { pi, handlers, sent } = makeHarness();
 	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
 	extension.default(pi);
 	const inputHandler = handlers.get("input");
-	assert.ok(inputHandler, "input event handler registered");
+	const agentStartHandler = handlers.get("before_agent_start");
+	assert.ok(inputHandler && agentStartHandler, "input + before_agent_start handlers registered");
 
-	const result = inputHandler({ type: "input", text: "grill me about egypt", source: "interactive" });
-	assert.equal(result.action, "transform");
-	assert.match(result.text, /# Grilling session/);
-	assert.match(result.text, /Topic: egypt/);
-	assert.match(result.text, /ask_user tool \(framed pickers\)/);
-	assert.ok(!sent.length, "no direct message sent for transformed input");
+	// The user's message passes through untouched (displayed as typed).
+	const inputResult = inputHandler({ type: "input", text: "grill me about egypt", source: "interactive" });
+	assert.deepEqual(inputResult, { action: "continue" });
 
-	// Non-grill text passes through untouched.
-	const pass = inputHandler({ type: "input", text: "hello world", source: "interactive" });
-	assert.deepEqual(pass, { action: "continue" });
+	// At agent start, the grilling brief rides along as a HIDDEN message.
+	const startResult = agentStartHandler({ type: "before_agent_start", prompt: "grill me about egypt" });
+	assert.ok(startResult?.message, "hidden brief message returned");
+	assert.equal(startResult.message.display, false);
+	assert.match(startResult.message.content[0].text, /# Grilling session/);
+	assert.match(startResult.message.content[0].text, /Topic: egypt/);
+	assert.match(startResult.message.content[0].text, /ask_user tool \(framed pickers\)/);
+	assert.ok(!sent.length, "no direct user message sent");
 
-	// Extension-sent grill prompts are never re-transformed (loop guard).
-	const loop = inputHandler({ type: "input", text: "grill me about x", source: "extension" });
-	assert.deepEqual(loop, { action: "continue" });
+	// One-shot: consumed after a single turn.
+	const second = agentStartHandler({ type: "before_agent_start", prompt: "hello" });
+	assert.equal(second, undefined);
+
+	// Non-grill text arms nothing.
+	inputHandler({ type: "input", text: "hello world", source: "interactive" });
+	assert.equal(agentStartHandler({ type: "before_agent_start", prompt: "hello world" }), undefined);
+
+	// Extension-sourced grill text never arms the brief (loop guard).
+	inputHandler({ type: "input", text: "grill me about x", source: "extension" });
+	assert.equal(agentStartHandler({ type: "before_agent_start", prompt: "x" }), undefined);
 });
 
 const themeStub = new Proxy({}, {

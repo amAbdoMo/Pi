@@ -155,15 +155,31 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 		].join("\n");
 	};
 
-	// Deterministic trigger: "grill me ...", "grilling ..." typed as a normal
-	// message is transformed into the picker-driven grilling prompt BEFORE the
-	// model sees it — no reliance on the model choosing prose over the tool.
+	// Deterministic trigger for "grill me ...": the user's message stays
+	// EXACTLY as typed (displayed and sent verbatim). The grilling brief is
+	// injected as a hidden before-agent-start message so the model is forced
+	// through the pickers without rewriting what the user said.
+	let pendingGrillBrief: string | undefined;
+
 	pi.on("input", (event) => {
 		if (event.source === "extension") return { action: "continue" };
 		const match = event.text.match(/^\s*(?:grill(?:ing)?\s+(?:me\s+)?(?:about\s+)?|grill\s*$)(.*)$/i);
 		if (!match) return { action: "continue" };
-		const topic = match[1]?.trim() ?? "";
-		return { action: "transform", text: buildGrillPrompt(topic) };
+		pendingGrillBrief = buildGrillPrompt(match[1]?.trim() ?? "");
+		return { action: "continue" };
+	});
+
+	pi.on("before_agent_start", () => {
+		if (!pendingGrillBrief) return;
+		const brief = pendingGrillBrief;
+		pendingGrillBrief = undefined;
+		return {
+			message: {
+				customType: "ask-user-grill-brief",
+				content: [{ type: "text", text: brief }],
+				display: false,
+			},
+		};
 	});
 
 	pi.registerTool({
