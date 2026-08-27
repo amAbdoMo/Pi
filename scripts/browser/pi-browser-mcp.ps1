@@ -129,7 +129,19 @@ function Ensure-SharedBrowser {
     throw "Edge did not expose CDP port $DebugPort within $StartupTimeoutSeconds seconds."
 }
 
-function Invoke-WithStartupMutex {
+function Add-ClientLock {
+    $self = Get-Process -Id $PID
+    $lockValue = "$PID|$($self.StartTime.ToUniversalTime().Ticks)"
+    $temporaryLock = "$clientLock.tmp"
+    try {
+        Set-Content -LiteralPath $temporaryLock -Value $lockValue -Encoding Ascii
+        [IO.File]::Move($temporaryLock, $clientLock)
+    } finally {
+        Remove-Item -LiteralPath $temporaryLock -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Enter-BrowserClient {
     $mutex = [Threading.Mutex]::new($false, $startupMutexName)
     $acquired = $false
     try {
@@ -139,7 +151,15 @@ function Invoke-WithStartupMutex {
             $acquired = $true
         }
         if (-not $acquired) { throw "Timed out waiting for shared browser startup lock on port $DebugPort." }
-        Ensure-SharedBrowser
+
+        Remove-StaleClientLocks
+        Add-ClientLock
+        try {
+            Ensure-SharedBrowser
+        } catch {
+            Remove-Item -LiteralPath $clientLock -Force -ErrorAction SilentlyContinue
+            throw
+        }
     } finally {
         if ($acquired) { $mutex.ReleaseMutex() }
         $mutex.Dispose()
@@ -149,12 +169,8 @@ function Invoke-WithStartupMutex {
 $exitCode = 1
 try {
     New-Item -ItemType Directory -Force -Path $lockDir, $outputDir | Out-Null
-    Remove-StaleClientLocks
-    $self = Get-Process -Id $PID
-    $lockValue = "$PID|$($self.StartTime.ToUniversalTime().Ticks)"
-    Set-Content -LiteralPath $clientLock -Value $lockValue -Encoding Ascii
+    Enter-BrowserClient
     Start-IdleWatcher
-    Invoke-WithStartupMutex
 
     $npx = (Get-Command 'npx.cmd' -ErrorAction Stop).Source
     $mcpArgs = @(

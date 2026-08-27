@@ -52,6 +52,7 @@ export default function mcpHubExtension(pi: ExtensionAPI): void {
 		promptGuidelines: [
 			"Use mcp search before describe or call when the server/tool name is unknown.",
 			"Use mcp describe to inspect a tool schema before mcp call, and encode call args as a JSON object string.",
+			"With the managed browser MCP, keep the tab assigned at connection and do not select another Pi session's tab.",
 		],
 		parameters: MCP_PARAMETERS,
 		async execute(_toolCallId, params, signal) {

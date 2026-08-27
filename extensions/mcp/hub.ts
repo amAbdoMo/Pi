@@ -298,6 +298,7 @@ export class McpHub {
 		try {
 			await client.connect(transport, { signal });
 			const tools = await this.fetchTools(client, runtime.definition, signal);
+			await this.claimSharedBrowserTab(client, runtime.definition, tools, signal);
 			runtime.tools = tools;
 			runtime.metadataKnown = true;
 			runtime.state = "connected";
@@ -354,6 +355,26 @@ export class McpHub {
 			if (!cursor) return tools.sort((left, right) => left.name.localeCompare(right.name));
 		}
 		throw new Error("MCP server returned too many tool-list pages");
+	}
+
+	private async claimSharedBrowserTab(
+		client: Client,
+		definition: McpServerDefinition,
+		tools: McpToolMetadata[],
+		signal?: AbortSignal,
+	): Promise<void> {
+		if (!isSharedBrowserSupervisor(definition)) return;
+		if (!tools.some((tool) => tool.name === "browser_tabs")) {
+			throw new Error("Shared browser MCP does not expose browser_tabs");
+		}
+		const response = await client.callTool(
+			{ name: "browser_tabs", arguments: { action: "new" } },
+			undefined,
+			{ signal },
+		);
+		if (isRecord(response) && response.isError === true) {
+			throw new Error("Shared browser MCP failed to claim a session tab");
+		}
 	}
 
 	private async refreshConnectedTools(runtime: McpServerRuntime, client: Client): Promise<void> {
@@ -497,6 +518,11 @@ async function terminateHttpSessionQuietly(client: Client): Promise<void> {
 	} finally {
 		if (timeout) clearTimeout(timeout);
 	}
+}
+
+function isSharedBrowserSupervisor(definition: McpServerDefinition): boolean {
+	if (definition.config.transport !== "stdio") return false;
+	return definition.config.args.some((argument) => /(^|[\\/])pi-browser-mcp\.ps1$/i.test(argument));
 }
 
 function abortablePromise<T>(pending: Promise<T>, signal?: AbortSignal): Promise<T> {

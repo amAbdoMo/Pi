@@ -27,12 +27,14 @@ async function stdioServerFixture(environment = {}) {
   const agentDirectory = join(root, "agent");
   const serverPath = join(root, "server.mjs");
   await writeFile(serverPath, `
+import fs from "node:fs";
 import readline from "node:readline";
 
 const lines = readline.createInterface({ input: process.stdin });
 lines.on("close", () => process.exit(0));
 const listDelay = Number(process.env.LIST_DELAY_MS || 0);
 const emitListChanged = process.env.EMIT_LIST_CHANGED === "1";
+const exposeBrowserTabs = process.env.EXPOSE_BROWSER_TABS === "1";
 let generation = 0;
 let notificationSent = false;
 
@@ -58,7 +60,8 @@ lines.on("line", async (line) => {
         { name: "required_task", inputSchema: { type: "object" }, execution: { taskSupport: "required" } },
         { name: "structured", inputSchema: { type: "object" }, outputSchema: {
           type: "object", properties: { count: { type: "number" } }, required: ["count"]
-        } }
+        } },
+        ...(exposeBrowserTabs ? [{ name: "browser_tabs", inputSchema: { type: "object" } }] : [])
       ] : [{ name: "refreshed", inputSchema: { type: "object" } }];
       send({ jsonrpc: "2.0", id: message.id, result: { tools, nextCursor: generation === 0 ? "page-2" : undefined } });
       return;
@@ -87,20 +90,32 @@ lines.on("line", async (line) => {
       } });
       return;
     }
+    if (name === "browser_tabs" && message.params.arguments.action === "new") {
+      fs.appendFileSync(process.env.BROWSER_CLAIM_LOG, "new\\n");
+      send({ jsonrpc: "2.0", id: message.id, result: { content: [{ type: "text", text: "claimed" }] } });
+      return;
+    }
     send({ jsonrpc: "2.0", id: message.id, result: { isError: true, content: [{ type: "text", text: "unexpected call" }] } });
   }
 });
 `, "utf8");
+  const browserClaimLog = join(root, "browser-claim.log");
+  const command = [process.execPath, serverPath];
+  const resolvedEnvironment = { ...environment };
+  if (environment.EXPOSE_BROWSER_TABS === "1") {
+    command.push(join(root, "pi-browser-mcp.ps1"));
+    resolvedEnvironment.BROWSER_CLAIM_LOG = browserClaimLog;
+  }
   await writeJson(join(agentDirectory, "mcp.json"), {
     mcp: {
       fixture: {
         type: "local",
-        command: [process.execPath, serverPath],
-        environment,
+        command,
+        environment: resolvedEnvironment,
       },
     },
   });
-  return { root, agentDirectory };
+  return { root, agentDirectory, browserClaimLog };
 }
 
 async function configFixture(t) {
@@ -437,6 +452,21 @@ test("caller cancellation does not abort another shared MCP connection", async (
   await assert.rejects(firstConnection, { name: "AbortError" });
   assert.equal((await secondConnection).length, 3);
   assert.equal(hub.serverSummaries()[0]?.state, "connected");
+});
+
+test("a managed shared browser claims a new tab when it connects", async (t) => {
+  const fixture = await stdioServerFixture({ EXPOSE_BROWSER_TABS: "1" });
+  const hub = new McpHub(fixture.agentDirectory);
+  t.after(async () => {
+    await hub.closeAll();
+    await rm(fixture.root, { recursive: true, force: true });
+  });
+  await hub.startSession(fixture.root, false);
+
+  const tools = await hub.connectServer("fixture");
+
+  assert.equal(tools.some(({ name }) => name === "browser_tabs"), true);
+  assert.equal(await readFile(fixture.browserClaimLog, "utf8"), "new\n");
 });
 
 test("MCP stdio lifecycle preserves paginated metadata and validates calls", async (t) => {

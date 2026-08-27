@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Assigned each managed shared-browser MCP connection a new tab while retaining the same persistent Edge profile, preventing concurrent Pi sessions from selecting the same tab without losing shared logins.
 - Added a clock-marked agent timer to the composer, showing live and settled durations without adding timing rows to chat.
 - Brightened syntax comments in chat from near-invisible dark gray to a readable teal that stays distinct from strings, keywords, and variables on the dark background.
 - Inline images now render on Windows Terminal: Kitty image sequences are converted to Sixel drawings of the same cell footprint (with cursor restore) since WT ignores the Kitty graphics protocol.
