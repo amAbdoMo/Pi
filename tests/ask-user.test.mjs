@@ -463,6 +463,7 @@ test("framed picker uses Pi's native border and keeps clarification optional", (
 	], {}, nativeTheme);
 	const lines = picker.render(60);
 	assert.ok(lines[0].startsWith("╭ Q3 — Primary project? "), lines[0]);
+	assert.match(lines[1], /^│\s+│$/, "blank padding separates the question title from its answers");
 	assert.ok(lines.some((line) => line.includes("Pick the focus for this week.")));
 	const recommendedLine = lines.find((line) => line.includes("WorkflowY"));
 	assert.ok(recommendedLine?.includes("Recommended"), recommendedLine);

@@ -191,7 +191,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 			border("╭") + this.theme.fg("accent", this.theme.bold(clippedTitle)) + border(`${fill}╮`),
 		];
 
-		const content: string[] = [];
+		const content: string[] = [""];
 		if (this.bodyText) {
 			for (const line of wrapPlain(this.bodyText, inner)) {
 				content.push(this.theme.fg("muted", line));
