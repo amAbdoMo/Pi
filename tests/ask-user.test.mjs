@@ -21,6 +21,12 @@ export class Text {
 export function visibleWidth(text) {
   return [...String(text).replace(/\\x1b\\[[0-9;]*m/g, "")].length;
 }
+export function truncateToWidth(text, width, suffix = "") {
+  const value = String(text);
+  if (visibleWidth(value) <= width) return value;
+  const plain = value.replace(/\\x1b\\[[0-9;]*m/g, "");
+  return [...plain].slice(0, Math.max(0, width - visibleWidth(suffix))).join("") + suffix;
+}
 `;
 
 const typeboxStub = `
@@ -59,7 +65,7 @@ registerHooks({
 	},
 });
 
-const { buildSelectOptions, formatAnswerSummary } = await import(
+const { buildSelectOptions, fallbackPromptText, formatAnswerSummary } = await import(
 	moduleUrl(path.join("extensions", "ask-user", "format.ts"))
 );
 const { FramedQuestionPicker } = await import(
@@ -96,7 +102,11 @@ test('typed "grill me ..." keeps the message verbatim and injects a hidden brief
 	assert.equal(startResult.message.display, false);
 	assert.match(startResult.message.content[0].text, /# Grilling session/);
 	assert.match(startResult.message.content[0].text, /Topic: egypt/);
-	assert.match(startResult.message.content[0].text, /ask_user tool \(framed pickers\)/);
+	const grillBrief = startResult.message.content[0].text;
+	assert.match(grillBrief, /ask_user tool/);
+	assert.match(grillBrief, /Do not add Q numbers/i);
+	assert.match(grillBrief, /direct, self-contained answer/i);
+	assert.match(grillBrief, /omit context and option descriptions/i);
 	assert.ok(!sent.length, "no direct user message sent");
 
 	// One-shot: consumed after a single turn.
@@ -123,46 +133,120 @@ const themeStub = new Proxy({}, {
 	},
 });
 const plain = (line) => line.replace(/«|»/g, "");
+const tuiRuntimeStub = { requestRender() {} };
 
-test("ask_user custom picker completes through the UI callback", async () => {
+test("ask_user keeps every question framed, sequential, and recommended-first", async () => {
 	let askUserTool;
+	let inputHandler;
+	const renderedFrames = [];
 	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
 	extension.default({
-		on() {},
+		on(event, handler) {
+			if (event === "input") inputHandler = handler;
+		},
 		registerTool(tool) { askUserTool = tool; },
 		registerCommand() {},
 		sendUserMessage() {},
 	});
-	assert.ok(askUserTool, "ask_user tool registered");
+	assert.ok(askUserTool && inputHandler, "ask_user tool and grill trigger registered");
 
-	const response = await askUserTool.execute(
-		"ask-user-regression",
+	const ctx = {
+		hasUI: true,
+		mode: "tui",
+		ui: {
+			custom(factory) {
+				return new Promise((done) => {
+					const picker = factory(tuiRuntimeStub, themeStub, {}, done);
+					renderedFrames.push(picker.render(80).map(plain));
+					picker.handleInput("1");
+				});
+			},
+			setStatus() {},
+		},
+	};
+
+	const firstResponse = await askUserTool.execute(
+		"ask-user-first",
 		{
 			questions: [{
-				question: "Primary focus?",
-				options: [{ label: "Egypt", recommended: true }],
+				question: "Q1 — Primary focus?",
+				options: [
+					{ label: "I want to discuss Egypt" },
+					{ label: "I want to improve Pi", recommended: true },
+				],
 				allowCustom: false,
 			}],
 		},
 		undefined,
 		undefined,
+		ctx,
+	);
+	const secondResponse = await askUserTool.execute(
+		"ask-user-second",
 		{
-			hasUI: true,
-			mode: "tui",
+			questions: [{
+				question: "Q2 — How should we continue?",
+				options: [{ label: "I want the recommended approach", recommended: true }],
+				allowCustom: false,
+			}],
+		},
+		undefined,
+		undefined,
+		ctx,
+	);
+	let freeTextFrame;
+	const freeTextResponse = await askUserTool.execute(
+		"ask-user-free-text",
+		{
+			questions: [{
+				question: "Q3 — What should I add?",
+				context: "Use your own words.",
+			}],
+		},
+		undefined,
+		undefined,
+		{
+			...ctx,
 			ui: {
+				...ctx.ui,
 				custom(factory) {
 					return new Promise((done) => {
-						const picker = factory({}, themeStub, {}, done);
-						picker.handleInput("1");
+						const picker = factory(tuiRuntimeStub, themeStub, {}, done);
+						freeTextFrame = picker.render(80).map(plain);
+						picker.handleInput("A direct answer");
+						picker.handleInput("\r");
 					});
 				},
-				setStatus() {},
 			},
 		},
 	);
+	inputHandler({ type: "input", text: "grill me about a fresh topic", source: "interactive" });
+	const resetResponse = await askUserTool.execute(
+		"ask-user-reset",
+		{
+			questions: [{
+				question: "Q1 — Start fresh?",
+				options: [{ label: "Yes", recommended: true }],
+				allowCustom: false,
+			}],
+		},
+		undefined,
+		undefined,
+		ctx,
+	);
 
-	assert.equal(response.details.answers[0].answer, "Egypt");
-	assert.match(response.content[0].text, /Q1: Primary focus\?\n→ Egypt/);
+	assert.equal(firstResponse.details.answers[0].answer, "I want to improve Pi");
+	assert.match(firstResponse.content[0].text, /Q1: Primary focus\?/);
+	assert.doesNotMatch(firstResponse.content[0].text, /Q1: Q1/);
+	assert.match(secondResponse.content[0].text, /Q2: How should we continue\?/);
+	assert.match(freeTextResponse.content[0].text, /Q3: What should I add\?\n→ A direct answer/);
+	assert.match(resetResponse.content[0].text, /Q1: Start fresh\?\n→ Yes/);
+	assert.equal(resetResponse.details.round, 1);
+	assert.ok(renderedFrames[0][0].startsWith("╭ Q1 — Primary focus? "), renderedFrames[0][0]);
+	assert.ok(renderedFrames[1][0].startsWith("╭ Q2 — How should we continue? "), renderedFrames[1][0]);
+	assert.ok(freeTextFrame[0].startsWith("╭ Q3 — What should I add? "), freeTextFrame[0]);
+	assert.ok(freeTextFrame.some((line) => line.includes("Use your own words.")));
+	assert.ok(freeTextFrame.some((line) => line.includes("❯ ▏")), "free-text input starts inside the frame");
 });
 
 test("select options put the recommended first and append a custom row", () => {
@@ -178,22 +262,30 @@ test("select options put the recommended first and append a custom row", () => {
 	assert.equal(buildSelectOptions([{ label: "A" }], false).customRow, undefined);
 });
 
-test("answer summaries support continuous numbering across follow-up rounds", () => {
+test("answer summaries start at the supplied question offset", () => {
 	const summary = formatAnswerSummary(
 		[
 			{ question: "CMS?", answer: "WordPress", custom: false, dismissed: false },
 			{ question: "Which plugin?", answer: "forms", custom: true, dismissed: false },
 		],
-		6,
+		1,
 	);
-	assert.match(summary, /Q7: CMS\?\n→ WordPress/);
-	assert.match(summary, /Q8: Which plugin\?\n→ forms \(custom answer\)/);
+	assert.match(summary, /Q2: CMS\?\n→ WordPress/);
+	assert.match(summary, /Q3: Which plugin\?\n→ forms \(custom answer\)/);
 });
 
-function makePicker(options, opts = {}) {
+test("non-interactive fallback preserves question offset and context", () => {
+	const fallback = fallbackPromptText(
+		[{ question: "Why?", context: "Explain the trade-off.", options: [] }],
+		2,
+	);
+	assert.match(fallback, /Q3: Why\?\n   Explain the trade-off\./);
+});
+
+function makePicker(options, opts = {}, theme = themeStub) {
 	const sent = [];
 	const done = (result) => sent.push(result);
-	const picker = new FramedQuestionPicker({}, themeStub, {}, {
+	const picker = new FramedQuestionPicker(tuiRuntimeStub, theme, {}, {
 		questionNumber: 3,
 		title: "Primary project?",
 		context: "Pick the focus for this week.",
@@ -204,20 +296,30 @@ function makePicker(options, opts = {}) {
 	return { picker, sent };
 }
 
-test("framed picker renders workspace-style borders, title, context, and options", () => {
+test("framed picker uses Pi's native border and keeps clarification optional", () => {
+	const usedColors = [];
+	const nativeTheme = {
+		bold(text) { return text; },
+		fg(color, text) {
+			usedColors.push(color);
+			return String(text);
+		},
+	};
 	const { picker } = makePicker([
 		{ label: "WorkflowY", description: "Electron app work", recommended: true },
 		{ label: "Pi harness", description: "extensions and guards" },
-	]);
-	const lines = picker.render(60).map(plain);
-	assert.ok(lines[0].startsWith("┌─ ❓ Q3 · Primary project?"), lines[0]);
+	], {}, nativeTheme);
+	const lines = picker.render(60);
+	assert.ok(lines[0].startsWith("╭ Q3 — Primary project? "), lines[0]);
 	assert.ok(lines.some((line) => line.includes("Pick the focus for this week.")));
-	assert.ok(lines.some((line) => line.includes("❯ 1. WorkflowY")), "selected row highlighted");
+	const recommendedLine = lines.find((line) => line.includes("WorkflowY"));
+	assert.ok(recommendedLine?.includes("Recommended"), recommendedLine);
 	assert.ok(lines.some((line) => line.includes("Electron app work")));
-	assert.ok(lines.some((line) => line.includes("(Recommended)")));
 	assert.ok(lines.some((line) => line.includes("3. Type your own answer")));
+	assert.ok(usedColors.includes("border"), "native border theme token used");
+	assert.ok(!usedColors.includes("borderMuted"), "muted border theme token omitted");
 	const last = lines[lines.length - 1];
-	assert.ok(last.startsWith("└"), last);
+	assert.ok(last.startsWith("╰"), last);
 	for (const line of lines.slice(1, -1)) assert.ok(line.startsWith("│ "), line);
 });
 

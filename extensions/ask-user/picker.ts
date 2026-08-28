@@ -1,14 +1,15 @@
-// Framed, workspace-style question picker built on pi-tui primitives.
-// Renders like the Pi workbench panels: ┌─ title ─┐ … │ content │ … └──┘
-// Only TYPE imports from pi-tui here — everything runtime is self-contained,
-// so tests can load this file with zero package stubs.
+// Native Pi-framed question picker built on pi-tui primitives.
+// It mirrors Pi's rounded workspace frame and uses pi-tui's terminal-width
+// utilities so styled and wide-character answers stay inside the border.
 
-import type {
-	Component,
-	Focusable,
-	KeybindingsManager,
-	Theme,
-	TUI,
+import {
+	truncateToWidth,
+	visibleWidth,
+	type Component,
+	type Focusable,
+	type KeybindingsManager,
+	type Theme,
+	type TUI,
 } from "@earendil-works/pi-tui";
 
 export type PickerOption = {
@@ -20,10 +21,6 @@ export type PickerOption = {
 export type PickerResult = { value: string; custom: boolean } | undefined;
 
 const MAX_VISIBLE_OPTIONS = 6;
-
-function visibleWidth(text: string): number {
-	return [...String(text).replace(/\x1b\[[0-9;]*m/g, "")].length;
-}
 
 function wrapPlain(text: string, width: number): string[] {
 	const words = String(text ?? "").split(/\s+/).filter(Boolean);
@@ -46,6 +43,7 @@ function wrapPlain(text: string, width: number): string[] {
 export class FramedQuestionPicker implements Component, Focusable {
 	focused = true;
 
+	private readonly tui: TUI;
 	private readonly theme: Theme;
 	private readonly done: (result: PickerResult) => void;
 	private readonly heading: string;
@@ -61,7 +59,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 	private finished = false;
 
 	constructor(
-		_tui: TUI,
+		tui: TUI,
 		theme: Theme,
 		_keybindings: KeybindingsManager,
 		opts: {
@@ -73,6 +71,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 		},
 		done: (result: PickerResult) => void,
 	) {
+		this.tui = tui;
 		this.theme = theme;
 		this.done = done;
 		this.questionNumber = opts.questionNumber;
@@ -81,6 +80,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 		this.options = opts.allowCustom && opts.options.length > 0
 			? [...opts.options, { label: this.customLabel }]
 			: [...opts.options];
+		this.inputMode = this.options.length === 0;
 	}
 
 	handleInput(data: string): void {
@@ -90,6 +90,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 			if (data === "\x1b") {
 				this.inputMode = false;
 				this.inputBuffer = "";
+				this.tui.requestRender();
 				return;
 			}
 			if (data === "\r" || data === "\n") {
@@ -100,11 +101,13 @@ export class FramedQuestionPicker implements Component, Focusable {
 			}
 			if (data === "\x7f" || data === "\b") {
 				this.inputBuffer = this.inputBuffer.slice(0, -1);
+				this.tui.requestRender();
 				return;
 			}
 			// Printable characters and paste chunks (no escape prefixes).
 			if (!data.includes("\x1b")) {
 				this.inputBuffer += data;
+				this.tui.requestRender();
 			}
 			return;
 		}
@@ -138,16 +141,15 @@ export class FramedQuestionPicker implements Component, Focusable {
 	render(width: number): string[] {
 		const totalWidth = Math.max(20, width);
 		const inner = totalWidth - 4; // "│ " + content + " │"
-		const border = (text: string) => this.theme.fg("borderMuted", text);
+		const border = (text: string) => this.theme.fg("border", text);
 
-		const title = `❓ Q${this.questionNumber} · ${this.heading}`;
-		const clippedTitle = visibleWidth(title) > inner - 1
-			? `${[...title].slice(0, inner - 2).join("")}…`
-			: title;
-		const fill = Math.max(1, totalWidth - 5 - visibleWidth(clippedTitle));
+		const title = ` Q${this.questionNumber} — ${this.heading} `;
+		const maxTitleWidth = totalWidth - 2;
+		const clippedTitle = truncateToWidth(title, maxTitleWidth, "…");
+		const fill = "─".repeat(Math.max(0, maxTitleWidth - visibleWidth(clippedTitle)));
 
 		const lines: string[] = [
-			border(`┌─ `) + this.theme.fg("accent", clippedTitle) + border(` ${"─".repeat(fill)}┐`),
+			border("╭") + this.theme.fg("accent", this.theme.bold(clippedTitle)) + border(`${fill}╮`),
 		];
 
 		const content: string[] = [];
@@ -179,14 +181,14 @@ export class FramedQuestionPicker implements Component, Focusable {
 				const label = isSelected
 					? this.theme.fg("accent", labelText)
 					: labelText;
-				content.push(`${prefix}${number}${label}`);
+				const recommendation = option.recommended
+					? this.theme.fg("warning", "  Recommended")
+					: "";
+				content.push(`${prefix}${number}${label}${recommendation}`);
 				if (option.description) {
 					for (const line of wrapPlain(option.description, inner - 4)) {
 						content.push(`    ${this.theme.fg("dim", line)}`);
 					}
-				}
-				if (option.recommended) {
-					content.push(`    ${this.theme.fg("warning", "(Recommended)")}`);
 				}
 			}
 			if (this.options.length > MAX_VISIBLE_OPTIONS) {
@@ -197,14 +199,12 @@ export class FramedQuestionPicker implements Component, Focusable {
 		}
 
 		for (const line of content) {
-			const clipped = visibleWidth(line) > inner
-				? `${[...line].slice(0, inner - 1).join("")}…`
-				: line;
+			const clipped = truncateToWidth(line, inner, "…");
 			const pad = " ".repeat(Math.max(0, inner - visibleWidth(clipped)));
 			lines.push(`${border("│ ")}${clipped}${pad}${border(" │")}`);
 		}
 
-		lines.push(border(`└${"─".repeat(totalWidth - 2)}┘`));
+		lines.push(border(`╰${"─".repeat(totalWidth - 2)}╯`));
 		return lines;
 	}
 
@@ -212,6 +212,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 		const count = this.options.length;
 		if (count === 0) return;
 		this.selectedIndex = (this.selectedIndex + delta + count) % count;
+		this.tui.requestRender();
 	}
 
 	private activate(): void {
@@ -220,6 +221,7 @@ export class FramedQuestionPicker implements Component, Focusable {
 		if (option.label === this.customLabel) {
 			this.inputMode = true;
 			this.inputBuffer = "";
+			this.tui.requestRender();
 			return;
 		}
 		this.finish({ value: option.label, custom: false });

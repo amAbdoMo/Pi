@@ -22,9 +22,8 @@ export function formatOptionLabel(option: AskOption, index: number): string {
 }
 
 /**
- * Options passed to ui.select, OpenCode style: numbered rows, recommended
- * first, plus a trailing "Type your own answer" entry when allowed.
- * Returns the ordered options too, so picked rows map back cleanly.
+ * Moves the first recommended option to the top and builds numbered rows for
+ * non-custom UI fallbacks. The interactive picker reuses the same ordering.
  */
 export function buildSelectOptions(
 	options: AskOption[],
@@ -58,12 +57,16 @@ export function formatAnswerSummary(answers: AnsweredQuestion[], baseNumber: num
 }
 
 /** Fallback text when there is no interactive UI (RPC/print mode). */
-export function fallbackPromptText(questions: { question: string; options?: AskOption[] }[]): string {
+export function fallbackPromptText(
+	questions: { question: string; context?: string; options?: AskOption[] }[],
+	baseNumber: number = 0,
+): string {
 	const blocks = questions.map((question, index) => {
+		const contextLine = question.context ? `\n   ${question.context}` : "";
 		const optionLines = (question.options ?? [])
 			.map((option, optionIndex) => `   ${formatOptionLabel(option, optionIndex)}`)
 			.join("\n");
-		return `Q${index + 1}: ${question.question}${optionLines ? `\n${optionLines}` : ""}`;
+		return `Q${baseNumber + index + 1}: ${question.question}${contextLine}${optionLines ? `\n${optionLines}` : ""}`;
 	});
 	return ["Interactive UI unavailable — ask these in plain text:", "", ...blocks].join("\n");
 }
