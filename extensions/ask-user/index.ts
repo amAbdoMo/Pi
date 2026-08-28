@@ -17,7 +17,7 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { FramedQuestionPicker, type PickerResult } from "./picker.ts";
+import { FramedQuestionPicker, type PickerImage, type PickerResult } from "./picker.ts";
 import {
 	buildSelectOptions,
 	fallbackPromptText,
@@ -80,6 +80,11 @@ function normalizeQuestions(raw: unknown): {
 	return parsed;
 }
 
+type FramedAnswer = {
+	answer: AnsweredQuestion;
+	images: PickerImage[];
+};
+
 async function askOneFramed(
 	ctx: ExtensionContext,
 	questionNumber: number,
@@ -87,13 +92,13 @@ async function askOneFramed(
 	context: string | undefined,
 	options: AskOption[],
 	allowCustom: boolean,
-): Promise<AnsweredQuestion> {
+): Promise<FramedAnswer> {
 	const entry: AnsweredQuestion = { question, answer: "", custom: false, dismissed: false };
 
 	if (!ctx.hasUI || ctx.mode !== "tui") {
 		entry.answer = fallbackPromptText([{ question, context, options }], questionNumber - 1);
 		entry.dismissed = true;
-		return entry;
+		return { answer: entry, images: [] };
 	}
 
 	const result = await ctx.ui.custom<PickerResult>(
@@ -113,11 +118,11 @@ async function askOneFramed(
 
 	if (!result) {
 		entry.dismissed = true;
-		return entry;
+		return { answer: entry, images: [] };
 	}
 	entry.answer = result.value;
 	entry.custom = result.custom;
-	return entry;
+	return { answer: entry, images: result.images };
 }
 
 export default function askUserExtension(pi: ExtensionAPI): void {
@@ -231,11 +236,19 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 			questionCounter += questions.length;
 
 			const answers: AnsweredQuestion[] = [];
+			const attachedImages: PickerImage[] = [];
 			for (let i = 0; i < questions.length; i++) {
 				const item = questions[i];
-				answers.push(
-					await askOneFramed(ctx, baseNumber + i + 1, item.question, item.context, item.options, item.allowCustom),
+				const framedAnswer = await askOneFramed(
+					ctx,
+					baseNumber + i + 1,
+					item.question,
+					item.context,
+					item.options,
+					item.allowCustom,
 				);
+				answers.push(framedAnswer.answer);
+				attachedImages.push(...framedAnswer.images);
 				ctx.ui.setStatus("ask-user", `${baseNumber + i + 1} · ${i + 1}/${questions.length} answered`);
 			}
 			ctx.ui.setStatus("ask-user", undefined);
@@ -245,17 +258,16 @@ export default function askUserExtension(pi: ExtensionAPI): void {
 			const dismissedCount = answers.filter((answer) => answer.dismissed).length;
 			const followUpHint =
 				"\n\n(Follow-up mode: call ask_user again to branch on these answers; numbering continues automatically.)";
+			const summaryText =
+				summary +
+				(dismissedCount > 0
+					? `\n\n${dismissedCount} question(s) dismissed — proceed carefully without assuming dismissed answers.`
+					: "") +
+				followUpHint;
 			return {
 				content: [
-					{
-						type: "text",
-						text:
-							summary +
-							(dismissedCount > 0
-								? `\n\n${dismissedCount} question(s) dismissed — proceed carefully without assuming dismissed answers.`
-								: "") +
-							followUpHint,
-					},
+					{ type: "text" as const, text: summaryText },
+					...attachedImages.map((image) => ({ type: "image" as const, ...image })),
 				],
 				details: { round: roundCounter, answers },
 			};

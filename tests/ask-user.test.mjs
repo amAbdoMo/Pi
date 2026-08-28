@@ -18,6 +18,50 @@ export class Text {
   constructor(text) { this.text = String(text); }
   render() { return this.text; }
 }
+export class Editor {
+  constructor(tui) { this.tui = tui; this.text = ""; }
+  handleInput(data) {
+    if (data === "\\r" || data === "\\n") {
+      const submitted = this.text;
+      this.text = "";
+      this.onChange?.("");
+      this.onSubmit?.(submitted);
+      return;
+    }
+    if (data === "\\x7f" || data === "\\b") this.text = this.text.slice(0, -1);
+    else {
+      const start = "\\x1b[200~";
+      const end = "\\x1b[201~";
+      this.text += data.startsWith(start) && data.endsWith(end)
+        ? data.slice(start.length, -end.length)
+        : data;
+    }
+    this.onChange?.(this.text);
+  }
+  render(width) {
+    const lines = [];
+    for (const logicalLine of this.text.split("\\n")) {
+      if (!logicalLine) { lines.push(""); continue; }
+      for (let offset = 0; offset < logicalLine.length; offset += width) {
+        lines.push(logicalLine.slice(offset, offset + width));
+      }
+    }
+    if (lines.length === 0) lines.push("");
+    if (this.focused) lines[lines.length - 1] += "▏";
+    return ["─".repeat(width), ...lines, "─".repeat(width)];
+  }
+  invalidate() {}
+  getText() { return this.text; }
+  getExpandedText() { return this.text; }
+  setText(text) { this.text = String(text); this.onChange?.(this.text); }
+  insertTextAtCursor(text) { this.text += String(text); this.onChange?.(this.text); }
+}
+export function matchesKey(data, key) {
+  if (key === "escape") return data === "\\x1b";
+  if (key === "ctrl+v") return data === "\\x16";
+  if (key === "alt+v") return data === "\\x1bv";
+  return false;
+}
 export function visibleWidth(text) {
   return [...String(text).replace(/\\x1b\\[[0-9;]*m/g, "")].length;
 }
@@ -26,6 +70,25 @@ export function truncateToWidth(text, width, suffix = "") {
   if (visibleWidth(value) <= width) return value;
   const plain = value.replace(/\\x1b\\[[0-9;]*m/g, "");
   return [...plain].slice(0, Math.max(0, width - visibleWidth(suffix))).join("") + suffix;
+}
+`;
+
+const imagePasteStub = `
+const image = { marker: "[Image 1]", data: "ZmFrZQ==", mimeType: "image/png" };
+const textMarker = "[2 lines pasted #1]";
+let clipboardMode = "image";
+let pastedText = "";
+export function setClipboardMode(mode) { clipboardMode = mode; }
+export function readBestImage() { return clipboardMode === "image" ? image : null; }
+export function readClipboardText() { return clipboardMode === "text" ? "clipboard\\nfallback" : ""; }
+export function savePastedText(text) { pastedText = text; return { marker: textMarker, text }; }
+export function expandPastedTextMarkers(text) { return text.replace(textMarker, pastedText); }
+export function imagesForText(text) { return text.includes(image.marker) ? [image] : []; }
+`;
+
+const terminalCompatibilityStub = `
+export function isEmptyBracketedPaste(data) {
+  return data === "\\x1b[200~\\x1b[201~";
 }
 `;
 
@@ -51,6 +114,12 @@ registerHooks({
 			return { format: "module", source: "export default {};", shortCircuit: true };
 		}
 		if (url === "stub:typebox") return { format: "module", source: typeboxStub, shortCircuit: true };
+		if (url.endsWith("/extensions/ui/imagePaste.ts")) {
+			return { format: "module", source: imagePasteStub, shortCircuit: true };
+		}
+		if (url.endsWith("/extensions/ui/terminalCompatibility.ts")) {
+			return { format: "module", source: terminalCompatibilityStub, shortCircuit: true };
+		}
 		if (url.endsWith(".ts")) {
 			return {
 				format: "module",
@@ -70,6 +139,9 @@ const { buildSelectOptions, fallbackPromptText, formatAnswerSummary } = await im
 );
 const { FramedQuestionPicker } = await import(
 	moduleUrl(path.join("extensions", "ask-user", "picker.ts"))
+);
+const imagePasteTestApi = await import(
+	moduleUrl(path.join("extensions", "ui", "imagePaste.ts"))
 );
 
 function makeHarness() {
@@ -212,8 +284,10 @@ test("ask_user keeps every question framed, sequential, and recommended-first", 
 				custom(factory) {
 					return new Promise((done) => {
 						const picker = factory(tuiRuntimeStub, themeStub, {}, done);
-						freeTextFrame = picker.render(80).map(plain);
-						picker.handleInput("A direct answer");
+						picker.handleInput(
+							"\x1b[200~A long pasted answer that wraps across\nmultiple visible lines.\x1b[201~",
+						);
+						freeTextFrame = picker.render(40).map(plain);
 						picker.handleInput("\r");
 					});
 				},
@@ -239,14 +313,92 @@ test("ask_user keeps every question framed, sequential, and recommended-first", 
 	assert.match(firstResponse.content[0].text, /Q1: Primary focus\?/);
 	assert.doesNotMatch(firstResponse.content[0].text, /Q1: Q1/);
 	assert.match(secondResponse.content[0].text, /Q2: How should we continue\?/);
-	assert.match(freeTextResponse.content[0].text, /Q3: What should I add\?\n→ A direct answer/);
+	assert.match(freeTextResponse.content[0].text, /Q3: What should I add\?/);
+	assert.match(freeTextResponse.content[0].text, /A long pasted answer that wraps across/);
+	assert.equal(freeTextResponse.content.length, 1);
 	assert.match(resetResponse.content[0].text, /Q1: Start fresh\?\n→ Yes/);
 	assert.equal(resetResponse.details.round, 1);
 	assert.ok(renderedFrames[0][0].startsWith("╭ Q1 — Primary focus? "), renderedFrames[0][0]);
 	assert.ok(renderedFrames[1][0].startsWith("╭ Q2 — How should we continue? "), renderedFrames[1][0]);
 	assert.ok(freeTextFrame[0].startsWith("╭ Q3 — What should I add? "), freeTextFrame[0]);
 	assert.ok(freeTextFrame.some((line) => line.includes("Use your own words.")));
-	assert.ok(freeTextFrame.some((line) => line.includes("❯ ▏")), "free-text input starts inside the frame");
+	assert.ok(freeTextFrame.some((line) => line.includes("A long pasted answer")), "pasted text remains visible");
+	assert.ok(freeTextFrame.some((line) => line.includes("multiple visible lines")), "long text wraps to later lines");
+	assert.ok(
+		!freeTextFrame.slice(1, -1).some((line) => line.includes("────")),
+		"stock editor borders are removed inside the question frame",
+	);
+});
+
+test("ask_user forwards picker images as content blocks without leaking bytes into details", async () => {
+	let askUserTool;
+	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
+	extension.default({
+		on() {},
+		registerTool(tool) { askUserTool = tool; },
+		registerCommand() {},
+		sendUserMessage() {},
+	});
+
+	const response = await askUserTool.execute(
+		"ask-user-image",
+		{ questions: [{ question: "What does this show?" }] },
+		undefined,
+		undefined,
+		{
+			hasUI: true,
+			mode: "tui",
+			ui: {
+				async custom() {
+					return {
+						value: "See [Image 1]",
+						custom: true,
+						images: [{ data: "ZmFrZQ==", mimeType: "image/png" }],
+					};
+				},
+				setStatus() {},
+			},
+		},
+	);
+
+	assert.deepEqual(response.content[1], {
+		type: "image",
+		data: "ZmFrZQ==",
+		mimeType: "image/png",
+	});
+	assert.ok(!JSON.stringify(response.details).includes("ZmFrZQ=="), "image bytes excluded from details");
+});
+
+test("Windows clipboard image shortcuts insert markers and preserve attachments", {
+	skip: process.platform !== "win32",
+}, () => {
+	imagePasteTestApi.setClipboardMode("image");
+	for (const trigger of ["\x16", "\x1bv", "\x1b[200~\x1b[201~"]) {
+		const { picker, sent } = makePicker([]);
+		picker.handleInput(trigger);
+		assert.ok(picker.render(44).some((line) => line.includes("[Image 1]")));
+		picker.handleInput("\r");
+		assert.deepEqual(sent, [{
+			value: "[Image 1]",
+			custom: true,
+			images: [{ data: "ZmFrZQ==", mimeType: "image/png" }],
+		}]);
+	}
+});
+
+test("Windows clipboard text fallback stays compact while editing and expands on submit", {
+	skip: process.platform !== "win32",
+}, () => {
+	imagePasteTestApi.setClipboardMode("text");
+	try {
+		const { picker, sent } = makePicker([]);
+		picker.handleInput("\x16");
+		assert.ok(picker.render(44).some((line) => line.includes("[2 lines pasted #1]")));
+		picker.handleInput("\r");
+		assert.deepEqual(sent, [{ value: "clipboard\nfallback", custom: true, images: [] }]);
+	} finally {
+		imagePasteTestApi.setClipboardMode("image");
+	}
 });
 
 test("select options put the recommended first and append a custom row", () => {
@@ -326,29 +478,33 @@ test("framed picker uses Pi's native border and keeps clarification optional", (
 test("number keys quick-pick and enter activates the selected row", () => {
 	const first = makePicker([{ label: "A" }, { label: "B" }]);
 	first.picker.handleInput("1");
-	assert.deepEqual(first.sent, [{ value: "A", custom: false }]);
+	assert.deepEqual(first.sent, [{ value: "A", custom: false, images: [] }]);
 
 	const second = makePicker([{ label: "A" }, { label: "B" }]);
 	second.picker.handleInput("\x1b[B"); // down
 	second.picker.handleInput("\r"); // enter
-	assert.deepEqual(second.sent, [{ value: "B", custom: false }]);
+	assert.deepEqual(second.sent, [{ value: "B", custom: false, images: [] }]);
 });
 
 test("custom row opens an inline input; enter submits, esc cancels back", () => {
 	const custom = makePicker([{ label: "A" }]);
 	custom.picker.handleInput("2"); // custom row is #2 with one option
 	let rendered = custom.picker.render(40).map(plain);
-	assert.ok(rendered.some((line) => line.includes("❯ ")), "input prompt visible");
+	assert.ok(rendered.some((line) => line.includes("▏")), "editor cursor visible");
+	custom.picker.focused = false;
+	rendered = custom.picker.render(40).map(plain);
+	assert.ok(!rendered.some((line) => line.includes("▏")), "editor focus follows picker focus");
+	custom.picker.focused = true;
 	custom.picker.handleInput("h");
 	custom.picker.handleInput("i");
 	custom.picker.handleInput("\r");
-	assert.deepEqual(custom.sent, [{ value: "hi", custom: true }]);
+	assert.deepEqual(custom.sent, [{ value: "hi", custom: true, images: [] }]);
 
 	const cancelled = makePicker([{ label: "A" }]);
 	cancelled.picker.handleInput("2");
 	cancelled.picker.handleInput("\x1b"); // esc returns to options
 	cancelled.picker.handleInput("1");
-	assert.deepEqual(cancelled.sent, [{ value: "A", custom: false }]);
+	assert.deepEqual(cancelled.sent, [{ value: "A", custom: false, images: [] }]);
 });
 
 test("esc dismisses the whole question and arrows wrap around", () => {
@@ -360,5 +516,5 @@ test("esc dismisses the whole question and arrows wrap around", () => {
 	const wrapped = makePicker([{ label: "A" }, { label: "B" }], { allowCustom: false });
 	wrapped.picker.handleInput("\x1b[A"); // up from index 0 wraps to last
 	wrapped.picker.handleInput("\r");
-	assert.deepEqual(wrapped.sent, [{ value: "B", custom: false }]);
+	assert.deepEqual(wrapped.sent, [{ value: "B", custom: false, images: [] }]);
 });
