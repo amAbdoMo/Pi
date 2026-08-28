@@ -117,8 +117,7 @@ async function askOneFramed(
 					recommended: option.recommended,
 				})),
 				allowCustom,
-			}),
-		done,
+			}, done),
 	);
 
 	if (!result) {

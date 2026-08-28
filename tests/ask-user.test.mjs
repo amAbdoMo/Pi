@@ -124,6 +124,47 @@ const themeStub = new Proxy({}, {
 });
 const plain = (line) => line.replace(/«|»/g, "");
 
+test("ask_user custom picker completes through the UI callback", async () => {
+	let askUserTool;
+	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
+	extension.default({
+		on() {},
+		registerTool(tool) { askUserTool = tool; },
+		registerCommand() {},
+		sendUserMessage() {},
+	});
+	assert.ok(askUserTool, "ask_user tool registered");
+
+	const response = await askUserTool.execute(
+		"ask-user-regression",
+		{
+			questions: [{
+				question: "Primary focus?",
+				options: [{ label: "Egypt", recommended: true }],
+				allowCustom: false,
+			}],
+		},
+		undefined,
+		undefined,
+		{
+			hasUI: true,
+			mode: "tui",
+			ui: {
+				custom(factory) {
+					return new Promise((done) => {
+						const picker = factory({}, themeStub, {}, done);
+						picker.handleInput("1");
+					});
+				},
+				setStatus() {},
+			},
+		},
+	);
+
+	assert.equal(response.details.answers[0].answer, "Egypt");
+	assert.match(response.content[0].text, /Q1: Primary focus\?\n→ Egypt/);
+});
+
 test("select options put the recommended first and append a custom row", () => {
 	const options = [
 		{ label: "Balanced" },
