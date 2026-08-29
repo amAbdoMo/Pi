@@ -17,21 +17,30 @@ Not a fork — Pi stays the runtime (models, sessions, tools, packages). Everyth
 
 ## Install
 
-Requires Pi, Git, and Node.js 20+.
+Requires Git and Node.js 20+. The bootstrap installs the pinned Pi runtime, extensions, settings, fonts, FFmpeg integration, and browser supervisor; provider authentication remains a separate user action.
 
 ```bash
-npx --yes github:amAbdoMo/Pi          # full setup (settings, fonts, terminal, FFmpeg, browser supervisor)
+npx --yes github:amAbdoMo/Pi@v0.13.0 install
 ```
+
+From an owned Windows clone:
+
+```powershell
+.\setup.ps1 diagnose
+.\setup.ps1 install
+.\setup.ps1 verify
+.\setup.ps1 rollback                 # restores the latest checkpoint
+```
+
+Use `--skip-ffmpeg` or `--skip-terminal` with the `npx` command, or `-SkipFfmpeg` / `-SkipTerminal` with `setup.ps1`, when those optional integrations are not wanted. Install creates a non-secret checkpoint under `~/.pi/agent/bootstrap-checkpoints/` before changing managed configuration. It preserves model/thinking preferences and never checkpoints auth files, sessions, trust decisions, credentials, cookies, or browser profiles.
 
 Package only (extensions + theme, no shared settings):
 
 ```bash
-pi install git:github.com/amAbdoMo/Pi
+pi install git:github.com/amAbdoMo/Pi@v0.13.0
 ```
 
-PowerShell / bash alternatives: `install.ps1` / `install.sh` in this repo. The installer is idempotent — rerun it any time to reconcile settings, fonts, and companions. It never overwrites your model/thinking preferences and backs up terminal configs before touching them.
-
-Update just the code with `pi update --extensions`.
+Upgrades are explicit: run the bootstrap for the next tagged release. Pinned Pi packages are intentionally skipped by `pi update --extensions`.
 
 ## Everyday controls
 
@@ -63,7 +72,7 @@ MCP servers live in `~/.pi/agent/mcp.jsonc`. Configure, connect, and inspect via
 git clone https://github.com/amAbdoMo/Pi.git && cd Pi && npm ci && npm test
 ```
 
-The development test suite uses Node.js 22.15+ for synchronous TypeScript test hooks; installing and running the package remains supported on Node.js 20+.
+The development test suite uses Node.js 22.15+ for synchronous TypeScript test hooks; installing and running the package remains supported on Node.js 20+. `npm test` includes the public-file secret/private-path scan; run `npm run scan:public` for that safety gate alone.
 
 Develop in a normal clone — Pi owns its managed checkout under `~/.pi/agent/git/...` and may reset it.
 

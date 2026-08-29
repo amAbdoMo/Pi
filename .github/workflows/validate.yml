@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+          cache: npm
+      - run: npm ci
       - name: Parse PowerShell scripts
         shell: pwsh
         run: |
@@ -40,3 +42,15 @@ jobs:
       - name: Smoke-test inferred npx installer
         shell: pwsh
         run: npx --yes . --help
+      - name: Diagnose clean runner
+        shell: pwsh
+        run: .\setup.ps1 diagnose -Json
+      - name: Install and verify clean runner
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          PI_CODING_AGENT_DIR: ${{ runner.temp }}\pi-agent
+          PI_WORKBENCH_PACKAGE_SPEC: git:github.com/amAbdoMo/Pi@${{ github.sha }}
+        run: |
+          .\setup.ps1 install -SkipFfmpeg -SkipTerminal
+          .\setup.ps1 verify -Json

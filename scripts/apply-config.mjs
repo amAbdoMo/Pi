@@ -2,10 +2,19 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+const configuredWorkbenchPackage = process.env.PI_WORKBENCH_PACKAGE_SPEC || "git:github.com/amAbdoMo/Pi@v0.13.0";
+const configuredContextModePackage = "npm:context-mode@1.0.169";
+if (!configuredWorkbenchPackage.startsWith("git:github.com/amAbdoMo/Pi@")) {
+  throw new Error("PI_WORKBENCH_PACKAGE_SPEC must be a pinned git:github.com/amAbdoMo/Pi source");
+}
 const REQUIRED_PACKAGES = [
-  "git:github.com/amAbdoMo/Pi",
-  "npm:context-mode",
+  configuredWorkbenchPackage,
+  configuredContextModePackage,
 ];
+const REQUIRED_PACKAGE_IDENTITIES = new Map([
+  ["git:github.com/amAbdoMo/Pi", configuredWorkbenchPackage],
+  ["npm:context-mode", configuredContextModePackage],
+]);
 const RETIRED_NPM_PACKAGES = new Set([
   "@hypabolic/pi-hypa",
   "pi-mcp-adapter",
@@ -24,7 +33,8 @@ function readJson(filePath) {
 }
 
 function packageSource(packageSpec) {
-  return typeof packageSpec === "string" ? packageSpec : packageSpec?.source;
+  const source = typeof packageSpec === "string" ? packageSpec : packageSpec?.source;
+  return typeof source === "string" ? source.replace(/^npm:\s*/, "npm:").trim() : source;
 }
 
 function npmPackageName(source) {
@@ -35,6 +45,15 @@ function npmPackageName(source) {
 
 function isRetiredPackageSource(source) {
   return RETIRED_NPM_PACKAGES.has(npmPackageName(source));
+}
+
+function requiredPackageSource(source) {
+  if (typeof source !== "string") return undefined;
+  if (source.startsWith("git:github.com/amAbdoMo/Pi")) {
+    return REQUIRED_PACKAGE_IDENTITIES.get("git:github.com/amAbdoMo/Pi");
+  }
+  const npmName = npmPackageName(source);
+  return npmName ? REQUIRED_PACKAGE_IDENTITIES.get(`npm:${npmName}`) : undefined;
 }
 
 function isLocalSource(source) {
@@ -64,14 +83,18 @@ function mergePackages(existingPackages, agentDir) {
 
     const source = packageSource(packageSpec);
     if (isRetiredPackageSource(source)) continue;
-    if (!REQUIRED_PACKAGES.includes(source)) {
+    const requiredSource = requiredPackageSource(source);
+    if (!requiredSource) {
       preservedPackages.push(packageSpec);
       continue;
     }
 
-    const existingSpec = requiredSpecs.get(source);
-    if (existingSpec === undefined || (typeof existingSpec === "string" && typeof packageSpec === "object")) {
-      requiredSpecs.set(source, packageSpec);
+    const migratedSpec = typeof packageSpec === "object"
+      ? { ...packageSpec, source: requiredSource }
+      : requiredSource;
+    const existingSpec = requiredSpecs.get(requiredSource);
+    if (existingSpec === undefined || (typeof existingSpec === "string" && typeof migratedSpec === "object")) {
+      requiredSpecs.set(requiredSource, migratedSpec);
     }
   }
 

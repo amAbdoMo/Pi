@@ -72,8 +72,12 @@ test("package reconciliation preserves user filters and unrelated local packages
   assert.ok(sources.includes(unrelatedPiPackage));
   assert.ok(!sources.includes(path.relative(agentDir, setupCheckout)));
   assert.ok(!sources.includes(path.relative(agentDir, legacySetupCheckout)));
-  assert.deepEqual(settings.packages.find((packageSpec) => packageSpec.source === "npm:context-mode"), filteredContextMode);
-  assert.equal(sources.filter((source) => source === "npm:context-mode").length, 1);
+  assert.deepEqual(
+    settings.packages.find((packageSpec) => packageSpec.source === "npm:context-mode@1.0.169"),
+    { ...filteredContextMode, source: "npm:context-mode@1.0.169" },
+  );
+  assert.equal(sources.filter((source) => source === "npm:context-mode@1.0.169").length, 1);
+  assert.equal(sources.filter((source) => source === "git:github.com/amAbdoMo/Pi@v0.13.0").length, 1);
   assert.equal(sources.some((source) => /^npm:\s*@hypabolic\/pi-hypa(?:@|$)/.test(source ?? "")), false);
   assert.ok(sources.includes("npm:@hypabolic/pi-hypa-tools"));
   assert.equal(sources.some((source) => source?.startsWith("npm:pi-mcp-adapter")), false);
@@ -143,7 +147,7 @@ test("config capture copies shared preferences without runtime or credential fie
   assert.equal(captured.defaultModel, "captured-model");
   assert.equal(captured.lastChangelogVersion, undefined);
   assert.equal(captured.apiKey, undefined);
-  assert.ok(captured.packages.includes("git:github.com/amAbdoMo/Pi"));
+  assert.ok(captured.packages.includes("git:github.com/amAbdoMo/Pi@v0.13.0"));
   assert.ok(!captured.packages.includes("private-package"));
   assert.deepEqual(readJson(path.join(testRepo, "keybindings.json")), { "custom.action": ["ctrl+x"] });
 });

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "release": "0.13.0",
+  "minimumNodeMajor": 20,
+  "packages": {
+    "pi": "@earendil-works/pi-coding-agent@0.84.4",
+    "workbench": "git:github.com/amAbdoMo/Pi@v0.13.0",
+    "contextMode": "npm:context-mode@1.0.169",
+    "playwrightMcp": "@playwright/mcp@0.0.79"
+  },
+  "checkpointFiles": [
+    "settings.json",
+    "keybindings.json",
+    "APPEND_SYSTEM.md",
+    "mcp.json",
+    "mcp.jsonc",
+    "bin/pi-browser-mcp.ps1",
+    "bin/pi-browser-idle-close.ps1"
+  ],
+  "requiredAgentFiles": [
+    "settings.json",
+    "keybindings.json",
+    "APPEND_SYSTEM.md",
+    "mcp.jsonc"
+  ]
+}

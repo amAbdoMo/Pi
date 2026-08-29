@@ -1,6 +1,6 @@
 {
   "name": "pi-workbench",
-  "version": "0.12.3",
+  "version": "0.13.0",
   "private": true,
   "description": "A polished terminal workbench, theme, and extension suite for Pi.",
   "type": "module",
@@ -39,7 +39,8 @@
   },
   "scripts": {
     "capture": "node scripts/capture-config.mjs",
-    "test": "node scripts/validate.mjs && node --test tests/*.test.mjs && npm run test:workflow",
+    "scan:public": "node scripts/scan-public-files.mjs",
+    "test": "node scripts/validate.mjs && npm run scan:public && node --test tests/*.test.mjs && npm run test:workflow",
     "test:workflow": "vitest run --config extensions/workflow/vitest.config.ts"
   },
   "dependencies": {

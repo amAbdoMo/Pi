@@ -124,6 +124,8 @@ test("concurrent browser MCP clients keep the shared-profile CDP mode", {
   await Promise.all([first.exited, second.exited]);
 
   const launches = logLines(launchLog);
+  assert.match(launches[0], /@playwright\/mcp@0\.0\.79/);
+  assert.match(launches[1], /@playwright\/mcp@0\.0\.79/);
   assert.doesNotMatch(launches[0], /--isolated/);
   assert.doesNotMatch(launches[1], /--isolated/);
 });

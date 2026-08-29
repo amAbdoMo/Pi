@@ -3,11 +3,10 @@ set -euo pipefail
 
 SOURCE_ROOT=""
 SKIP_FFMPEG=0
-REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/amAbdoMo/Pi/main"
-PI_PACKAGES=(
-  "git:github.com/amAbdoMo/Pi"
-  "npm:context-mode"
-)
+SKIP_TERMINAL=0
+WORKBENCH_PACKAGE="git:github.com/amAbdoMo/Pi@v0.13.0"
+CONTEXT_MODE_PACKAGE="npm:context-mode@1.0.169"
+REPOSITORY_RAW_BASE="https://raw.githubusercontent.com/amAbdoMo/Pi/v0.13.0"
 TEMPORARY_FILES=()
 PLATFORM="$(uname -s)"
 
@@ -18,12 +17,26 @@ while [[ $# -gt 0 ]]; do
       SOURCE_ROOT="$2"
       shift 2
       ;;
+    --workbench-package)
+      [[ $# -ge 2 ]] || { echo "--workbench-package requires a package source" >&2; exit 2; }
+      WORKBENCH_PACKAGE="$2"
+      shift 2
+      ;;
+    --context-mode-package)
+      [[ $# -ge 2 ]] || { echo "--context-mode-package requires a package source" >&2; exit 2; }
+      CONTEXT_MODE_PACKAGE="$2"
+      shift 2
+      ;;
     --skip-ffmpeg)
       SKIP_FFMPEG=1
       shift
       ;;
+    --skip-terminal)
+      SKIP_TERMINAL=1
+      shift
+      ;;
     -h|--help)
-      echo "Usage: install.sh [--source-root PATH] [--skip-ffmpeg]"
+      echo "Usage: install.sh [--source-root PATH] [--workbench-package SPEC] [--context-mode-package SPEC] [--skip-ffmpeg] [--skip-terminal]"
       exit 0
       ;;
     *)
@@ -80,12 +93,12 @@ case "$PLATFORM" in
     ;;
 esac
 
+export PI_WORKBENCH_PACKAGE_SPEC="$WORKBENCH_PACKAGE"
 node "$RETIREMENT_SCRIPT_FILE"
 node "$CONFIG_SCRIPT_FILE" --system-policy "$SYSTEM_POLICY_FILE"
-for package in "${PI_PACKAGES[@]}"; do
+for package in "$WORKBENCH_PACKAGE" "$CONTEXT_MODE_PACKAGE"; do
   pi install "$package"
 done
-pi update --extensions
 node "$CONFIG_SCRIPT_FILE" --system-policy "$SYSTEM_POLICY_FILE"
 node "$DEPENDENCY_REFRESH_SCRIPT_FILE"
 
@@ -97,10 +110,14 @@ fi
 
 case "$PLATFORM" in
   MINGW*|MSYS*|CYGWIN*)
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$FONT_SETUP_SCRIPT_FILE")" -TerminalSettingsScript "$(cygpath -w "$TERMINAL_SETTINGS_SCRIPT_FILE")" -WarpSettingsScript "$(cygpath -w "$WARP_SETTINGS_SCRIPT_FILE")"
+    if [[ $SKIP_TERMINAL -eq 0 ]]; then
+      powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$FONT_SETUP_SCRIPT_FILE")" -TerminalSettingsScript "$(cygpath -w "$TERMINAL_SETTINGS_SCRIPT_FILE")" -WarpSettingsScript "$(cygpath -w "$WARP_SETTINGS_SCRIPT_FILE")"
+    fi
     ;;
   *)
-    echo "Nerd Font note: configure DejaVuSansM Nerd Font Mono to render Pi icons and joined Arabic text."
+    if [[ $SKIP_TERMINAL -eq 0 ]]; then
+      echo "Nerd Font note: configure DejaVuSansM Nerd Font Mono to render Pi icons and joined Arabic text."
+    fi
     ;;
 esac
 

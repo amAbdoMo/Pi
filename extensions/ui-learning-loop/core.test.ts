@@ -40,17 +40,18 @@ test("captures corrective UI steering without treating ordinary steering as a le
 });
 
 test("redacts likely credentials and caps correction text", () => {
-	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123";
+	// Provider-shaped fixtures exercise redaction and are allowlisted one line at a time by the public scan.
+	const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123"; // public-scan: synthetic-credential
 	const redacted = redactSensitiveText([
 		'password=hunter2 token:abc123 {"password":"json-secret"}',
 		"Authorization: Bearer short",
 		"Cookie: session=browser-secret",
-		"OPENAI_API_KEY=sk-proj-1234567890abcdef",
+		"OPENAI_API_KEY=sk-proj-1234567890abcdef", // public-scan: synthetic-credential
 		'{"access_token":"oauth-secret","clientSecret":"client-secret"}',
 		jwt,
 		"https://me:pw@example.com",
 	].join("\n"));
-	for (const secret of ["hunter2", "abc123", "json-secret", "Bearer short", "browser-secret", "sk-proj-1234567890abcdef", "oauth-secret", "client-secret", jwt, "me:pw"]) {
+	for (const secret of ["hunter2", "abc123", "json-secret", "Bearer short", "browser-secret", "sk-proj-1234567890abcdef", "oauth-secret", "client-secret", jwt, "me:pw"]) { // public-scan: synthetic-credential
 		assert.equal(redacted.includes(secret), false, `secret was not redacted: ${secret}`);
 	}
 	assert.equal(sanitizeCorrection("x".repeat(2_000)).length, 1_200);

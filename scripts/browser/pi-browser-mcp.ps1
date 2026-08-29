@@ -173,8 +173,9 @@ try {
     Start-IdleWatcher
 
     $npx = (Get-Command 'npx.cmd' -ErrorAction Stop).Source
+    $playwrightMcpPackage = if ($env:PI_PLAYWRIGHT_MCP_PACKAGE) { $env:PI_PLAYWRIGHT_MCP_PACKAGE } else { '@playwright/mcp@0.0.79' }
     $mcpArgs = @(
-        '-y', '@playwright/mcp@latest',
+        '-y', $playwrightMcpPackage,
         "--cdp-endpoint=http://127.0.0.1:$DebugPort",
         '--caps=vision',
         "--output-dir=$outputDir"

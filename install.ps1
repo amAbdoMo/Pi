@@ -1,15 +1,16 @@
 param(
   [string]$SourceRoot,
-  [switch]$SkipFfmpeg
+  [string]$WorkbenchPackage = 'git:github.com/amAbdoMo/Pi@v0.13.0',
+  [string]$ContextModePackage = 'npm:context-mode@1.0.169',
+  [switch]$SkipFfmpeg,
+  [switch]$SkipTerminal
 )
 
 $ErrorActionPreference = 'Stop'
-$RepositoryRawBase = 'https://raw.githubusercontent.com/amAbdoMo/Pi/main'
-$PiPackages = @(
-  'git:github.com/amAbdoMo/Pi',
-  'npm:context-mode'
-)
+$RepositoryRawBase = 'https://raw.githubusercontent.com/amAbdoMo/Pi/v0.13.0'
+$PiPackages = @($WorkbenchPackage, $ContextModePackage)
 $DownloadedFiles = @()
+$PreviousWorkbenchPackageSpec = $env:PI_WORKBENCH_PACKAGE_SPEC
 
 function Invoke-CheckedNative {
   param(
@@ -42,6 +43,7 @@ function Resolve-SetupAsset {
 }
 
 try {
+  $env:PI_WORKBENCH_PACKAGE_SPEC = $WorkbenchPackage
   if ($SourceRoot) {
     $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
   }
@@ -64,7 +66,6 @@ try {
   foreach ($Package in $PiPackages) {
     Invoke-CheckedNative -Command 'pi' -Arguments @('install', $Package)
   }
-  Invoke-CheckedNative -Command 'pi' -Arguments @('update', '--extensions')
   Invoke-CheckedNative -Command 'node' -Arguments @($ConfigScriptFile, '--system-policy', $SystemPolicyFile)
   Invoke-CheckedNative -Command 'node' -Arguments @($DependencyRefreshScriptFile)
   Invoke-CheckedNative -Command 'node' -Arguments @(
@@ -84,8 +85,11 @@ try {
     }
   }
 
-  & $FontSetupScriptFile -TerminalSettingsScript $TerminalSettingsScriptFile -WarpSettingsScript $WarpSettingsScriptFile
+  if (-not $SkipTerminal) {
+    & $FontSetupScriptFile -TerminalSettingsScript $TerminalSettingsScriptFile -WarpSettingsScript $WarpSettingsScriptFile
+  }
 } finally {
+  $env:PI_WORKBENCH_PACKAGE_SPEC = $PreviousWorkbenchPackageSpec
   foreach ($DownloadedFile in $DownloadedFiles) {
     Remove-Item $DownloadedFile -Force -ErrorAction SilentlyContinue
   }

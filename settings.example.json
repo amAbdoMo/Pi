@@ -1,8 +1,8 @@
 {
   "theme": "hypr-waves",
   "packages": [
-    "git:github.com/amAbdoMo/Pi",
-    "npm:context-mode"
+    "git:github.com/amAbdoMo/Pi@v0.13.0",
+    "npm:context-mode@1.0.169"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
