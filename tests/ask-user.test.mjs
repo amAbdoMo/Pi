@@ -175,10 +175,10 @@ test('typed "grill me ..." keeps the message verbatim and injects a hidden brief
 	assert.match(startResult.message.content[0].text, /# Grilling session/);
 	assert.match(startResult.message.content[0].text, /Topic: egypt/);
 	const grillBrief = startResult.message.content[0].text;
-	assert.match(grillBrief, /ask_user tool/);
+	assert.match(grillBrief, /through (?:the )?ask_user(?: tool)?/);
 	assert.match(grillBrief, /Do not add Q numbers/i);
 	assert.match(grillBrief, /direct, self-contained answer/i);
-	assert.match(grillBrief, /omit context and option descriptions/i);
+	assert.match(grillBrief, /omit context and (?:option )?descriptions/i);
 	assert.ok(!sent.length, "no direct user message sent");
 
 	// One-shot: consumed after a single turn.
