@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added an approval-gated WordPress UI lesson queue with automatic correction capture, explicit history import, equivalent-issue grouping, project-scope isolation, secret redaction, final interactive promotion confirmation, and regression coverage.
 - Reworked `ask_user` and grilling pickers with Pi's rounded workspace frame, sequential question numbers, recommended-first ordering, direct answer wording, optional rather than default explanatory text, multiline text paste, and the existing Windows clipboard-image path.
 - Assigned each managed shared-browser MCP connection a new tab while retaining the same persistent Edge profile, preventing concurrent Pi sessions from selecting the same tab without losing shared logins.
 - Added a clock-marked agent timer to the composer, showing live and settled durations without adding timing rows to chat.

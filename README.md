@@ -12,7 +12,7 @@ Not a fork — Pi stays the runtime (models, sessions, tools, packages). Everyth
 | --- | --- |
 | **Workbench UI** | Fixed sidebar (session / context / usage resets / activity / MCP status), anchored composer showing model, thinking level, and live Codex `5h` / `7d` usage bars |
 | **Agent workflows** | Task progress cards, nested subagents with tuned GPT-5.6 profiles (`fast` / `balanced` / `implementation` / `review` = Luna-max, `deep` / `critical` = Sol), side chat, and `pipeline` + opt-in `deep-review` four-phase workflows with blocker-aware routing |
-| **Tools & integrations** | Owned MCP Hub (JSON/JSONC, discovery, calls, secret redaction), Windows shared-browser supervisor with persistent logins, Firecrawl web tools, image generation, persistent memory, fast mode, code-state undo/redo |
+| **Tools & integrations** | Owned MCP Hub (JSON/JSONC, discovery, calls, secret redaction), Windows shared-browser supervisor with persistent logins, Firecrawl web tools, image generation, persistent memory, approval-gated WordPress UI lesson queue, fast mode, code-state undo/redo |
 | **Terminal & language** | Arabic shaping + bidirectional ordering (code/paths stay LTR), pinned Nerd Font, Windows Terminal & Warp provisioning, graphite `hypr-waves` theme |
 
 ## Install
@@ -43,6 +43,7 @@ Update just the code with `pi update --extensions`.
 | `/sidebar` `/todos` `/agents` `/btw` | Sidebar · tasks · subagents · side question |
 | `/workflow pipeline` | Run the focused four-phase workflow |
 | `/mcp` `/skills` `/memory` `/fast` `/undo` | Hub · skills · memory · fast mode · checkpoints |
+| `/ui-learning` `/ui-lessons` | WordPress UI lesson queue · review pending lessons |
 
 Defaults for fresh installs: `hypr-waves` theme, `openai-codex` provider, `gpt-5.6-sol`, thinking `high`.
 
@@ -61,6 +62,8 @@ MCP servers live in `~/.pi/agent/mcp.jsonc`. Configure, connect, and inspect via
 ```bash
 git clone https://github.com/amAbdoMo/Pi.git && cd Pi && npm ci && npm test
 ```
+
+The development test suite uses Node.js 22.15+ for synchronous TypeScript test hooks; installing and running the package remains supported on Node.js 20+.
 
 Develop in a normal clone — Pi owns its managed checkout under `~/.pi/agent/git/...` and may reset it.
 
