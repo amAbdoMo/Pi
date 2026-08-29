@@ -107,7 +107,7 @@ phases:
       Use at most two delegates, only for genuinely independent workstreams with explicit file ownership. Do not delegate routine reads, tiny edits, or final integration. Delegate profiles: fast/review work uses the fast profile, deep analysis uses deep, release-critical judgment uses critical. Depth-1 only; the parent owns integration, commits, pushes, and final claims.
       Do not create custom verification pages, sections, fixtures, or visual harnesses unless the user explicitly approved one.
       Process large outputs through the sandbox tools and print only summaries.
-      Repository discipline: C:\Users\COMPUMARTS\Projects\Pi is the only active canonical checkout of the Pi setup; treat managed clones and recovery backups as read-only references and never edit them directly.
+      Repository discipline: the user-owned development clone is the only active canonical checkout of the Pi setup; resolve it from the current Git repository or configured source path, and treat managed clones and recovery backups as read-only references.
       WordPress/WooCommerce code standards: prefer core APIs and CRUD over direct meta, keep HPOS-safe order access, escape output, sanitize input, use nonces plus capability checks, keep strings translation-ready, and hook rather than override templates. Custom UI must fully style every control, keep microcopy short, and never show outline/ring focus — use border, color, background, or scale feedback instead.
     prompt: |
       Original task:
