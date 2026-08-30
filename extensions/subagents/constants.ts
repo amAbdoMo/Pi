@@ -11,4 +11,6 @@ export const EVENT_LOG_LIMIT = 240;
 export const BRIDGE_POLL_MS = 300;
 export const ASK_PARENT_POLL_MS = 250;
 export const CHILD_STOP_GRACE_MS = 1_500;
+export const RPC_REQUEST_TIMEOUT_MS = 30_000;
+export const RPC_ABORT_TIMEOUT_MS = 750;
 export const DEFAULT_CHILD_TOOLS = ["read", "bash", "edit", "write"];

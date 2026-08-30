@@ -1,7 +1,11 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { CHILD_STOP_GRACE_MS } from "./constants.ts";
+import {
+  CHILD_STOP_GRACE_MS,
+  RPC_ABORT_TIMEOUT_MS,
+  RPC_REQUEST_TIMEOUT_MS,
+} from "./constants.ts";
 import type { RpcEvent } from "./types.ts";
 import { sleep } from "./utils.ts";
 
@@ -50,15 +54,25 @@ export class RpcProcess {
   >();
   private listeners: Array<(event: RpcEvent) => void> = [];
   private exitError?: Error;
+  private readonly command: string;
+  private readonly args: string[];
+  private readonly options: {
+    cwd: string;
+    env: Record<string, string | undefined>;
+  };
 
   constructor(
-    private readonly command: string,
-    private readonly args: string[],
-    private readonly options: {
+    command: string,
+    args: string[],
+    options: {
       cwd: string;
       env: Record<string, string | undefined>;
     },
-  ) {}
+  ) {
+    this.command = command;
+    this.args = args;
+    this.options = options;
+  }
 
   get pid(): number | undefined {
     return this.proc?.pid;
@@ -78,10 +92,14 @@ export class RpcProcess {
 
   async start(): Promise<void> {
     if (this.proc) throw new Error("RPC process already started");
+    this.exitError = undefined;
+    this.stderr = "";
     const proc = spawn(this.command, this.args, {
       cwd: this.options.cwd,
       env: { ...process.env, ...this.options.env },
       stdio: ["pipe", "pipe", "pipe"],
+      detached: process.platform !== "win32",
+      windowsHide: true,
     });
     this.proc = proc;
     proc.stderr.on("data", (data) => {
@@ -109,7 +127,11 @@ export class RpcProcess {
       this.handleLine(line),
     );
     await sleep(120);
-    if (proc.exitCode !== null) {
+    if (this.exitError || proc.exitCode !== null) {
+      this.stopReader?.();
+      this.stopReader = undefined;
+      this.proc = undefined;
+      proc.stdin.destroy();
       throw (
         this.exitError ??
         new Error(`child pi exited during startup. ${this.stderr.trim()}`)
@@ -122,10 +144,11 @@ export class RpcProcess {
     if (!proc) return;
     this.stopReader?.();
     this.stopReader = undefined;
-    if (proc.exitCode === null) proc.kill("SIGTERM");
+    this.rejectPending(new Error("child Pi RPC process stopped"));
+    if (proc.exitCode === null) this.terminateProcessTree(proc, "SIGTERM");
     await new Promise<void>((resolve) => {
       const timer = setTimeout(() => {
-        if (proc.exitCode === null) proc.kill("SIGKILL");
+        if (proc.exitCode === null) this.terminateProcessTree(proc, "SIGKILL");
         resolve();
       }, CHILD_STOP_GRACE_MS);
       proc.once("exit", () => {
@@ -134,7 +157,6 @@ export class RpcProcess {
       });
     });
     this.proc = undefined;
-    this.pending.clear();
   }
 
   async prompt(message: string): Promise<void> {
@@ -150,7 +172,7 @@ export class RpcProcess {
   }
 
   async abort(): Promise<void> {
-    await this.send({ type: "abort" });
+    await this.send({ type: "abort" }, RPC_ABORT_TIMEOUT_MS);
   }
 
   async getState(): Promise<any> {
@@ -223,7 +245,10 @@ export class RpcProcess {
     }
   }
 
-  private send(command: Record<string, any>): Promise<any> {
+  private send(
+    command: Record<string, any>,
+    timeoutMs = RPC_REQUEST_TIMEOUT_MS,
+  ): Promise<any> {
     const proc = this.proc;
     if (!proc || !proc.stdin.writable)
       throw new Error("RPC process not started");
@@ -233,14 +258,64 @@ export class RpcProcess {
     const id = `req_${++this.requestId}`;
     const fullCommand = { ...command, id };
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (!this.pending.has(id)) return;
+        this.pending.delete(id);
+        reject(
+          new Error(
+            `child Pi RPC ${String(command.type ?? "request")} timed out after ${timeoutMs}ms`,
+          ),
+        );
+      }, timeoutMs);
+      timer.unref();
+      this.pending.set(id, { resolve, reject, timer });
       try {
         proc.stdin.write(`${JSON.stringify(fullCommand)}\n`);
       } catch (err) {
         this.pending.delete(id);
+        clearTimeout(timer);
         reject(err instanceof Error ? err : new Error(String(err)));
       }
     });
+  }
+
+  private terminateProcessTree(
+    proc: ChildProcessWithoutNullStreams,
+    signal: "SIGTERM" | "SIGKILL",
+  ): void {
+    const pid = proc.pid;
+    if (process.platform === "win32" && pid) {
+      const killer = spawn("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.once("error", () => this.terminateDirectProcess(proc, signal));
+      killer.once("exit", (code) => {
+        if (code !== 0 && proc.exitCode === null) this.terminateDirectProcess(proc, signal);
+      });
+      killer.unref();
+      return;
+    }
+    if (pid) {
+      try {
+        process.kill(-pid, signal);
+        return;
+      } catch {
+        // Fall back when the process group has already disappeared.
+      }
+    }
+    this.terminateDirectProcess(proc, signal);
+  }
+
+  private terminateDirectProcess(
+    proc: ChildProcessWithoutNullStreams,
+    signal: "SIGTERM" | "SIGKILL",
+  ): void {
+    try {
+      proc.kill(signal);
+    } catch {
+      // Process already exited.
+    }
   }
 
   private getData(response: any): any {
