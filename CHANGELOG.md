@@ -2,7 +2,21 @@
 
 ## 0.13.0
 
-- Added a pinned cross-platform bootstrap with `diagnose`, `install`, `verify`, and checkpointed `rollback` commands, plus a Windows `setup.ps1` entry point, clean-runner verification, and an automated public-file credential/private-path gate.
+- Added a pinned cross-platform bootstrap with `diagnose`, `install`, `verify`, and checkpointed `rollback` commands, including clean-install removal of newly introduced Pi/package files, plus a Windows `setup.ps1` entry point, clean-runner verification, and an automated public-file credential/private-path gate.
+- Added an authenticated loopback-only Pi Harness with opaque session discovery, persistent HttpOnly same-site authentication, process-isolated RPC streaming, process-aware writer locks, strict browser security headers, and approval gates for every non-read-only tool.
+- Added the source-derived DeepSeek Harness pixel-chase marker to the active running session and the matching “Deep diving...” chat shimmer with an elapsed clock after 15 seconds.
+- Added an opt-in Windows per-user startup task that runs Pi Harness without a visible terminal or browser tab, prevents duplicate instances, and lets authenticated old or new tabs reconnect through `http://127.0.0.1:3081/`.
+- Added dependency-free safe Markdown rendering and accessible message/code copy controls to Pi Harness, with external-protocol link allowlisting and authoritative stream-finalization regressions.
+- Added bounded image attachments for image-capable Pi models, including picker/paste previews, removable chips, byte-signature validation, and path-free Pi RPC content blocks.
+- Added picker, paste, and drop support for bounded UTF-8 text/source references, with client/server MIME and extension validation, validated base names, queue restoration, safe transcript labels, and clear rejection of PDFs and other unsupported binaries.
+- Added explicit Pi RPC event coverage, retry and summarization lifecycle states, truthful compaction failure/cancellation handling, bounded tool details, and payload-free projection for unknown custom events.
+- Added lock-safe session rename, clone, and confirmed deletion operations using opaque catalog IDs.
+- Added bounded extension dialog/notification/status/widget/title/editor-text contracts and browser-mode `ask_user` flows through standard Pi RPC UI methods.
+- Added explicit MCP, workflow, plan, subagent, memory, and skill mappings through existing Pi tools and command discovery rather than a parallel browser protocol.
+- Added narrow-viewport sidebar adaptation, popup/dialog containment checks, reduced-motion and accessibility regressions, a browser CSP/evaluator scan, and Node 20/22/24 CI coverage.
+- Added persistent workspace/list and manual/last-updated session views, opaque workspace grouping, five-session collapsed groups, and progressive flat-list rendering for large catalogs.
+- Added persistent steer/follow-up queue controls, queue counts, clear-before-abort text restoration, one-way Pi RPC interaction responses, and approval-dialog replay after browser reconnects.
+- Added a bounded active-session context panel with token/window/message/cost stats, auto-compaction control, manual compaction, compaction event status, and stricter runtime-state privacy filtering.
 - Added an approval-gated WordPress UI lesson queue with automatic correction capture, explicit history import, equivalent-issue grouping, project-scope isolation, secret redaction, final interactive promotion confirmation, and regression coverage.
 - Reworked `ask_user` and grilling pickers with Pi's rounded workspace frame, sequential question numbers, recommended-first ordering, direct answer wording, optional rather than default explanatory text, multiline text paste, and the existing Windows clipboard-image path.
 - Assigned each managed shared-browser MCP connection a new tab while retaining the same persistent Edge profile, preventing concurrent Pi sessions from selecting the same tab without losing shared logins.

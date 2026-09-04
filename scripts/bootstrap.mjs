@@ -12,6 +12,7 @@ import {
   ensurePiVersion,
   installedManagedSources,
   installedPi,
+  managedPackagePresence,
   invokePlatformInstaller,
   reinstallPreviousState,
   verifyInstallation,
@@ -50,7 +51,7 @@ function runVerification({ manifest, agentDir, json }) {
 
 function runRollback({ manifest, agentDir, checkpointDirectory, json }) {
   const restoredState = restoreCheckpoint({ agentDir, manifest, directory: checkpointDirectory });
-  reinstallPreviousState(restoredState.checkpoint);
+  reinstallPreviousState(restoredState.checkpoint, { agentDir });
   restoreCheckpoint({ agentDir, manifest, directory: restoredState.directory });
   printChecks("Pi Workbench rollback", [{ id: "checkpoint", status: "pass", detail: restoredState.directory }], json);
   return 0;
@@ -67,6 +68,7 @@ function installationCheckpoint({ agentDir, manifest }) {
     manifest,
     previousPiVersion: installedPi()?.version,
     managedPackageSources: installedManagedSources(agentDir),
+    managedPackagePresence: managedPackagePresence(agentDir),
   });
 }
 

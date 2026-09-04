@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm as remove } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -15,6 +15,10 @@ import {
 async function temporaryStore(): Promise<{ directory: string; store: LessonStore }> {
 	const directory = await mkdtemp(join(tmpdir(), "pi-ui-learning-"));
 	return { directory, store: new LessonStore(join(directory, "lessons.json")) };
+}
+
+async function rm(directory: string, options: { recursive: true; force: true }): Promise<void> {
+	await remove(directory, { ...options, maxRetries: 10, retryDelay: 25 });
 }
 
 test("detects explicit UI corrections", () => {

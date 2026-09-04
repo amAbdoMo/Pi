@@ -5,17 +5,20 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { runBootstrap } from "./bootstrap.mjs";
 
-function main() {
+async function main() {
   try {
     const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-    process.exitCode = runBootstrap({
-      argumentsList: process.argv.slice(2),
-      sourceRoot,
-    });
+    const argumentsList = process.argv.slice(2);
+    if (argumentsList[0] === "web" || argumentsList[0] === "browser") {
+      const { runPiBrowser } = await import("../browser/server.mjs");
+      await runPiBrowser();
+      return;
+    }
+    process.exitCode = runBootstrap({ argumentsList, sourceRoot });
   } catch (error) {
-    console.error(`Pi Workbench bootstrap: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`Pi Workbench: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   }
 }
 
-main();
+await main();

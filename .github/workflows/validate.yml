@@ -7,17 +7,25 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22, 24]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: npm
       - run: npm ci
       - run: npm test
-      - run: npx --yes . --help
-      - run: npm pack --dry-run --json
-      - run: bash -n install.sh
+      - run: git diff --check
+      - if: matrix.node-version == 24
+        run: npx --yes . --help
+      - if: matrix.node-version == 24
+        run: npm pack --dry-run --json
+      - if: matrix.node-version == 24
+        run: bash -n install.sh
 
   windows-powershell-syntax:
     runs-on: windows-latest

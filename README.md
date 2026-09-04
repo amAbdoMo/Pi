@@ -2,80 +2,103 @@
 
 [![Validate Pi setup](https://github.com/amAbdoMo/Pi/actions/workflows/validate.yml/badge.svg)](https://github.com/amAbdoMo/Pi/actions/workflows/validate.yml)
 
-My custom coding-agent harness built on [Pi](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent): a full-screen terminal workbench with structured agent workflows, subagents, an owned MCP hub, live Codex usage windows, Arabic/RTL support, and one-command setup.
-
-Not a fork — Pi stays the runtime (models, sessions, tools, packages). Everything here ships as extensions, a theme, portable settings, and installers on top of it.
-
-## What it adds
-
-| Area | Highlights |
-| --- | --- |
-| **Workbench UI** | Fixed sidebar (session / context / usage resets / activity / MCP status), anchored composer showing model, thinking level, and live Codex `5h` / `7d` usage bars |
-| **Agent workflows** | Task progress cards, nested subagents with tuned GPT-5.6 profiles (`fast` / `balanced` / `implementation` / `review` = Luna-max, `deep` / `critical` = Sol), side chat, and `pipeline` + opt-in `deep-review` four-phase workflows with blocker-aware routing |
-| **Tools & integrations** | Owned MCP Hub (JSON/JSONC, discovery, calls, secret redaction), Windows shared-browser supervisor with persistent logins, Firecrawl web tools, image generation, persistent memory, approval-gated WordPress UI lesson queue, fast mode, code-state undo/redo |
-| **Terminal & language** | Arabic shaping + bidirectional ordering (code/paths stay LTR), pinned Nerd Font, Windows Terminal & Warp provisioning, graphite `hypr-waves` theme |
+Pi Workbench turns [Pi](https://github.com/earendil-works/pi-mono/tree/main/packages/coding-agent) into a complete coding workspace for the terminal and browser. Pi still owns the models, sessions, tools, and package system; this project adds the interface, workflows, integrations, and installer around it.
 
 ## Install
 
-Requires Git and Node.js 20+. The bootstrap installs the pinned Pi runtime, extensions, settings, fonts, FFmpeg integration, and browser supervisor; provider authentication remains a separate user action.
+You need **Git** and **Node.js 20 or newer**.
+
+1. Install the complete Workbench setup:
+
+   ```bash
+   npx --yes github:amAbdoMo/Pi install
+   ```
+
+2. Restart your terminal, then open Pi:
+
+   ```bash
+   pi
+   ```
+
+3. Sign in to your model provider when Pi asks. Accounts and API keys are not bundled.
+
+To open the browser interface:
 
 ```bash
-npx --yes github:amAbdoMo/Pi@v0.13.0 install
+npx --yes github:amAbdoMo/Pi web
 ```
 
-From an owned Windows clone:
+The command prints a private local URL. Pi Harness only listens on your computer at `127.0.0.1:3081`.
 
-```powershell
-.\setup.ps1 diagnose
-.\setup.ps1 install
-.\setup.ps1 verify
-.\setup.ps1 rollback                 # restores the latest checkpoint
+Useful setup commands:
+
+```bash
+npx --yes github:amAbdoMo/Pi diagnose   # check without changing anything
+npx --yes github:amAbdoMo/Pi verify     # verify the installation
+npx --yes github:amAbdoMo/Pi rollback   # restore the latest checkpoint
 ```
 
-Use `--skip-ffmpeg` or `--skip-terminal` with the `npx` command, or `-SkipFfmpeg` / `-SkipTerminal` with `setup.ps1`, when those optional integrations are not wanted. Install creates a non-secret checkpoint under `~/.pi/agent/bootstrap-checkpoints/` before changing managed configuration. It preserves model/thinking preferences and never checkpoints auth files, sessions, trust decisions, credentials, cookies, or browser profiles.
-
-Package only (extensions + theme, no shared settings):
+Add `--skip-ffmpeg` or `--skip-terminal` to `install` if you do not want those optional integrations. To install only the Pi extensions and theme—without shared settings, fonts, FFmpeg, or terminal setup—run:
 
 ```bash
 pi install git:github.com/amAbdoMo/Pi@v0.13.0
 ```
 
-Upgrades are explicit: run the bootstrap for the next tagged release. Pinned Pi packages are intentionally skipped by `pi update --extensions`.
+## What is included
 
-## Everyday controls
-
-| Control | Action |
+| Area | What you get |
 | --- | --- |
-| `Tab` / `Shift+Tab` | Autocomplete / thinking level |
-| Mouse wheel, `PgUp`/`PgDn` | Scroll chat during and after runs |
-| Mouse drag + `Ctrl+C` | Select and copy exact text |
-| `/sidebar` `/todos` `/agents` `/btw` | Sidebar · tasks · subagents · side question |
-| `/workflow pipeline` | Run the focused four-phase workflow |
-| `/mcp` `/skills` `/memory` `/fast` `/undo` | Hub · skills · memory · fast mode · checkpoints |
-| `/ui-learning` `/ui-lessons` | WordPress UI lesson queue · review pending lessons |
+| **Terminal Workbench** | Full-screen chat, session sidebar, tasks, subagents, MCP activity, context usage, Codex `5h`/`7d` limits, model/thinking controls, precise scrolling and copying, image display, and code undo/redo. |
+| **Pi Harness for browsers** | Local authenticated UI with session search/grouping/pinning/archive, rename/clone/delete, streaming Markdown and code, working animations, tool details, themes, responsive layout, context/compaction controls, account switching, and model/provider/extension/MCP settings. |
+| **Agent workflows** | Automatic task tracking, adaptive Luna/Sol subagents, side chat, a focused `pipeline` workflow, and an opt-in `deep-review` workflow for higher-risk work. |
+| **Files and queues** | Image and UTF-8 text/source attachments, paste/drop support, Steer or Follow up queues, queue recovery, stop controls, and reconnect-safe approvals. |
+| **Tools** | MCP Hub, shared Edge browser with persistent logins, Firecrawl web research, image generation, persistent memory, skills, fast mode, and an approval-gated WordPress UI learning queue. |
+| **Terminal and language** | Arabic shaping and RTL support while code stays LTR, the `hypr-waves` theme, Nerd Font setup, Windows Terminal/Warp support, and optional FFmpeg provisioning. |
+| **Safety** | Checkpoints before install, loopback-only browser access, tool approvals, secret redaction, bounded browser payloads, public-file scans, and CSP checks. |
 
-Defaults for fresh installs: `hypr-waves` theme, `openai-codex` provider, `gpt-5.6-sol`, thinking `high`.
+## What is not included
 
-## Workflows & MCP in brief
+- Model access, paid subscriptions, provider accounts, API keys, or automatic sign-in.
+- A hosted cloud service or public browser endpoint; Pi Harness is local-only.
+- Your sessions, credentials, browser profile, trust decisions, or private project files.
+- DeepSeek Harness's agent runtime or JavaScript evaluator. Only selected MIT-licensed UI patterns are adapted to Pi RPC.
+- PDF or arbitrary binary attachments in Pi Harness; it currently accepts supported images and UTF-8 text/source files.
+- A byte-for-byte DeepSeek Harness clone. Remaining browser parity work is listed in [`browser/PARITY_MATRIX.md`](browser/PARITY_MATRIX.md).
 
-```text
-/workflow pipeline --cwd "C:\path\to\project" Implement and verify X   # noninteractive form
+## Everyday commands
+
+| Command | Purpose |
+| --- | --- |
+| `/workflow pipeline` | Plan, implement, verify, and review one task. |
+| `/workflow deep-review` | Add multi-agent consensus for release-critical work. |
+| `/todos` · `/agents` · `/btw` | Tasks, subagents, and side chat. |
+| `/mcp` · `/skills` · `/memory` | Integrations, skills, and persistent memory. |
+| `/fast` · `/undo` | Faster model mode and code checkpoints. |
+| `/ui-learning` | Review the WordPress UI lesson queue. |
+
+Fresh installs use the `hypr-waves` theme, `openai-codex`, `gpt-5.6-sol`, and high thinking by default.
+
+## Optional Windows startup
+
+From an owned clone, Pi Harness can start quietly when you sign in:
+
+```powershell
+npm run browser:startup:install
+npm run browser:startup:status
+npm run browser:startup:uninstall
 ```
-
-`pipeline` plans with evidence, caps delegates, verifies once, allows one repair cycle, and reports `BLOCKED` instead of looping when something external is missing. `deep-review` adds multi-agent consensus for release-critical work. Lowercase YAML in `~/.pi/workflows` overrides globally; project `.pi/workflows` wins.
-
-MCP servers live in `~/.pi/agent/mcp.jsonc`. Configure, connect, and inspect via `/mcp` — statuses show in the sidebar.
 
 ## Development
 
 ```bash
-git clone https://github.com/amAbdoMo/Pi.git && cd Pi && npm ci && npm test
+git clone https://github.com/amAbdoMo/Pi.git
+cd Pi
+npm ci
+npm test
 ```
 
-The development test suite uses Node.js 22.15+ for synchronous TypeScript test hooks; installing and running the package remains supported on Node.js 20+. `npm test` includes the public-file secret/private-path scan; run `npm run scan:public` for that safety gate alone.
+Develop in a normal clone, not Pi's managed checkout under `~/.pi/agent/git/`.
 
-Develop in a normal clone — Pi owns its managed checkout under `~/.pi/agent/git/...` and may reset it.
+More detail: [`browser/INTEGRATIONS.md`](browser/INTEGRATIONS.md) · [`browser/EVENT_COVERAGE.md`](browser/EVENT_COVERAGE.md) · [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) · [`CHANGELOG.md`](CHANGELOG.md)
 
-## Privacy & credits
-
-No auth files, sessions, trust decisions, or credentials are stored here; the checked-in audit contains only anonymous aggregates and fails closed on private data. Built on [Pi](https://github.com/earendil-works/pi-mono); retains selected foundations from [h4ni0](https://github.com/h4ni0) — see [`UPSTREAM.md`](UPSTREAM.md).
+No credentials or private sessions are stored in this repository. Built on Pi, with credited foundations in [`UPSTREAM.md`](UPSTREAM.md).

@@ -28,6 +28,7 @@ export interface McpServerDefinition {
 	sourcePath: string;
 	sourceDirectory: string;
 	fingerprint: string;
+	privateSecretValues?: string[];
 }
 
 export interface McpToolMetadata {

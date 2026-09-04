@@ -100,6 +100,13 @@ const requiredFiles = [
   "scripts/setup-browser-mcp.mjs",
   "scripts/browser/pi-browser-mcp.ps1",
   "scripts/browser/pi-browser-idle-close.ps1",
+  "browser/server.mjs",
+  "browser/security.mjs",
+  "browser/session-catalog.mjs",
+  "browser/pi-bridge.mjs",
+  "browser/public/index.html",
+  "browser/public/styles.css",
+  "browser/public/app.js",
   "scripts/setup-terminal-font.ps1",
   "scripts/set-terminal-font.mjs",
   "scripts/set-warp-settings.mjs",
@@ -224,6 +231,9 @@ for (const retiredPackage of ["npm:pi-mcp-adapter", "npm:@hypabolic/pi-hypa"]) {
 }
 if (Object.keys(packageManifest.bin ?? {}).length !== 1 || packageManifest.bin?.["pi-workbench-install"] !== "./scripts/install-cli.mjs") {
   throw new Error("package.json must expose exactly one deterministic pi-workbench-install bin");
+}
+if (packageManifest.scripts?.browser !== "node browser/server.mjs") {
+  throw new Error("package.json must expose the local Pi Harness launcher");
 }
 for (const dependency of ["@modelcontextprotocol/sdk", "arabic-reshaper", "bidi-js", "jsonc-parser", "typebox", "yaml"]) {
   if (!packageManifest.dependencies?.[dependency]) throw new Error(`Missing runtime dependency: ${dependency}`);

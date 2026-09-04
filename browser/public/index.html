@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Pi Harness</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/pi-harness-favicon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/pi-harness-touch-icon.png">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body data-theme="dark" data-booting="true">
+  <div class="boot-screen" role="status" aria-label="Loading Pi Harness">
+    <div class="boot-brand">
+      <img src="/pi-harness-icon.png" alt="" width="72" height="72">
+      <span>Pi Harness</span>
+    </div>
+  </div>
+  <a class="skip-link" href="#message-input">Skip to message composer</a>
+  <div class="app-frame" id="app" data-connection="starting" data-sidebar-collapsed="false" data-details-collapsed="true" data-session-active="false">
+    <aside class="sidebar" aria-label="Pi Harness sessions">
+      <header class="logo-row">
+        <button class="brand" id="brand-new-session" type="button" aria-label="Start a new session">
+          <img class="brand-mark" src="/pi-harness-icon.png" alt="" width="34" height="34">
+          <span class="brand-name">Pi Harness</span>
+        </button>
+        <button class="icon-button sidebar-toggle" id="sidebar-toggle" type="button" aria-label="Collapse sidebar" aria-expanded="true" data-tooltip="Collapse sidebar">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="3"></rect><path d="M7.5 3v14"></path></svg>
+        </button>
+      </header>
+
+      <button class="new-session" id="new-session" type="button" aria-label="New session">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M11.5 3.5h-6A2.5 2.5 0 0 0 3 6v8.5A2.5 2.5 0 0 0 5.5 17H14a2.5 2.5 0 0 0 2.5-2.5v-6"></path><path d="m9 11 1-.2 6.1-6.1a1.3 1.3 0 0 0-1.8-1.8L8.2 9 8 10z"></path></svg>
+        <span>New session</span>
+      </button>
+
+      <section class="workspace-browser" aria-labelledby="workspaces-label">
+        <header class="workspace-browser-header">
+          <span id="workspaces-label">Workspaces</span>
+          <div class="workspace-actions">
+            <button class="icon-button" id="search-sessions" type="button" aria-label="Search sessions" aria-expanded="false" data-tooltip="Search">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.25"></circle><path d="m12.4 12.4 4.1 4.1"></path></svg>
+            </button>
+            <button class="icon-button" id="view-options" type="button" aria-label="View options" aria-haspopup="menu" aria-expanded="false" data-tooltip="View options">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h12M4 10h12M4 15h12"></path><circle cx="8" cy="5" r="1.5"></circle><circle cx="13" cy="10" r="1.5"></circle><circle cx="7" cy="15" r="1.5"></circle></svg>
+            </button>
+            <button class="icon-button" id="add-workspace" type="button" aria-label="Start in a new project" data-tooltip="New project">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.75 6.25h5l1.5 1.75h8v7.25a1.5 1.5 0 0 1-1.5 1.5H4.25a1.5 1.5 0 0 1-1.5-1.5z"></path></svg>
+            </button>
+          </div>
+        </header>
+        <label class="session-search" id="session-search-wrap" hidden>
+          <span class="sr-only">Search sessions</span>
+          <input id="session-filter" type="search" placeholder="Search sessions…" autocomplete="off">
+        </label>
+        <nav id="session-list" class="session-list" aria-label="Saved sessions"></nav>
+      </section>
+
+      <footer class="sidebar-footer">
+        <button class="profile-trigger" id="profile-trigger" type="button" aria-label="Open account menu" aria-haspopup="menu" aria-controls="profile-menu" aria-expanded="false">
+          <span class="account-avatar" id="profile-avatar" aria-hidden="true">AI</span>
+          <span class="profile-trigger-copy"><strong id="profile-name">OpenAI account</strong><small id="profile-plan">Codex</small></span>
+          <svg class="profile-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 12 4-4 4 4"></path></svg>
+        </button>
+      </footer>
+    </aside>
+
+    <main class="conversation-root">
+      <header class="conversation-header">
+        <div class="session-heading">
+          <h1 id="session-title">New Session</h1>
+          <button class="icon-button session-actions-trigger" id="session-actions" type="button" aria-label="Session actions" aria-haspopup="menu" aria-expanded="false" data-tooltip="Session actions" hidden>•••</button>
+          <button class="context-trigger" id="context-trigger" type="button" aria-haspopup="dialog" aria-controls="context-menu" aria-expanded="false" hidden>
+            <span id="context-brief">Context —</span>
+          </button>
+          <span class="connection" id="connection-status" role="status"><span class="connection-light" aria-hidden="true"></span><span>Starting</span></span>
+        </div>
+      </header>
+
+      <div class="conversation-scroll">
+        <section id="transcript" class="transcript" role="log" aria-live="polite" aria-relevant="additions text">
+          <div class="conversation-loading" id="conversation-loading" role="status" aria-live="polite" hidden>
+            <img src="/pi-harness-icon.png" alt="" width="72" height="72">
+            <span>Loading conversation…</span>
+          </div>
+          <div class="empty-state" id="empty-state">
+            <div class="hero-headline">
+              <img class="hero-mark" src="/pi-harness-icon.png" alt="" width="52" height="52">
+              <h2>Into the Unknown</h2>
+            </div>
+          </div>
+          <div class="agent-working-status" id="agent-working-status" role="status" aria-live="polite" hidden>
+            <span>Deep diving...</span><time class="agent-working-clock" id="agent-working-clock" aria-hidden="true" hidden></time>
+          </div>
+        </section>
+
+        <div class="fresh-composer-stack">
+          <div class="fresh-project-picker">
+            <button id="workspace-picker" type="button">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.75 6.25h5l1.5 1.75h9v7.25a1.5 1.5 0 0 1-1.5 1.5H4.25a1.5 1.5 0 0 1-1.5-1.5z"></path></svg>
+              <span>Choose Project</span>
+            </button>
+          </div>
+
+          <form class="composer" id="composer">
+          <div class="extension-widgets" id="extension-widgets-above" aria-live="polite" hidden></div>
+          <div class="attachment-strip" id="attachment-strip" aria-label="Attached files" aria-live="polite" hidden></div>
+          <label class="sr-only" for="message-input">Describe what you want Pi to build</label>
+          <textarea id="message-input" rows="2" placeholder="Describe what you want to build" disabled></textarea>
+          <div class="extension-widgets" id="extension-widgets-below" aria-live="polite" hidden></div>
+          <input id="attachment-input" type="file" multiple hidden>
+          <div class="composer-row">
+            <div class="composer-tools">
+              <button class="round-tool" id="commands-trigger" type="button" aria-label="Commands" aria-expanded="false" data-tooltip="Commands">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg>
+              </button>
+              <button class="round-tool" id="attach-image" type="button" aria-label="Attach files" data-tooltip="Attach files" disabled>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7.25 10.75 4.9-4.9a2.25 2.25 0 0 1 3.18 3.18l-6.2 6.2a3.75 3.75 0 0 1-5.3-5.3l6.54-6.54"></path></svg>
+              </button>
+              <button class="mode-select" id="permission-status" type="button" aria-label="Tool access mode: Workspace Write" aria-haspopup="menu" aria-expanded="false">
+                <svg class="approval-filled-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8.08887 0.251709C8.20479 0.23085 8.32486 0.241168 8.43652 0.282959L15.0215 2.75171C15.2787 2.84819 15.4492 3.09414 15.4492 3.3689V7.0105C15.4492 7.10986 15.4441 7.2081 15.4414 7.30542C15.0285 7.07175 14.5905 6.87695 14.1309 6.73022V3.82495L8.20508 1.60327L2.2793 3.82495V7.0105C2.27936 9.7171 3.4745 11.5379 5.02734 12.7947C5.01025 12.9942 5 13.1962 5 13.4001C5.00001 13.7617 5.02722 14.1169 5.08008 14.4636C2.91555 13.0393 0.961014 10.752 0.960938 7.0105V3.3689C0.960938 3.09417 1.13146 2.84821 1.38867 2.75171L7.97461 0.282959L8.08887 0.251709Z" fill="currentColor"></path><path d="M11.3525 5.64688V6.85688H5V5.64688H11.3525Z" fill="currentColor"></path><path d="M9.5824 8.29376V9.50376H5V8.29376H9.5824Z" fill="currentColor"></path><path d="M14.6647 15.6852H10.0338C10.3878 15.3751 10.7567 15.0517 11.0772 14.7706C11.2531 14.6164 11.4144 14.4746 11.5511 14.3547H14.6647V15.6852Z" fill="currentColor"></path><path d="M8.14852 14.1308L7.33925 15.4976C7.22458 15.6912 7.42245 15.9194 7.63037 15.8333L9.09785 15.2254L15.0399 10.0719L14.0905 8.97733L8.14852 14.1308Z" fill="currentColor"></path></svg>
+                <span>Workspace Write</span><svg class="select-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"></path></svg>
+              </button>
+              <label class="mode-select" id="queue-mode-wrap" title="How messages are handled while Pi is working" hidden>
+                <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 4.5h12v8H9l-4 3v-3H4z"></path><path d="m7 8 2 2 4-4"></path></svg>
+                <span class="sr-only">Message mode</span>
+                <select id="queue-mode">
+                  <option value="steer">Steer</option>
+                  <option value="followUp">Follow up</option>
+                </select>
+                <output class="queue-count" id="queue-count" aria-live="polite" hidden></output>
+              </label>
+            </div>
+            <div class="composer-trailing">
+              <button class="model-select" id="model-trigger" type="button" aria-label="Select Pi model and thinking level" aria-haspopup="dialog" aria-controls="model-dialog" aria-expanded="false">
+                <span id="model-label">Pi model</span><span class="model-separator" aria-hidden="true">·</span><span id="thinking-label">—</span>
+                <svg class="select-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m6.5 8 3.5 3.5L13.5 8"></path></svg>
+              </button>
+              <button class="stop-button" id="abort-run" type="button" hidden aria-label="Stop Pi and restore queued messages" data-tooltip="Stop">
+                <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="6" y="6" width="8" height="8" rx="1.5"></rect></svg>
+              </button>
+              <button class="send-button" id="send-message" type="submit" disabled aria-label="Send message" data-tooltip="Send">
+                <span class="sr-only">Send</span>
+                <svg class="action-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 15V5M5.75 9.25 10 5l4.25 4.25"></path></svg>
+              </button>
+            </div>
+          </div>
+          </form>
+        </div>
+      </div>
+      <div id="toast-region" class="toast-region" role="status" aria-live="polite"></div>
+    </main>
+
+    <aside class="details-panel" aria-label="Tool details">
+      <header class="details-header"><span>Details</span><button class="icon-button" id="details-close" type="button" aria-label="Close details" data-tooltip="Close">×</button></header>
+      <div class="details-body">
+        <p class="details-empty">Click a tool row in the message flow to view its details</p>
+        <ol id="activity-list" class="activity-list" aria-label="Live activity"></ol>
+      </div>
+    </aside>
+  </div>
+
+  <div class="popup-menu session-menu" id="session-menu" role="menu" aria-label="Session actions" hidden>
+    <button id="rename-session" type="button" role="menuitem">Rename session</button>
+    <button id="clone-session" type="button" role="menuitem">Clone session</button>
+    <button id="delete-session" class="danger" type="button" role="menuitem">Delete session</button>
+  </div>
+
+  <div class="popup-menu profile-menu" id="profile-menu" role="menu" aria-label="Account and settings" hidden>
+    <button class="profile-menu-identity" id="profile-identity" type="button" role="menuitem">
+      <span class="account-avatar" id="profile-menu-avatar" aria-hidden="true">AI</span>
+      <span><strong id="profile-menu-name">OpenAI account</strong><small id="profile-menu-plan">Codex</small></span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"></path></svg>
+    </button>
+    <span class="profile-menu-rule" aria-hidden="true"></span>
+    <button id="settings-trigger" type="button" role="menuitem" aria-label="Settings" aria-haspopup="dialog" aria-controls="settings-dialog">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M8.6 2.75h2.8l.65 1.7 1.8.75 1.65-.75 1.4 2.4-1.35 1.15v2l1.35 1.15-1.4 2.4-1.65-.75-1.8.75-.65 1.7H8.6l-.65-1.7-1.8-.75-1.65.75-1.4-2.4L4.45 10V8L3.1 6.85l1.4-2.4 1.65.75 1.8-.75z"></path><circle cx="10" cy="9" r="2.25"></circle></svg>
+      <span>Settings</span>
+    </button>
+  </div>
+
+  <div class="session-tooltip" id="session-tooltip" role="tooltip" hidden>
+    <strong id="session-tooltip-title"></strong>
+    <span id="session-tooltip-workspace"></span>
+  </div>
+  <div class="icon-tooltip" id="icon-tooltip" role="tooltip" hidden></div>
+
+  <dialog id="model-dialog" aria-labelledby="model-dialog-title">
+    <div class="model-dialog-surface">
+      <header class="model-dialog-header">
+        <div>
+          <h2 id="model-dialog-title">Pi model &amp; thinking level</h2>
+          <p><strong id="model-dialog-current">Pi model</strong><span aria-hidden="true"> · </span><span id="thinking-dialog-current">—</span></p>
+        </div>
+        <button class="dialog-close" id="model-dialog-close" type="button" aria-label="Close model picker" data-tooltip="Close">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"></path></svg>
+        </button>
+      </header>
+      <div class="model-dialog-grid">
+        <section class="model-browser" id="model-submenu" aria-labelledby="available-models-title">
+          <h3 id="available-models-title">Available models</h3>
+          <label class="popup-search"><span class="sr-only">Search models</span><input id="model-search" type="search" placeholder="Search models…" autocomplete="off"></label>
+          <div id="model-options" class="popup-options" role="listbox" aria-label="Available Pi models"></div>
+        </section>
+        <section class="thinking-browser" aria-labelledby="thinking-levels-title">
+          <h3 id="thinking-levels-title">Thinking level</h3>
+          <p>Choose how much reasoning Pi applies to the next response.</p>
+          <div class="thinking-submenu" id="thinking-submenu" role="radiogroup" aria-label="Thinking levels"></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
+  <div class="command-menu" id="command-menu" role="listbox" aria-label="Pi commands" hidden></div>
+
+  <div class="popup-menu approval-menu" id="approval-menu" role="menu" aria-label="Tool access mode" hidden>
+    <button type="button" role="menuitemradio" data-approval-mode="read-only">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.75 16 5v4.5c0 3.7-2.35 6.35-6 7.75-3.65-1.4-6-4.05-6-7.75V5z"></path><path d="m7.25 9.75 1.75 1.75 3.75-4"></path></svg>
+      <span>Read Only</span>
+    </button>
+    <button type="button" role="menuitemradio" data-approval-mode="workspace-write">
+      <svg class="approval-filled-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8.08887 0.251709C8.20479 0.23085 8.32486 0.241168 8.43652 0.282959L15.0215 2.75171C15.2787 2.84819 15.4492 3.09414 15.4492 3.3689V7.0105C15.4492 7.10986 15.4441 7.2081 15.4414 7.30542C15.0285 7.07175 14.5905 6.87695 14.1309 6.73022V3.82495L8.20508 1.60327L2.2793 3.82495V7.0105C2.27936 9.7171 3.4745 11.5379 5.02734 12.7947C5.01025 12.9942 5 13.1962 5 13.4001C5.00001 13.7617 5.02722 14.1169 5.08008 14.4636C2.91555 13.0393 0.961014 10.752 0.960938 7.0105V3.3689C0.960938 3.09417 1.13146 2.84821 1.38867 2.75171L7.97461 0.282959L8.08887 0.251709Z" fill="currentColor"></path><path d="M11.3525 5.64688V6.85688H5V5.64688H11.3525Z" fill="currentColor"></path><path d="M9.5824 8.29376V9.50376H5V8.29376H9.5824Z" fill="currentColor"></path><path d="M14.6647 15.6852H10.0338C10.3878 15.3751 10.7567 15.0517 11.0772 14.7706C11.2531 14.6164 11.4144 14.4746 11.5511 14.3547H14.6647V15.6852Z" fill="currentColor"></path><path d="M8.14852 14.1308L7.33925 15.4976C7.22458 15.6912 7.42245 15.9194 7.63037 15.8333L9.09785 15.2254L15.0399 10.0719L14.0905 8.97733L8.14852 14.1308Z" fill="currentColor"></path></svg>
+      <span>Workspace Write</span>
+    </button>
+    <button type="button" role="menuitemradio" data-approval-mode="full-access">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.75 16 5v4.5c0 3.7-2.35 6.35-6 7.75-3.65-1.4-6-4.05-6-7.75V5z"></path><path d="M10 6.5v4M10 13.5h.01"></path></svg>
+      <span>Full Access</span>
+    </button>
+  </div>
+
+  <div class="popup-menu view-menu" id="view-menu" role="menu" aria-label="Session view options" hidden>
+    <span class="view-menu-heading">Group by</span>
+    <button type="button" role="menuitemradio" data-view-group="workspace">WorkSpace</button>
+    <button type="button" role="menuitemradio" data-view-group="list">In one list</button>
+    <span class="view-menu-heading">Order by</span>
+    <button type="button" role="menuitemradio" data-view-order="manual">Manual</button>
+    <button type="button" role="menuitemradio" data-view-order="updated">Last updated</button>
+  </div>
+
+  <section class="popup-menu context-menu" id="context-menu" role="dialog" aria-label="Session context usage" hidden>
+    <header><strong>Session context</strong><span id="context-state">Ready</span></header>
+    <dl>
+      <div><dt>Used</dt><dd id="context-used">—</dd></div>
+      <div><dt>Window</dt><dd id="context-window">—</dd></div>
+      <div><dt>Messages</dt><dd id="context-messages">—</dd></div>
+      <div><dt>Cost</dt><dd id="context-cost">—</dd></div>
+    </dl>
+    <button class="context-toggle" id="auto-compaction" type="button" role="switch" aria-checked="true"><span>Auto compaction</span><strong>On</strong></button>
+    <button class="context-compact" id="compact-now" type="button">Compact now</button>
+  </section>
+
+  <dialog id="accounts-dialog" aria-labelledby="accounts-title">
+    <div class="accounts-surface">
+      <header class="accounts-header">
+        <div class="accounts-active-identity">
+          <span class="account-avatar account-avatar-large" id="accounts-active-avatar" aria-hidden="true">AI</span>
+          <span><span class="accounts-kicker">Active account</span><h2 id="accounts-title" tabindex="-1">OpenAI account</h2><small id="accounts-active-email"></small></span>
+        </div>
+        <button class="dialog-close" id="accounts-close" type="button" aria-label="Close accounts" data-tooltip="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"></path></svg></button>
+      </header>
+      <div class="accounts-toolbar">
+        <div><h3>Accounts</h3><p>Switch accounts in one click and see when each usage window resets.</p></div>
+        <div>
+          <button class="accounts-refresh" id="accounts-refresh" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36L21 8"></path><path d="M21 3v5h-5"></path></svg><span>Refresh usage</span></button>
+          <button class="accounts-add" id="accounts-add" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg><span>Add account</span></button>
+        </div>
+      </div>
+      <section class="account-login-progress" id="account-login-progress" role="status" aria-live="polite" hidden>
+        <span class="account-login-spinner" aria-hidden="true"></span>
+        <span><strong>Complete sign-in in your browser</strong><small id="account-login-message">Waiting for OpenAI…</small></span>
+        <button id="account-login-cancel" type="button">Cancel</button>
+      </section>
+      <div class="accounts-list" id="accounts-list" aria-live="polite" aria-busy="true"></div>
+      <footer class="accounts-footer"><span id="accounts-status" role="status" aria-live="polite">Loading accounts…</span><span>Credentials stay in Pi's private local storage.</span></footer>
+    </div>
+  </dialog>
+
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="settings-surface">
+      <nav class="settings-nav" aria-label="Settings sections" role="tablist">
+        <h2 id="settings-title">Settings</h2>
+        <button class="settings-tab active" id="settings-tab-general" type="button" role="tab" aria-selected="true" aria-controls="settings-panel-general" data-settings-tab="general"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="2.6"></circle><path d="M10 2.75v1.5M10 15.75v1.5M2.75 10h1.5M15.75 10h1.5M4.87 4.87l1.06 1.06M14.07 14.07l1.06 1.06M15.13 4.87l-1.06 1.06M5.93 14.07l-1.06 1.06"></path></svg><span>General</span></button>
+        <button class="settings-tab" id="settings-tab-models" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-models" tabindex="-1" data-settings-tab="models"><svg viewBox="0 0 20 20" aria-hidden="true"><ellipse cx="9" cy="5" rx="5.5" ry="2.25"></ellipse><path d="M3.5 5v5c0 1.25 2.46 2.25 5.5 2.25M14.5 5v3.5M3.5 10v4c0 1.25 2.46 2.25 5.5 2.25"></path><circle cx="14.25" cy="13.25" r="2.75"></circle><path d="M14.25 11.9v1.55l1 .6"></path></svg><span>Models</span></button>
+        <button class="settings-tab" id="settings-tab-extensions" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-extensions" tabindex="-1" data-settings-tab="extensions"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 5h4M12 5h4M4 10h8M15 10h1M4 15h2M10 15h6"></path><circle cx="10" cy="5" r="1.5"></circle><circle cx="13.5" cy="10" r="1.5"></circle><circle cx="8" cy="15" r="1.5"></circle></svg><span>Extensions</span></button>
+        <button class="settings-tab" id="settings-tab-mcp" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-mcp" tabindex="-1" data-settings-tab="mcp"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="4" r="2"></circle><circle cx="5" cy="14.5" r="2"></circle><circle cx="15" cy="14.5" r="2"></circle><path d="m8.9 5.7-2.8 6M11.1 5.7l2.8 6M7 14.5h6"></path></svg><span>MCP</span></button>
+        <button class="settings-tab" id="settings-tab-archive" type="button" role="tab" aria-selected="false" aria-controls="settings-panel-archive" tabindex="-1" data-settings-tab="archive"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.75h13v10.5h-13zM2.75 3.5h14.5v2.25H2.75zM7.5 9h5"></path></svg><span>Archive</span></button>
+      </nav>
+      <section class="settings-content">
+        <header><span class="settings-product">Pi Harness</span><button class="dialog-close" id="settings-close" type="button" aria-label="Close settings" data-tooltip="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"></path></svg></button></header>
+        <div class="settings-panel" id="settings-panel-general" role="tabpanel" aria-labelledby="settings-tab-general" data-settings-panel="general">
+          <div class="setting-row"><span><strong>Runtime</strong><small>Pi remains the canonical engine</small></span><output>Pi Workbench</output></div>
+          <div class="setting-row"><span><strong>Enter behavior while busy</strong><small>Choose whether Enter steers or queues a follow-up</small></span><button id="settings-queue-mode" type="button">Steer</button></div>
+          <fieldset class="appearance">
+            <legend>Appearance</legend>
+            <button type="button" data-theme-choice="light">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.25"></circle><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4"></path></svg>
+              <span>Light</span>
+            </button>
+            <button class="active" type="button" data-theme-choice="dark">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M15.75 12.4A6.25 6.25 0 0 1 7.6 4.25a6.25 6.25 0 1 0 8.15 8.15z"></path></svg>
+              <span>Dark</span>
+            </button>
+            <button type="button" data-theme-choice="system">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="3.5" y="3.75" width="13" height="9.5" rx="2"></rect><path d="M7 16.25h6M10 13.25v3"></path></svg>
+              <span>System</span>
+            </button>
+          </fieldset>
+        </div>
+        <div class="settings-panel models-settings-panel" id="settings-panel-models" role="tabpanel" aria-labelledby="settings-tab-models" data-settings-panel="models" hidden>
+          <div class="providers-heading">
+            <div><h3>Model providers</h3><p>Add custom API providers and the models Pi should expose. Saved keys stay in Pi's private credential file and are never shown again.</p></div>
+            <button class="provider-add" id="provider-add" type="button">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg>
+              <span>Add provider</span>
+            </button>
+          </div>
+          <div class="provider-list" id="provider-list" aria-live="polite" aria-busy="true"></div>
+          <form class="provider-form" id="provider-form" hidden>
+            <div class="provider-form-heading"><div><h4 id="provider-form-title">Add provider</h4><p>Use an OpenAI-, Anthropic-, or Google-compatible endpoint.</p></div><button class="provider-form-close" id="provider-form-close" type="button" aria-label="Close provider form" data-tooltip="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"></path></svg></button></div>
+            <div class="provider-fields">
+              <label><span>Provider ID</span><input id="provider-id" name="providerId" type="text" required maxlength="64" autocomplete="off" placeholder="my-provider" pattern="[a-z0-9][a-z0-9._-]{0,63}"></label>
+              <div class="provider-select-field"><span id="provider-api-field-label">API type</span><div class="provider-api-select"><button id="provider-api" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="provider-api-options" aria-labelledby="provider-api-field-label provider-api-label"><span id="provider-api-label">OpenAI Chat Completions</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"></path></svg></button><div class="provider-api-options" id="provider-api-options" role="listbox" aria-labelledby="provider-api-field-label" hidden><button type="button" role="option" aria-selected="true" tabindex="-1" data-provider-api="openai-completions">OpenAI Chat Completions</button><button type="button" role="option" aria-selected="false" tabindex="-1" data-provider-api="openai-responses">OpenAI Responses</button><button type="button" role="option" aria-selected="false" tabindex="-1" data-provider-api="anthropic-messages">Anthropic Messages</button><button type="button" role="option" aria-selected="false" tabindex="-1" data-provider-api="google-generative-ai">Google Generative AI</button></div></div></div>
+              <label class="provider-field-wide"><span>Base URL</span><input id="provider-base-url" name="baseUrl" type="url" required maxlength="2048" autocomplete="url" placeholder="https://api.example.com/v1"></label>
+              <label class="provider-field-wide"><span>API key <small id="provider-key-hint">Optional when configured elsewhere</small></span><input id="provider-api-key" name="apiKey" type="password" maxlength="16384" autocomplete="new-password" placeholder="Leave blank to keep the current credential"></label>
+            </div>
+            <div class="provider-models-heading"><div><strong>Models</strong><small>Add at least one model ID exposed by this provider.</small></div><button id="provider-model-add" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg><span>Add model</span></button></div>
+            <div class="provider-model-list" id="provider-model-list"></div>
+            <div class="provider-form-footer"><span id="provider-form-status" role="status" aria-live="polite"></span><div><button id="provider-cancel" type="button">Cancel</button><button class="provider-save" id="provider-save" type="submit">Save and reload</button></div></div>
+          </form>
+        </div>
+        <div class="settings-panel extensions-panel" id="settings-panel-extensions" role="tabpanel" aria-labelledby="settings-tab-extensions" data-settings-panel="extensions" hidden>
+          <div class="extensions-heading">
+            <div><h3>Extensions</h3><p>Choose which Workbench features Pi loads. Changes apply globally to every project.</p></div>
+            <span class="extensions-count" id="extensions-count"></span>
+          </div>
+          <div class="extension-grid" id="extension-list" aria-live="polite" aria-busy="true"></div>
+          <div class="extensions-footer">
+            <span id="extensions-status">Loading extensions…</span>
+            <button class="extensions-apply" id="extensions-apply" type="button" disabled>Apply and reload</button>
+          </div>
+        </div>
+        <div class="settings-panel mcp-panel" id="settings-panel-mcp" role="tabpanel" aria-labelledby="settings-tab-mcp" data-settings-panel="mcp" hidden>
+          <div class="mcp-heading">
+            <div><h3>MCP servers</h3><p>Manage local and remote tool servers for Pi. Effective definitions follow MCP source precedence.</p></div>
+            <button class="mcp-add" id="mcp-add" type="button"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12M4 10h12"></path></svg><span>Add server</span></button>
+          </div>
+          <div class="mcp-banner" id="mcp-extension-warning" hidden><strong>MCP Hub is turned off</strong><span>Enable MCP Hub in Extensions before using configured servers.</span></div>
+          <div class="mcp-diagnostics" id="mcp-diagnostics" hidden></div>
+          <div class="mcp-list" id="mcp-list" aria-live="polite" aria-busy="true"></div>
+          <form class="mcp-form" id="mcp-form" hidden>
+            <div class="mcp-form-heading"><div><h4 id="mcp-form-title">Add MCP server</h4><p id="mcp-form-description">Configure a stdio command or Streamable HTTP endpoint.</p></div><button class="mcp-form-close" id="mcp-form-close" type="button" aria-label="Close MCP form" data-tooltip="Close"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 5.5 9 9M14.5 5.5l-9 9"></path></svg></button></div>
+            <div class="mcp-unsupported-note">SSE and OAuth MCP configurations are not supported by Pi Workbench.</div>
+            <div class="mcp-form-grid">
+              <label><span>Server name</span><input id="mcp-name" type="text" maxlength="128" required autocomplete="off" placeholder="my-tools"></label>
+              <div class="mcp-choice-field" id="mcp-scope-field"><span>Scope</span><div class="mcp-segments" role="radiogroup" aria-label="MCP configuration scope"><button type="button" role="radio" aria-checked="false" data-mcp-scope="global">Global</button><button type="button" role="radio" aria-checked="true" data-mcp-scope="project">Project</button></div></div>
+              <div class="mcp-choice-field mcp-field-wide"><span>Transport</span><div class="mcp-segments" role="radiogroup" aria-label="MCP transport"><button type="button" role="radio" aria-checked="true" data-mcp-transport="stdio">Stdio</button><button type="button" role="radio" aria-checked="false" data-mcp-transport="streamable-http">Streamable HTTP</button></div></div>
+              <div class="mcp-transport-fields mcp-field-wide" id="mcp-stdio-fields">
+                <label><span>Command</span><input id="mcp-command" type="text" maxlength="16384" autocomplete="off" placeholder="npx"></label>
+                <label><span>Working directory <small>Optional</small></span><input id="mcp-cwd" type="text" maxlength="4096" autocomplete="off" placeholder="Use the active project"></label>
+                <div class="mcp-rows-field mcp-field-wide"><div><span>Arguments</span><button id="mcp-add-argument" type="button">Add argument</button></div><div class="mcp-row-list" id="mcp-arguments"></div></div>
+              </div>
+              <div class="mcp-transport-fields mcp-field-wide" id="mcp-http-fields" hidden>
+                <label class="mcp-field-wide"><span>URL</span><input id="mcp-url" type="url" maxlength="4096" autocomplete="url" placeholder="https://tools.example.com/mcp"></label>
+              </div>
+              <div class="mcp-rows-field mcp-field-wide"><div><span id="mcp-values-title">Environment variables</span><button id="mcp-add-value" type="button">Add variable</button></div><div class="mcp-row-list" id="mcp-values"></div></div>
+              <div class="mcp-enabled-row mcp-field-wide"><span><strong>Enabled</strong><small>Enabled servers are tested before settings are kept.</small></span><button class="extension-toggle" id="mcp-enabled" type="button" role="switch" aria-checked="true" aria-label="Enable MCP server"></button></div>
+            </div>
+            <div class="mcp-form-footer"><span id="mcp-form-status" role="status" aria-live="polite"></span><div><button id="mcp-cancel" type="button">Cancel</button><button class="mcp-save" id="mcp-save" type="submit">Save and test</button></div></div>
+          </form>
+        </div>
+        <div class="settings-panel archive-panel" id="settings-panel-archive" role="tabpanel" aria-labelledby="settings-tab-archive" data-settings-panel="archive" hidden>
+          <div class="archive-heading">
+            <h3>Archived sessions</h3>
+            <button class="archive-delete-all" id="archive-delete-all" type="button" hidden>
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 5.5h13M8 3.5h4l.75 2H7.25zM5.5 5.5l.75 10h7.5l.75-10M8.25 8.5v4.5M11.75 8.5v4.5"></path></svg>
+              <span>Delete all</span>
+            </button>
+          </div>
+          <p>Archived sessions are hidden locally from the sidebar. Deleting removes their Pi session data permanently.</p>
+          <div class="archive-list" id="archived-sessions" aria-live="polite"></div>
+        </div>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="ui-dialog" aria-labelledby="dialog-title">
+    <form method="dialog" class="dialog-surface" id="dialog-form">
+      <span class="dialog-kicker">Pi requests input</span>
+      <h2 id="dialog-title"></h2>
+      <p id="dialog-message"></p>
+      <div id="dialog-control"></div>
+      <menu id="dialog-actions"></menu>
+    </form>
+  </dialog>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

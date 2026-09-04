@@ -4,9 +4,14 @@ const REDACTED = "[redacted]";
 const OAUTH_UNSUPPORTED = "Server requires OAuth, which Pi MCP Hub does not support yet.";
 const MIN_REDACTABLE_SECRET_LENGTH = 8;
 const MIN_DISTINCTIVE_VALUE_LENGTH = 12;
+const SENSITIVE_NAME = /(?:authorization|auth|cookie|credential|token|api[-_]?key|secret|password)/i;
 
 export function configuredSecretValues(definition: McpServerDefinition): string[] {
 	const secrets = new Set<string>();
+	for (const value of definition.privateSecretValues ?? []) {
+		addExplicitSecret(secrets, value);
+		addExplicitSecret(secrets, value.replace(/^\S+\s+/, ""));
+	}
 	if (definition.config.transport === "stdio") {
 		for (const [envName, envValue] of Object.entries(definition.config.env ?? {})) {
 			addConfiguredValue(secrets, envName, envValue);
@@ -80,12 +85,14 @@ function redactUnknown(candidate: unknown, definition: McpServerDefinition): unk
 
 function addSensitiveArguments(secrets: Set<string>, args: string[]): void {
 	for (let index = 0; index < args.length; index += 1) {
-		const currentArg = args[index] ?? "";
-		const assignment = /^(?:--?)?(?:api[-_]?key|token|secret|password|authorization)=(.+)$/i.exec(currentArg);
-		if (assignment?.[1]) addSecret(secrets, assignment[1]);
-		if (/^(?:--?)?(?:api[-_]?key|token|secret|password|authorization)$/i.test(currentArg)) {
-			addSecret(secrets, args[index + 1] ?? "");
+		const currentArg = (args[index] ?? "").replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, "$1$2");
+		const candidate = currentArg.replace(/^(?:--?|\/)/, "");
+		const assignment = /(?:^|[=:]\s*)(?:--?|\/)?((?:authorization|auth|cookie|credential|token|api[-_]?key|secret|password))[=:]\s*(.+)$/i.exec(candidate);
+		if (assignment?.[2]) {
+			addSecret(secrets, assignment[2]);
+			addSecret(secrets, assignment[2].replace(/^\S+\s+/, ""));
 		}
+		if (SENSITIVE_NAME.test(candidate) && !/[=:]/.test(candidate)) addSecret(secrets, args[index + 1] ?? "");
 	}
 }
 
@@ -107,14 +114,23 @@ function addConfiguredValue(secrets: Set<string>, fieldName: string, fieldValue:
 	if (isSensitiveName(fieldName)) addSecret(secrets, fieldValue.replace(/^\S+\s+/, ""));
 }
 
-function addSecret(secrets: Set<string>, secret: string): void {
-	if (secret.length < MIN_REDACTABLE_SECRET_LENGTH) return;
+function addEncodedSecret(secrets: Set<string>, secret: string): void {
 	secrets.add(secret);
 	const encoded = encodeURIComponent(secret);
 	if (encoded === secret) return;
 	secrets.add(encoded);
 	secrets.add(encoded.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toLowerCase()));
 	secrets.add(encoded.replace(/%[0-9a-f]{2}/gi, (escape) => escape.toUpperCase()));
+}
+
+function addExplicitSecret(secrets: Set<string>, secret: string): void {
+	if (!secret) return;
+	addEncodedSecret(secrets, secret);
+}
+
+function addSecret(secrets: Set<string>, secret: string): void {
+	if (secret.length < MIN_REDACTABLE_SECRET_LENGTH) return;
+	addEncodedSecret(secrets, secret);
 }
 
 function addSensitivePathSegments(secrets: Set<string>, pathname: string): void {
@@ -138,7 +154,7 @@ function decodedUrlPart(rawPart: string): string {
 function redactTokenAssignments(text: string): string {
 	const bearerRedacted = text.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, `$1${REDACTED}`);
 	return bearerRedacted.replace(
-		/((?:authorization|token|api[-_]?key|secret|password)\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi,
+		/((?:authorization|auth|cookie|credential|token|api[-_]?key|secret|password)\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi,
 		`$1${REDACTED}`,
 	);
 }
@@ -160,7 +176,7 @@ function redactUrlCredentials(text: string): string {
 }
 
 function isSensitiveName(fieldName: string): boolean {
-	return /(?:authorization|auth|token|api[-_]?key|secret|password)/i.test(fieldName);
+	return SENSITIVE_NAME.test(fieldName);
 }
 
 function isOauthError(error: unknown): boolean {

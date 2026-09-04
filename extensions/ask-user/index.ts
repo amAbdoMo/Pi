@@ -85,6 +85,34 @@ type FramedAnswer = {
 	images: PickerImage[];
 };
 
+async function askOneRpc(
+	ctx: ExtensionContext,
+	questionNumber: number,
+	question: string,
+	context: string | undefined,
+	options: AskOption[],
+	allowCustom: boolean,
+): Promise<FramedAnswer> {
+	const answer: AnsweredQuestion = { question, answer: "", custom: false, dismissed: false };
+	const title = [`Q${questionNumber} · ${question}`, context].filter(Boolean).join(" — ");
+	if (options.length === 0) {
+		const value = await ctx.ui.editor(title, "");
+		if (value === undefined) answer.dismissed = true;
+		else { answer.answer = value; answer.custom = true; }
+		return { answer, images: [] };
+	}
+	const displayed = options.map((option) => option.description ? `${option.label} — ${option.description}` : option.label);
+	const customLabel = "Type your own answer";
+	const selected = await ctx.ui.select(title, allowCustom ? [...displayed, customLabel] : displayed);
+	if (selected === undefined) answer.dismissed = true;
+	else if (selected === customLabel) {
+		const custom = await ctx.ui.input(`${title} — Custom answer`, "Type your answer");
+		if (custom === undefined) answer.dismissed = true;
+		else { answer.answer = custom; answer.custom = true; }
+	} else answer.answer = options[displayed.indexOf(selected)]?.label ?? selected;
+	return { answer, images: [] };
+}
+
 async function askOneFramed(
 	ctx: ExtensionContext,
 	questionNumber: number,
@@ -95,11 +123,12 @@ async function askOneFramed(
 ): Promise<FramedAnswer> {
 	const entry: AnsweredQuestion = { question, answer: "", custom: false, dismissed: false };
 
-	if (!ctx.hasUI || ctx.mode !== "tui") {
+	if (!ctx.hasUI) {
 		entry.answer = fallbackPromptText([{ question, context, options }], questionNumber - 1);
 		entry.dismissed = true;
 		return { answer: entry, images: [] };
 	}
+	if (ctx.mode !== "tui") return askOneRpc(ctx, questionNumber, question, context, options, allowCustom);
 
 	const result = await ctx.ui.custom<PickerResult>(
 		(tui, theme, keybindings, done) =>

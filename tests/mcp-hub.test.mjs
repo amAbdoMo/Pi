@@ -146,7 +146,7 @@ async function configFixture(t) {
     mcpServers: {
       shared: {
         type: "streamable-http",
-        url: "https://mcp.example.test/rpc?token=url-secret",
+        url: "https://mcp.example.test/rpc?version=1",
         headers: { Authorization: "Bearer header-secret" },
       },
     },
@@ -223,19 +223,31 @@ test("MCP redaction covers encoded secrets without corrupting benign short value
     config: {
       transport: "stdio",
       command: "fixture",
-      args: [],
+      args: ['"--credential=quoted-credential-secret"', "--cookie:cookie-secret-value", "--auth", "auth-secret-value", "--header=Authorization: Bearer nested-auth-secret"],
       env: { OAUTH_ENABLED: "false", DEBUG: "1", API_TOKEN: "distinct-secret-value" },
       disabled: false,
       oauthConfigured: false,
     },
   };
   const localOutput = redactServerSecrets(
-    '{"available":false,"version":"1.30.0","secret":"distinct-secret-value"}',
+    '{"available":false,"version":"1.30.0","secret":"distinct-secret-value","credential":"quoted-credential-secret","cookie":"cookie-secret-value","auth":"auth-secret-value"}',
     localDefinition,
   );
   assert.match(localOutput, /"available":false/);
   assert.match(localOutput, /"version":"1\.30\.0"/);
   assert.equal(localOutput.includes("distinct-secret-value"), false);
+  assert.equal(localOutput.includes("quoted-credential-secret"), false);
+  assert.equal(localOutput.includes("cookie-secret-value"), false);
+  assert.equal(localOutput.includes("auth-secret-value"), false);
+  assert.equal(redactServerSecrets("nested-auth-secret", localDefinition).includes("nested-auth-secret"), false);
+
+  const privateDefinition = {
+    ...remoteDefinition,
+    privateSecretValues: ["secret123", "short"],
+  };
+  const privateOutput = redactServerSecrets("server echoed secret123 and short", privateDefinition);
+  assert.equal(privateOutput.includes("secret123"), false);
+  assert.equal(privateOutput.includes("short"), false);
 });
 
 test("MCP config accepts JSONC and OpenCode-style server entries", async (t) => {
@@ -298,6 +310,13 @@ test("credential headers require HTTPS except on loopback MCP servers", async (t
         url: "http://example.test/mcp",
         headers: { Authorization: "Bearer distinct-secret-value" },
       },
+      xAuthInsecure: {
+        type: "remote",
+        url: "http://example.test/mcp",
+        headers: { "X-Auth": "distinct-x-auth-secret" },
+      },
+      userinfo: { type: "remote", url: "https://user:pass@example.test/mcp" },
+      querySecret: { type: "remote", url: "https://example.test/mcp?token=distinct-query-secret" },
       loopback: {
         type: "remote",
         url: "http://127.0.0.1:3000/mcp",
@@ -313,8 +332,14 @@ test("credential headers require HTTPS except on loopback MCP servers", async (t
     includeProject: false,
   });
   assert.equal(configuration.servers.has("insecure"), false);
+  assert.equal(configuration.servers.has("xAuthInsecure"), false);
+  assert.equal(configuration.servers.has("userinfo"), false);
+  assert.equal(configuration.servers.has("querySecret"), false);
   assert.equal(configuration.servers.has("loopback"), true);
-  assert.match(configuration.diagnostics[0]?.message ?? "", /credential headers require HTTPS/);
+  const diagnostics = configuration.diagnostics.map(({ message }) => message).join("\n");
+  assert.match(diagnostics, /credential headers require HTTPS/);
+  assert.match(diagnostics, /must not include credentials/);
+  assert.match(diagnostics, /credential-like URL parameters/);
 });
 
 test("Playwright MCP output defaults to a temporary artifact directory", () => {

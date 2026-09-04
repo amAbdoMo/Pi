@@ -23,7 +23,7 @@ function captureEntry({ agentDir, filesDirectory, relativePath }) {
   return { relativePath, existed: true, sha256: fileHash(backupPath) };
 }
 
-function checkpointDocument({ agentDir, manifest, now, previousPiVersion, managedPackageSources, entries }) {
+function checkpointDocument({ agentDir, manifest, now, previousPiVersion, managedPackageSources, managedPackagePresence, entries }) {
   return {
     schemaVersion: 1,
     release: manifest.release,
@@ -31,6 +31,7 @@ function checkpointDocument({ agentDir, manifest, now, previousPiVersion, manage
     agentDir: path.resolve(agentDir),
     previousPiVersion,
     managedPackageSources: [...new Set(managedPackageSources.filter(Boolean))],
+    managedPackagePresence,
     entries,
   };
 }
@@ -41,6 +42,7 @@ export function createCheckpoint({
   now = new Date(),
   previousPiVersion,
   managedPackageSources = [],
+  managedPackagePresence,
 }) {
   const root = checkpointRoot(agentDir);
   const directory = path.join(root, checkpointName(now));
@@ -55,6 +57,7 @@ export function createCheckpoint({
       now,
       previousPiVersion,
       managedPackageSources,
+      managedPackagePresence,
       entries,
     });
     atomicWrite(path.join(directory, CHECKPOINT_MANIFEST_FILE), `${JSON.stringify(checkpoint, null, 2)}\n`);

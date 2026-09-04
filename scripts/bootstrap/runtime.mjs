@@ -284,6 +284,13 @@ function resolvedContextModeSource(agentDir, configuredSources) {
   return version ? `${identity}@${version}` : undefined;
 }
 
+export function managedPackagePresence(agentDir) {
+  return {
+    workbench: fs.existsSync(safeAgentPath(agentDir, "git/github.com/amAbdoMo/Pi/package.json")),
+    contextMode: fs.existsSync(safeAgentPath(agentDir, "npm/node_modules/context-mode/package.json")),
+  };
+}
+
 export function ensurePiVersion(manifest) {
   const expectedVersion = packageVersion(manifest.packages.pi);
   if (installedPi()?.version === expectedVersion) return;
@@ -325,19 +332,41 @@ function invokePosixInstaller({ sourceRoot, manifest, skipFfmpeg, skipTerminal }
   runNative("bash", args, { stdio: "inherit" });
 }
 
-export function reinstallPreviousState(checkpoint) {
+export function reinstallPreviousState(checkpoint, { agentDir } = {}) {
   restorePreviousPiVersion(checkpoint.previousPiVersion);
+  removeNewManagedPackages(checkpoint, agentDir);
   for (const source of checkpoint.managedPackageSources ?? []) reinstallManagedPackage(source);
 }
 
-function restorePreviousPiVersion(previousVersion) {
-  if (!previousVersion || installedPi()?.version === previousVersion) return;
-  runNpm([
+export function restorePreviousPiVersion(previousVersion, {
+  installedPiFn = installedPi,
+  runNpmCommand = runNpm,
+} = {}) {
+  const current = installedPiFn();
+  if (!previousVersion) {
+    if (current) runNpmCommand(["uninstall", "-g", "@earendil-works/pi-coding-agent"], { stdio: "inherit" });
+    return;
+  }
+  if (current?.version === previousVersion) return;
+  runNpmCommand([
     "install",
     "-g",
     "--ignore-scripts",
     `@earendil-works/pi-coding-agent@${previousVersion}`,
   ], { stdio: "inherit" });
+}
+
+export function removeNewManagedPackages(checkpoint, agentDir, rmSync = fs.rmSync) {
+  if (!agentDir || !checkpoint.managedPackagePresence) return;
+  const managedPaths = {
+    workbench: "git/github.com/amAbdoMo/Pi",
+    contextMode: "npm/node_modules/context-mode",
+  };
+  for (const [name, relativePath] of Object.entries(managedPaths)) {
+    if (checkpoint.managedPackagePresence[name] === false) {
+      rmSync(safeAgentPath(agentDir, relativePath), { recursive: true, force: true });
+    }
+  }
 }
 
 function reinstallManagedPackage(source) {

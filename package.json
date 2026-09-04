@@ -38,9 +38,14 @@
     ]
   },
   "scripts": {
+    "browser": "node browser/server.mjs",
+    "browser:startup:install": "powershell.exe -NoProfile -File scripts/browser/install-pi-harness-startup.ps1 -Action Install",
+    "browser:startup:status": "powershell.exe -NoProfile -File scripts/browser/install-pi-harness-startup.ps1 -Action Status",
+    "browser:startup:uninstall": "powershell.exe -NoProfile -File scripts/browser/install-pi-harness-startup.ps1 -Action Uninstall",
     "capture": "node scripts/capture-config.mjs",
     "scan:public": "node scripts/scan-public-files.mjs",
-    "test": "node scripts/validate.mjs && npm run scan:public && node --test tests/*.test.mjs && npm run test:workflow",
+    "scan:browser-security": "node scripts/check-browser-security.mjs",
+    "test": "node scripts/validate.mjs && npm run scan:public && npm run scan:browser-security && node --test tests/*.test.mjs && npm run test:workflow",
     "test:workflow": "vitest run --config extensions/workflow/vitest.config.ts"
   },
   "dependencies": {
@@ -48,6 +53,7 @@
     "arabic-reshaper": "1.1.0",
     "bidi-js": "1.0.3",
     "jsonc-parser": "3.3.1",
+    "proper-lockfile": "4.1.2",
     "typebox": "1.1.38",
     "yaml": "2.9.0"
   },

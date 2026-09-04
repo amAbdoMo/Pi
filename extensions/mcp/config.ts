@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir as systemHomeDirectory } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { parse as parseJsonc, type ParseError } from "jsonc-parser";
 
@@ -38,6 +38,19 @@ interface ParsedConfigFile {
 	diagnostics: McpConfigDiagnostic[];
 }
 
+interface PrivateCredential {
+	source: string;
+	server: string;
+	location: "env" | "headers";
+	key: string;
+	value: string;
+}
+
+interface PrivateCredentialLoad {
+	credentials: PrivateCredential[];
+	diagnostics: McpConfigDiagnostic[];
+}
+
 class McpConfigError extends Error {}
 
 export function resolvePiAgentDirectory(homeDirectory = systemHomeDirectory()): string {
@@ -66,11 +79,16 @@ export function mcpConfigPaths(options: McpConfigLoadOptions): string[] {
 
 export async function loadMcpConfiguration(options: McpConfigLoadOptions): Promise<LoadedMcpConfiguration> {
 	const mergedServers = new Map<string, McpServerDefinition>();
-	const diagnostics: McpConfigDiagnostic[] = [];
+	const agentDirectory = options.agentDirectory ?? resolvePiAgentDirectory(options.homeDirectory);
+	const privateLoad = await readPrivateCredentials(join(agentDirectory, "mcp-auth.json"));
+	const diagnostics: McpConfigDiagnostic[] = [...privateLoad.diagnostics];
 	const loadedSources: string[] = [];
 
 	for (const sourcePath of mcpConfigPaths(options)) {
-		const parsedFile = await readConfigFile(sourcePath);
+		const sourceCredentials = privateLoad.credentials.filter(
+			(credential) => credential.source === mcpCredentialSourceId(sourcePath),
+		);
+		const parsedFile = await readConfigFile(sourcePath, sourceCredentials);
 		if (!parsedFile) continue;
 		loadedSources.push(sourcePath);
 		diagnostics.push(...parsedFile.diagnostics);
@@ -97,7 +115,64 @@ export function safeConfigurationSummary(configuration: LoadedMcpConfiguration):
 	};
 }
 
-async function readConfigFile(sourcePath: string): Promise<ParsedConfigFile | undefined> {
+export function mcpCredentialSourceId(sourcePath: string): string {
+	const absolute = resolve(sourcePath);
+	const normalized = process.platform === "win32" ? absolute.replaceAll("\\", "/").toLowerCase() : absolute;
+	return createHash("sha256").update(normalized).digest("base64url");
+}
+
+async function readPrivateCredentials(authPath: string): Promise<PrivateCredentialLoad> {
+	let sourceText: string;
+	try {
+		sourceText = await readFile(authPath, "utf8");
+	} catch (error) {
+		if (isFileNotFound(error)) return { credentials: [], diagnostics: [] };
+		return { credentials: [], diagnostics: [{ sourcePath: authPath, message: "Unable to read private MCP credentials" }] };
+	}
+	try {
+		const document: unknown = JSON.parse(sourceText);
+		if (!isRecord(document) || (document.version !== undefined && document.version !== 1) || !isRecord(document.credentials)) {
+			throw new Error("invalid");
+		}
+		const credentials = Object.entries(document.credentials).map(([id, value]) => privateCredential(id, value));
+		return { credentials, diagnostics: [] };
+	} catch {
+		return { credentials: [], diagnostics: [{ sourcePath: authPath, message: "Private MCP credentials are invalid" }] };
+	}
+}
+
+function privateCredential(id: string, value: unknown): PrivateCredential {
+	if (!isRecord(value)
+		|| typeof value.source !== "string"
+		|| !/^[A-Za-z0-9_-]{20,128}$/.test(value.source)
+		|| typeof value.server !== "string"
+		|| !value.server.trim()
+		|| (value.location !== "env" && value.location !== "headers")
+		|| typeof value.key !== "string"
+		|| !/^[A-Za-z_][A-Za-z0-9_.-]{0,127}$/.test(value.key)
+		|| typeof value.value !== "string"
+		|| value.value.length === 0
+		|| value.value.length > 16 * 1024
+		|| id !== privateCredentialId(value.source, value.server, value.location, value.key)) {
+		throw new Error("invalid");
+	}
+	return {
+		source: value.source,
+		server: value.server,
+		location: value.location,
+		key: value.key,
+		value: value.value,
+	};
+}
+
+function privateCredentialId(source: string, server: string, location: string, key: string): string {
+	return createHash("sha256").update(JSON.stringify([source, server, location, key])).digest("base64url");
+}
+
+async function readConfigFile(
+	sourcePath: string,
+	privateCredentials: PrivateCredential[],
+): Promise<ParsedConfigFile | undefined> {
 	let sourceText: string;
 	try {
 		sourceText = await readFile(sourcePath, "utf8");
@@ -109,10 +184,14 @@ async function readConfigFile(sourcePath: string): Promise<ParsedConfigFile | un
 	const parseErrors: ParseError[] = [];
 	const document: unknown = parseJsonc(sourceText, parseErrors, { allowTrailingComma: true });
 	if (parseErrors.length > 0) return configFailure(sourcePath, "Invalid JSON/JSONC");
-	return parseConfigDocument(document, sourcePath);
+	return parseConfigDocument(document, sourcePath, privateCredentials);
 }
 
-function parseConfigDocument(document: unknown, sourcePath: string): ParsedConfigFile {
+function parseConfigDocument(
+	document: unknown,
+	sourcePath: string,
+	privateCredentials: PrivateCredential[],
+): ParsedConfigFile {
 	if (!isRecord(document)) return configFailure(sourcePath, "Config root must be an object");
 	let serverContainer: Record<string, unknown> | undefined;
 	try {
@@ -125,7 +204,8 @@ function parseConfigDocument(document: unknown, sourcePath: string): ParsedConfi
 	const parsed: ParsedConfigFile = { servers: [], invalidServerNames: [], diagnostics: [] };
 	for (const [serverName, rawConfig] of Object.entries(serverContainer)) {
 		try {
-			parsed.servers.push(serverDefinition(serverName, rawConfig, sourcePath));
+			const credentials = privateCredentials.filter((credential) => credential.server === serverName);
+			parsed.servers.push(serverDefinition(serverName, applyPrivateCredentials(rawConfig, credentials), sourcePath, credentials));
 		} catch (error) {
 			parsed.invalidServerNames.push(serverName);
 			parsed.diagnostics.push({
@@ -135,6 +215,28 @@ function parseConfigDocument(document: unknown, sourcePath: string): ParsedConfi
 		}
 	}
 	return parsed;
+}
+
+function applyPrivateCredentials(rawConfig: unknown, credentials: PrivateCredential[]): unknown {
+	if (!isRecord(rawConfig) || credentials.length === 0) return rawConfig;
+	const merged = { ...rawConfig };
+	for (const location of ["env", "headers"] as const) {
+		const matching = credentials.filter((credential) => credential.location === location);
+		if (matching.length === 0) continue;
+		const target = location === "env" && merged.env === undefined && merged.environment !== undefined
+			? "environment"
+			: location;
+		const current = isRecord(merged[target]) ? { ...merged[target] } : {};
+		for (const credential of matching) {
+			const caseInsensitive = location === "headers" || (location === "env" && process.platform === "win32");
+			if (caseInsensitive) {
+				for (const key of Object.keys(current)) if (key.toLowerCase() === credential.key.toLowerCase()) delete current[key];
+			}
+			current[credential.key] = credential.value;
+		}
+		merged[target] = current;
+	}
+	return merged;
 }
 
 function configuredServers(document: Record<string, unknown>): Record<string, unknown> | undefined {
@@ -153,25 +255,31 @@ function configuredServers(document: Record<string, unknown>): Record<string, un
 	return undefined;
 }
 
-function serverDefinition(serverName: string, rawConfig: unknown, sourcePath: string): McpServerDefinition {
+function serverDefinition(
+	serverName: string,
+	rawConfig: unknown,
+	sourcePath: string,
+	privateCredentials: PrivateCredential[],
+): McpServerDefinition {
 	if (!serverName.trim()) throw new McpConfigError("Server name must not be empty");
 	if (!isRecord(rawConfig)) throw new McpConfigError("Server config must be an object");
-	const config = normalizeServerConfig(rawConfig);
+	const config = normalizeServerConfig(rawConfig, privateCredentials);
 	return {
 		name: serverName,
 		config,
 		sourcePath,
 		sourceDirectory: dirname(sourcePath),
 		fingerprint: createHash("sha256").update(JSON.stringify({ config, sourcePath })).digest("hex"),
+		privateSecretValues: privateCredentials.map(({ value }) => value),
 	};
 }
 
-function normalizeServerConfig(rawConfig: Record<string, unknown>): McpServerConfig {
+function normalizeServerConfig(rawConfig: Record<string, unknown>, privateCredentials: PrivateCredential[]): McpServerConfig {
 	const disabled = disabledState(rawConfig);
 	const oauthConfigured = hasOauthConfiguration(rawConfig);
 	const transport = transportKind(rawConfig);
 	if (transport === "stdio") return stdioConfig(rawConfig, disabled, oauthConfigured);
-	return httpConfig(rawConfig, disabled, oauthConfigured);
+	return httpConfig(rawConfig, disabled, oauthConfigured, privateCredentials.some(({ location }) => location === "headers"));
 }
 
 function disabledState(rawConfig: Record<string, unknown>): boolean {
@@ -233,6 +341,7 @@ function httpConfig(
 	rawConfig: Record<string, unknown>,
 	disabled: boolean,
 	oauthConfigured: boolean,
+	hasPrivateHeaders: boolean,
 ): HttpServerConfig {
 	const url = requiredNonEmptyString(rawConfig.url, "url");
 	let parsedUrl: URL;
@@ -244,17 +353,25 @@ function httpConfig(
 	if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
 		throw new McpConfigError("url must use HTTP or HTTPS");
 	}
+	if (parsedUrl.username || parsedUrl.password) {
+		throw new McpConfigError("url must not include credentials");
+	}
+	if ([...parsedUrl.searchParams.keys()].some(isSensitiveName)) {
+		throw new McpConfigError("credential-like URL parameters are not supported; use headers");
+	}
 	const headers = optionalStringRecord(rawConfig.headers, "headers");
-	if (parsedUrl.protocol === "http:" && hasCredentialHeaders(headers) && !isLoopbackHostname(parsedUrl.hostname)) {
+	if (parsedUrl.protocol === "http:" && (hasPrivateHeaders || hasCredentialHeaders(headers)) && !isLoopbackHostname(parsedUrl.hostname)) {
 		throw new McpConfigError("credential headers require HTTPS unless the MCP server is loopback-only");
 	}
 	return { transport: "streamable-http", url, headers, disabled, oauthConfigured };
 }
 
+function isSensitiveName(name: string): boolean {
+	return /(?:authorization|auth|cookie|credential|token|api[-_]?key|secret|password)/i.test(name);
+}
+
 function hasCredentialHeaders(headers: Record<string, string> | undefined): boolean {
-	return Object.keys(headers ?? {}).some((headerName) =>
-		/(?:authorization|proxy-authorization|cookie|token|api[-_]?key|secret|password)/i.test(headerName)
-	);
+	return Object.keys(headers ?? {}).some(isSensitiveName);
 }
 
 function isLoopbackHostname(hostname: string): boolean {

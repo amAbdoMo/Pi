@@ -330,6 +330,43 @@ test("ask_user keeps every question framed, sequential, and recommended-first", 
 	);
 });
 
+test("ask_user uses standard Pi RPC select and input requests in browser mode", async () => {
+	let askUserTool;
+	const calls = [];
+	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
+	extension.default({
+		on() {},
+		registerTool(tool) { askUserTool = tool; },
+		registerCommand() {},
+		sendUserMessage() {},
+	});
+	const response = await askUserTool.execute(
+		"ask-user-rpc",
+		{ questions: [
+			{ question: "Choose a path", options: [{ label: "Use RPC", description: "Browser-safe", recommended: true }], allowCustom: false },
+			{ question: "Add a note" },
+		] },
+		undefined,
+		undefined,
+		{
+			hasUI: true,
+			mode: "rpc",
+			ui: {
+				async select(title, options) { calls.push({ method: "select", title, options }); return options[0]; },
+				async input(title, placeholder) { calls.push({ method: "input", title, placeholder }); return "Custom answer"; },
+				async editor(title, prefill) { calls.push({ method: "editor", title, prefill }); return "Browser answer"; },
+				setStatus() {},
+			},
+		},
+	);
+	assert.equal(calls[0].method, "select");
+	assert.match(calls[0].title, /^Q1 · Choose a path/);
+	assert.deepEqual(calls[0].options, ["Use RPC — Browser-safe"]);
+	assert.equal(calls[1].method, "editor");
+	assert.match(response.content[0].text, /Q1: Choose a path\n→ Use RPC/);
+	assert.match(response.content[0].text, /Q2: Add a note\n→ Browser answer \(custom answer\)/);
+});
+
 test("ask_user forwards picker images as content blocks without leaking bytes into details", async () => {
 	let askUserTool;
 	const extension = await import(moduleUrl(path.join("extensions", "ask-user", "index.ts")));
