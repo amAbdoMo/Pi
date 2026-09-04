@@ -71,8 +71,12 @@ function windowsPackageManagerRunner(parts, managerName) {
   const directCommand = path.basename(parts[0]).replace(/\.(cmd|exe)$/i, "").toLowerCase();
   if (process.platform !== "win32" || directCommand !== managerName || directExecutable) return undefined;
 
+  const npmExecPath = process.env.npm_execpath;
   const candidates = managerName === "npm"
-    ? [path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js")]
+    ? [
+      path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+      ...(npmExecPath && path.basename(npmExecPath).toLowerCase() === "npm-cli.js" ? [npmExecPath] : []),
+    ]
     : managerName === "pnpm"
       ? [
         path.join(process.env.APPDATA ?? "", "npm", "node_modules", "pnpm", "bin", "pnpm.cjs"),

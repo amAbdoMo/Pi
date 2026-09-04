@@ -201,7 +201,6 @@ export class PiBridge extends EventEmitter {
       };
       const onAbort = () => { cleanup(); reject(signal.reason ?? new Error("Aborted")); };
       const timer = setTimeout(() => { cleanup(); reject(new Error(`RPC request timed out: ${type}`)); }, timeoutMs);
-      timer.unref?.();
       this.#pending.set(id, { resolve, reject, cleanup });
       signal?.addEventListener("abort", onAbort, { once: true });
       this.#child.stdin.write(line, "utf8", (error) => {
@@ -248,7 +247,6 @@ export class PiBridge extends EventEmitter {
       const done = () => { if (!settled) { settled = true; clearTimeout(timer); resolve(); } };
       child.once("exit", done);
       timer = setTimeout(() => { try { child.kill("SIGTERM"); } catch {} done(); }, graceMs);
-      timer.unref?.();
       try { child.stdin?.end(); } catch { done(); }
     });
   }
