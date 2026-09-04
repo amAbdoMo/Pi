@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
+        node-version: [22, 24]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -26,6 +26,22 @@ jobs:
         run: npm pack --dry-run --json
       - if: matrix.node-version == 24
         run: bash -n install.sh
+
+  node-20-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node scripts/validate.mjs
+      - run: npm run scan:public
+      - run: npm run scan:browser-security
+      - run: npm run test:node20
+      - run: npx --yes . --help
+      - run: npm pack --dry-run --json
 
   windows-powershell-syntax:
     runs-on: windows-latest

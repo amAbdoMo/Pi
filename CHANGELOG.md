@@ -5,7 +5,7 @@
 - Added a pinned cross-platform bootstrap with `diagnose`, `install`, `verify`, and checkpointed `rollback` commands, including clean-install removal of newly introduced Pi/package files, plus a Windows `setup.ps1` entry point, clean-runner verification, and an automated public-file credential/private-path gate.
 - Added an authenticated loopback-only Pi Harness with opaque session discovery, persistent HttpOnly same-site authentication, process-isolated RPC streaming, process-aware writer locks, strict browser security headers, and approval gates for every non-read-only tool.
 - Added the source-derived DeepSeek Harness pixel-chase marker to the active running session and the matching “Deep diving...” chat shimmer with an elapsed clock after 15 seconds.
-- Fixed Node.js 20/22 validation by keeping pending Pi RPC deadlines alive and resolving the active npm CLI when Node is launched through `npx`.
+- Fixed cross-version CI by preserving pending Pi RPC deadlines on Node.js 22, resolving npm when Node runs through `npx`, and testing Node.js 20 through its supported JavaScript/browser smoke suite instead of Node.js 22-only TypeScript hooks.
 - Added an opt-in Windows per-user startup task that runs Pi Harness without a visible terminal or browser tab, prevents duplicate instances, and lets authenticated old or new tabs reconnect through `http://127.0.0.1:3081/`.
 - Added dependency-free safe Markdown rendering and accessible message/code copy controls to Pi Harness, with external-protocol link allowlisting and authoritative stream-finalization regressions.
 - Added bounded image attachments for image-capable Pi models, including picker/paste previews, removable chips, byte-signature validation, and path-free Pi RPC content blocks.

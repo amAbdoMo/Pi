@@ -97,7 +97,7 @@ npm ci
 npm test
 ```
 
-Develop in a normal clone, not Pi's managed checkout under `~/.pi/agent/git/`.
+Running Pi requires Node.js 20+. The full development test suite requires Node.js 22.15 or newer. Develop in a normal clone, not Pi's managed checkout under `~/.pi/agent/git/`.
 
 More detail: [`browser/INTEGRATIONS.md`](browser/INTEGRATIONS.md) · [`browser/EVENT_COVERAGE.md`](browser/EVENT_COVERAGE.md) · [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) · [`CHANGELOG.md`](CHANGELOG.md)
 

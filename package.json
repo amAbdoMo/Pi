@@ -46,6 +46,7 @@
     "scan:public": "node scripts/scan-public-files.mjs",
     "scan:browser-security": "node scripts/check-browser-security.mjs",
     "test": "node scripts/validate.mjs && npm run scan:public && npm run scan:browser-security && node --test tests/*.test.mjs && npm run test:workflow",
+    "test:node20": "node scripts/test-node20.mjs",
     "test:workflow": "vitest run --config extensions/workflow/vitest.config.ts"
   },
   "dependencies": {
