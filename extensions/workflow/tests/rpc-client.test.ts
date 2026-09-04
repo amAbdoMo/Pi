@@ -105,10 +105,17 @@ describe("bounded RPC lifecycle", () => {
 		await expect(brokenPipe.request({ type: "prompt", message: "x" })).rejects.toThrow(/stdin|EPIPE|write|broken pipe/i);
 		await brokenPipe.stop();
 
-		const rpc = client("exit", { requestTimeoutMs: 1000 });
-		await new Promise((resolve) => setTimeout(resolve, process.platform === "win32" ? 400 : 40));
-		await expect(rpc.request({ type: "prompt", message: "x" })).rejects.toThrow(/exited|stdin|process/i);
-		await rpc.stop();
+		const exited: any = new EventEmitter();
+		exited.stdin = new PassThrough();
+		exited.stdout = new PassThrough();
+		exited.stderr = new PassThrough();
+		exited.exitCode = 7;
+		exited.signalCode = null;
+		exited.pid = undefined;
+		exited.kill = () => false;
+		const closedProcess = new RpcPhaseClient("fake", [], process.cwd(), process.env, bounds, () => exited);
+		await expect(closedProcess.request({ type: "prompt", message: "x" })).rejects.toThrow(/exited|stdin|process/i);
+		await closedProcess.stop();
 	});
 
 	test("keeps only a bounded stderr tail", async () => {

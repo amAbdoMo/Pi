@@ -10,10 +10,6 @@ if (scenario === "ignore-term") {
 if (scenario === "stderr") {
   process.stderr.write("z".repeat(256 * 1024));
 }
-if (scenario === "exit") {
-  process.stdin.resume();
-  setTimeout(() => process.exit(7), 10);
-}
 if (scenario === "orphan-descendant" || scenario === "active-descendant") {
   const descendant = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   descendant.unref();
